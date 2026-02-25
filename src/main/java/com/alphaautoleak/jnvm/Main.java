@@ -1,4 +1,4 @@
-package com.alphaautoleak.jnvm;
+﻿package com.alphaautoleak.jnvm;
 
 import com.alphaautoleak.jnvm.config.ProtectConfig;
 import com.alphaautoleak.jnvm.converter.Converter;

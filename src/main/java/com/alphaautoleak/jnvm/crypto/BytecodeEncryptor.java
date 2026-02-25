@@ -1,4 +1,4 @@
-﻿package com.alphaautoleak.jnvm.crypto;
+package com.alphaautoleak.jnvm.crypto;
 
 import com.alphaautoleak.jnvm.asm.MethodInfo;
 

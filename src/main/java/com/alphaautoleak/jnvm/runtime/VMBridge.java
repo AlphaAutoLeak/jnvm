@@ -1,4 +1,4 @@
-﻿package com.alphaautoleak.jnvm.runtime;
+package com.alphaautoleak.jnvm.runtime;
 
 import java.io.*;
 import java.nio.file.*;

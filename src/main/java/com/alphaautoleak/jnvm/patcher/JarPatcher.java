@@ -1,4 +1,4 @@
-﻿package com.alphaautoleak.jnvm.patcher;
+package com.alphaautoleak.jnvm.patcher;
 
 import com.alphaautoleak.jnvm.asm.MethodInfo;
 import org.objectweb.asm.*;
