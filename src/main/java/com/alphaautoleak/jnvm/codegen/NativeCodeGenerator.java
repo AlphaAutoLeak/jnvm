@@ -428,7 +428,7 @@ public class NativeCodeGenerator {
             w.println("}");
             w.println();
 
-// vm_data_init
+            // vm_data_init
             w.println("void vm_data_init(void) {");
             w.println("    vm_init_methods();");
             w.println("    for (int i = 0; i < VM_METHOD_COUNT; i++) {");
@@ -608,6 +608,8 @@ public class NativeCodeGenerator {
 
         w.println("}");
     }
+
+
     /**
      * 发射异常表
      */
@@ -632,62 +634,67 @@ public class NativeCodeGenerator {
         List<BootstrapEntry> bsm = m.getBootstrapMethods();
         if (bsm.isEmpty()) return;
 
-        // 先发射字符串
+        // 第一趟：发射所有字符串数据和参数数据
         for (int i = 0; i < bsm.size(); i++) {
             BootstrapEntry b = bsm.get(i);
             String bPrefix = prefix + "_bsm" + i;
+
+            // bootstrap 方法自身的 owner/name/desc
             emitEncStr(w, bPrefix + "_o", b.getHandleOwner());
             emitEncStr(w, bPrefix + "_n", b.getHandleName());
             emitEncStr(w, bPrefix + "_d", b.getHandleDescriptor());
 
-            // Bootstrap 参数
+            // bootstrap 参数
             List<Object> args = b.getArguments();
             if (!args.isEmpty()) {
-                // 参数数据数组
-                w.println("static const unsigned char* " + bPrefix + "_args[] = {");
+                // 先逐个发射每个参数的加密数据
                 for (int j = 0; j < args.size(); j++) {
                     String argStr = argToString(args.get(j));
                     String aName = bPrefix + "_a" + j;
                     emitEncStr(w, aName, argStr);
                 }
-                // 重新打开数组
-                w.println("};"); // 先关掉
-                // 实际用 forward decl 方式处理
-                // 简化：将参数存为字符串描述
+
+                // 然后构建指针数组和长度数组
                 w.print("static const unsigned char* " + bPrefix + "_argp[] = {");
                 for (int j = 0; j < args.size(); j++) {
+                    if (j > 0) w.print(", ");
                     w.print(bPrefix + "_a" + j);
-                    if (j < args.size() - 1) w.print(",");
                 }
                 w.println("};");
+
                 w.print("static int " + bPrefix + "_argl[] = {");
                 for (int j = 0; j < args.size(); j++) {
+                    if (j > 0) w.print(", ");
                     w.print(bPrefix + "_a" + j + "_len");
-                    if (j < args.size() - 1) w.print(",");
                 }
                 w.println("};");
             }
         }
 
+        // 第二趟：构建 VMBootstrapEntry 数组
         w.println("static VMBootstrapEntry " + prefix + "_bsm[] = {");
         for (int i = 0; i < bsm.size(); i++) {
             BootstrapEntry b = bsm.get(i);
             String bPrefix = prefix + "_bsm" + i;
-            w.print("    {" + b.getHandleTag() + ",");
-            w.print(bPrefix + "_o," + bPrefix + "_o_len,");
-            w.print(bPrefix + "_n," + bPrefix + "_n_len,");
-            w.print(bPrefix + "_d," + bPrefix + "_d_len,");
-            w.print(b.getArguments().size() + ",");
+
+            w.print("    {");
+            w.print(".tag=" + b.getHandleTag() + ", ");
+            w.print(".owner=" + bPrefix + "_o, .owner_len=" + bPrefix + "_o_len, ");
+            w.print(".name=" + bPrefix + "_n, .name_len=" + bPrefix + "_n_len, ");
+            w.print(".desc=" + bPrefix + "_d, .desc_len=" + bPrefix + "_d_len, ");
+            w.print(".arg_count=" + b.getArguments().size() + ", ");
+
             if (b.getArguments().isEmpty()) {
-                w.print("NULL,NULL");
+                w.print(".arg_data=NULL, .arg_lens=NULL");
             } else {
-                w.print(bPrefix + "_argp," + bPrefix + "_argl");
+                w.print(".arg_data=" + bPrefix + "_argp, ");
+                w.print(".arg_lens=" + bPrefix + "_argl");
             }
+
             w.println("}" + (i < bsm.size() - 1 ? "," : ""));
         }
         w.println("};");
     }
-
     // ========================================================
     // 工具方法
     // ========================================================
@@ -1231,15 +1238,13 @@ public class NativeCodeGenerator {
         w.println("}");
         w.println();
     }
-
-
     private void writeInvokeHelper(PrintWriter w) {
         w.println("/**");
         w.println(" * 通过 JNI 调用方法，根据返回类型装箱/拆箱。");
         w.println(" * 参数从栈上弹出，结果压栈。");
         w.println(" */");
         w.println("static void vm_invoke_method(JNIEnv* env, VMCPEntry* cpEntry,");
-        w.println("    int invoke_type, VMFrame* frame) {");
+        w.println("    int invoke_type, VMFrame* f) {");
         w.println();
         w.println("    int is_static = (invoke_type == OP_INVOKESTATIC);");
         w.println("    jmethodID mid = vm_resolve_method(env, cpEntry, is_static);");
@@ -1277,11 +1282,10 @@ public class NativeCodeGenerator {
         w.println("        }");
         w.println("    }");
         w.println();
-        w.println("    /* 构建 jvalue 参数数组 */");
+        w.println("    /* 构建 jvalue 参数数组 — 从栈上逆序弹出 */");
         w.println("    jvalue jargs[256];");
-        w.println("    /* 从栈上逆序弹出参数 */");
         w.println("    for (int i = param_count - 1; i >= 0; i--) {");
-        w.println("        VMValue v = frame->stack[--frame->sp];");
+        w.println("        VMValue v = f->stack[--f->sp];");
         w.println("        switch (param_slots[i]) {");
         w.println("            case 0: jargs[i].l = v.l; break;");
         w.println("            case 1: jargs[i].i = v.i; break;");
@@ -1294,14 +1298,20 @@ public class NativeCodeGenerator {
         w.println("    /* objectref for non-static */");
         w.println("    jobject obj = NULL;");
         w.println("    if (!is_static) {");
-        w.println("        obj = frame->stack[--frame->sp].l;");
+        w.println("        obj = f->stack[--f->sp].l;");
         w.println("    }");
         w.println();
         w.println("    /* 返回类型 */");
         w.println("    p++; /* skip ')' */");
         w.println("    char ret_type = *p;");
         w.println();
-        w.println("    /* 调用 */");
+        w.println("    /* 调用 + 压栈结果 */");
+        w.println("    #define F_PUSH_I(v) do { f->stack[f->sp].i = (jint)(v); f->sp++; } while(0)");
+        w.println("    #define F_PUSH_J(v) do { f->stack[f->sp].j = (jlong)(v); f->sp++; } while(0)");
+        w.println("    #define F_PUSH_F(v) do { f->stack[f->sp].f = (jfloat)(v); f->sp++; } while(0)");
+        w.println("    #define F_PUSH_D(v) do { f->stack[f->sp].d = (jdouble)(v); f->sp++; } while(0)");
+        w.println("    #define F_PUSH_L(v) do { f->stack[f->sp].l = (jobject)(v); f->sp++; } while(0)");
+        w.println();
         w.println("    switch (ret_type) {");
         w.println("    case 'V':");
         w.println("        if (is_static) (*env)->CallStaticVoidMethodA(env, cls, mid, jargs);");
@@ -1315,7 +1325,7 @@ public class NativeCodeGenerator {
         w.println("        else if (invoke_type == OP_INVOKESPECIAL)");
         w.println("            r = (*env)->CallNonvirtualIntMethodA(env, obj, cls, mid, jargs);");
         w.println("        else r = (*env)->CallIntMethodA(env, obj, mid, jargs);");
-        w.println("        PUSH_I(r); break;");
+        w.println("        F_PUSH_I(r); break;");
         w.println("    }");
         w.println("    case 'J': {");
         w.println("        jlong r;");
@@ -1323,7 +1333,7 @@ public class NativeCodeGenerator {
         w.println("        else if (invoke_type == OP_INVOKESPECIAL)");
         w.println("            r = (*env)->CallNonvirtualLongMethodA(env, obj, cls, mid, jargs);");
         w.println("        else r = (*env)->CallLongMethodA(env, obj, mid, jargs);");
-        w.println("        PUSH_J(r); break;");
+        w.println("        F_PUSH_J(r); break;");
         w.println("    }");
         w.println("    case 'F': {");
         w.println("        jfloat r;");
@@ -1331,7 +1341,7 @@ public class NativeCodeGenerator {
         w.println("        else if (invoke_type == OP_INVOKESPECIAL)");
         w.println("            r = (*env)->CallNonvirtualFloatMethodA(env, obj, cls, mid, jargs);");
         w.println("        else r = (*env)->CallFloatMethodA(env, obj, mid, jargs);");
-        w.println("        PUSH_F(r); break;");
+        w.println("        F_PUSH_F(r); break;");
         w.println("    }");
         w.println("    case 'D': {");
         w.println("        jdouble r;");
@@ -1339,7 +1349,7 @@ public class NativeCodeGenerator {
         w.println("        else if (invoke_type == OP_INVOKESPECIAL)");
         w.println("            r = (*env)->CallNonvirtualDoubleMethodA(env, obj, cls, mid, jargs);");
         w.println("        else r = (*env)->CallDoubleMethodA(env, obj, mid, jargs);");
-        w.println("        PUSH_D(r); break;");
+        w.println("        F_PUSH_D(r); break;");
         w.println("    }");
         w.println("    default: { /* L or [ → object */");
         w.println("        jobject r;");
@@ -1347,12 +1357,19 @@ public class NativeCodeGenerator {
         w.println("        else if (invoke_type == OP_INVOKESPECIAL)");
         w.println("            r = (*env)->CallNonvirtualObjectMethodA(env, obj, cls, mid, jargs);");
         w.println("        else r = (*env)->CallObjectMethodA(env, obj, mid, jargs);");
-        w.println("        PUSH_L(r); break;");
+        w.println("        F_PUSH_L(r); break;");
         w.println("    }");
         w.println("    }");
+        w.println();
+        w.println("    #undef F_PUSH_I");
+        w.println("    #undef F_PUSH_J");
+        w.println("    #undef F_PUSH_F");
+        w.println("    #undef F_PUSH_D");
+        w.println("    #undef F_PUSH_L");
         w.println("}");
         w.println();
     }
+
     private void writeDescriptorParser(PrintWriter w) {
         w.println("/* 获取描述符的返回类型字符 */");
         w.println("static char vm_get_return_type(const char* desc) {");
@@ -1491,7 +1508,7 @@ public class NativeCodeGenerator {
         // 数组 LOAD
         w.println("        /* ===== 数组 LOAD ===== */");
         w.println("        case OP_IALOAD: { jint idx=POP_I(); jobject arr=POP_L();");
-        w.println("            PUSH_I((*env)->GetIntArrayElements(env,arr,NULL)[idx]);break;}");
+        w.println("            jint v; (*env)->GetIntArrayRegion(env,arr,idx,1,&v); PUSH_I(v);break;}");
         // 简化版：用 Get<Type>ArrayRegion
         w.println("        case OP_LALOAD: { jint idx=POP_I(); jobject arr=POP_L();");
         w.println("            jlong v; (*env)->GetLongArrayRegion(env,arr,idx,1,&v); PUSH_J(v);break;}");
