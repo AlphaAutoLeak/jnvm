@@ -476,41 +476,57 @@ public class BytecodeExtractor {
             }
         }
 
-        // 创建新的
         BootstrapEntry entry = new BootstrapEntry();
         entry.setHandleTag(bsm.getTag());
         entry.setHandleOwner(bsm.getOwner());
         entry.setHandleName(bsm.getName());
         entry.setHandleDescriptor(bsm.getDesc());
 
-        // 收集 bootstrap 参数
         List<Object> args = new ArrayList<>();
+        List<BootstrapEntry.ArgType> argTypes = new ArrayList<>();
+
         if (bsmArgs != null) {
             for (Object arg : bsmArgs) {
-                if (arg instanceof Type) {
-                    args.add(((Type) arg).getDescriptor());
+                if (arg instanceof Integer) {
+                    args.add(arg);
+                    argTypes.add(BootstrapEntry.ArgType.INTEGER);
+                } else if (arg instanceof Long) {
+                    args.add(arg);
+                    argTypes.add(BootstrapEntry.ArgType.LONG);
+                } else if (arg instanceof Float) {
+                    args.add(arg);
+                    argTypes.add(BootstrapEntry.ArgType.FLOAT);
+                } else if (arg instanceof Double) {
+                    args.add(arg);
+                    argTypes.add(BootstrapEntry.ArgType.DOUBLE);
+                } else if (arg instanceof String) {
+                    args.add(arg);
+                    argTypes.add(BootstrapEntry.ArgType.STRING);
+                } else if (arg instanceof Type) {
+                    Type t = (Type) arg;
+                    args.add(t.getDescriptor());
+                    argTypes.add(BootstrapEntry.ArgType.METHOD_TYPE);
                 } else if (arg instanceof Handle) {
                     Handle h = (Handle) arg;
-                    // 存为特殊结构
-                    Map<String, Object> handleMap = new HashMap<>();
-                    handleMap.put("tag", h.getTag());
-                    handleMap.put("owner", h.getOwner());
-                    handleMap.put("name", h.getName());
-                    handleMap.put("desc", h.getDesc());
-                    args.add(handleMap);
+                    // 序列化为 "tag:owner:name:desc"
+                    String serialized = h.getTag() + ":" + h.getOwner() + ":" +
+                            h.getName() + ":" + h.getDesc();
+                    args.add(serialized);
+                    argTypes.add(BootstrapEntry.ArgType.METHOD_HANDLE);
                 } else {
-                    // Integer, Long, Float, Double, String
-                    args.add(arg);
+                    args.add(arg.toString());
+                    argTypes.add(BootstrapEntry.ArgType.STRING);
                 }
             }
         }
+
         entry.setArguments(args);
+        entry.setArgumentTypes(argTypes);
 
         int idx = bootstrapMethods.size();
         bootstrapMethods.add(entry);
         return idx;
     }
-
     // ===== 常量池管理（去重） =====
 
     private int getOrCreateIntEntry(int value) {

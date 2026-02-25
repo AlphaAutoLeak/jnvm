@@ -99,6 +99,12 @@ public class Main {
                 .build());
 
         options.addOption(Option.builder()
+                .longOpt("debug")
+                .desc("Enable debug logging in native VM")
+                .hasArg().argName("BOOL")
+                .build());
+
+        options.addOption(Option.builder()
                 .longOpt("target")
                 .desc("Comma-separated Zig targets (e.g. x86_64-linux-gnu,aarch64-linux-android29)")
                 .hasArg().argName("TARGETS")
@@ -154,6 +160,10 @@ public class Main {
             }
         }
         config.setProtectRules(rules);
+
+        config.setDebug(
+                cmd.hasOption("debug") && Boolean.parseBoolean(cmd.getOptionValue("debug"))
+        );
 
         if (cmd.hasOption("config")) {
             config.setConfigFile(new File(cmd.getOptionValue("config")));

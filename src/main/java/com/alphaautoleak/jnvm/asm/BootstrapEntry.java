@@ -3,26 +3,38 @@ package com.alphaautoleak.jnvm.asm;
 import java.util.ArrayList;
 import java.util.List;
 
-/**
- * BootstrapMethods 属性中的一条记录。
- * invokedynamic 指令引用此表。
- */
 public class BootstrapEntry {
 
-    /** bootstrap method handle 的 tag (6 = invokestatic, etc.) */
     private int handleTag;
-
-    /** bootstrap method 所属类 */
     private String handleOwner;
-
-    /** bootstrap method 名称 */
     private String handleName;
-
-    /** bootstrap method 描述符 */
     private String handleDescriptor;
 
-    /** bootstrap 参数（静态参数） */
+    /**
+     * Bootstrap 参数 — 保持原始类型
+     * 每个元素是以下之一：
+     * - String (字符串常量或 recipe)
+     * - Integer
+     * - Long
+     * - Float
+     * - Double
+     * - org.objectweb.asm.Type (MethodType 描述符)
+     * - org.objectweb.asm.Handle (MethodHandle)
+     */
     private List<Object> arguments = new ArrayList<>();
+
+    /** 参数的类型标记 */
+    public enum ArgType {
+        STRING,      // 普通字符串
+        INTEGER,     // int
+        LONG,        // long
+        FLOAT,       // float
+        DOUBLE,      // double
+        METHOD_TYPE, // MethodType 描述符字符串
+        METHOD_HANDLE // MethodHandle 引用
+    }
+
+    private List<ArgType> argumentTypes = new ArrayList<>();
 
     public BootstrapEntry() {}
 
@@ -40,6 +52,9 @@ public class BootstrapEntry {
 
     public List<Object> getArguments() { return arguments; }
     public void setArguments(List<Object> arguments) { this.arguments = arguments; }
+
+    public List<ArgType> getArgumentTypes() { return argumentTypes; }
+    public void setArgumentTypes(List<ArgType> argumentTypes) { this.argumentTypes = argumentTypes; }
 
     @Override
     public String toString() {

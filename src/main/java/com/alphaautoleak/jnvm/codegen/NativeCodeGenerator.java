@@ -155,9 +155,9 @@ public class NativeCodeGenerator {
             w.println("    const unsigned char* name;  int name_len;");
             w.println("    const unsigned char* desc;  int desc_len;");
             w.println("    int arg_count;");
-            w.println("    /* bootstrap 参数（简化：仅存字符串描述） */");
-            w.println("    const unsigned char** arg_data;");
-            w.println("    int* arg_lens;");
+            w.println("    const unsigned char** arg_data;  /* 参数原始数据 */");
+            w.println("    int* arg_lens;                   /* 参数数据长度 */");
+            w.println("    /* BSM 参数类型: 0=STRING, 1=INT, 2=LONG, 3=FLOAT, 4=DOUBLE, 5=METHOD_TYPE, 6=METHOD_HANDLE */");
             w.println("} VMBootstrapEntry;");
             w.println();
 
@@ -634,44 +634,111 @@ public class NativeCodeGenerator {
         List<BootstrapEntry> bsm = m.getBootstrapMethods();
         if (bsm.isEmpty()) return;
 
-        // 第一趟：发射所有字符串数据和参数数据
         for (int i = 0; i < bsm.size(); i++) {
             BootstrapEntry b = bsm.get(i);
             String bPrefix = prefix + "_bsm" + i;
 
-            // bootstrap 方法自身的 owner/name/desc
+            // BSM 自身的 owner/name/desc 用加密字符串
             emitEncStr(w, bPrefix + "_o", b.getHandleOwner());
             emitEncStr(w, bPrefix + "_n", b.getHandleName());
             emitEncStr(w, bPrefix + "_d", b.getHandleDescriptor());
 
-            // bootstrap 参数
+            // BSM 参数 — 每个参数存为: type(1byte) + data
             List<Object> args = b.getArguments();
+            List<BootstrapEntry.ArgType> argTypes = b.getArgumentTypes();
+
             if (!args.isEmpty()) {
-                // 先逐个发射每个参数的加密数据
                 for (int j = 0; j < args.size(); j++) {
-                    String argStr = argToString(args.get(j));
                     String aName = bPrefix + "_a" + j;
-                    emitEncStr(w, aName, argStr);
+                    BootstrapEntry.ArgType type = argTypes.get(j);
+                    Object arg = args.get(j);
+
+                    // 类型标记
+                    w.println("static const int " + aName + "_type = " + type.ordinal() + ";");
+
+                    switch (type) {
+                        case STRING: {
+                            // recipe 等字符串可能含 \u0001 — 用 raw bytes
+                            String s = (String) arg;
+                            byte[] raw = s.getBytes(java.nio.charset.StandardCharsets.UTF_8);
+                            w.println("static const unsigned char " + aName + "_data[] = " +
+                                    bytesToCArray(raw) + ";");
+                            w.println("static const int " + aName + "_len = " + raw.length + ";");
+                            break;
+                        }
+                        case METHOD_TYPE: {
+                            String s = (String) arg;
+                            byte[] raw = s.getBytes(java.nio.charset.StandardCharsets.UTF_8);
+                            w.println("static const unsigned char " + aName + "_data[] = " +
+                                    bytesToCArray(raw) + ";");
+                            w.println("static const int " + aName + "_len = " + raw.length + ";");
+                            break;
+                        }
+                        case METHOD_HANDLE: {
+                            String s = (String) arg;
+                            byte[] raw = s.getBytes(java.nio.charset.StandardCharsets.UTF_8);
+                            w.println("static const unsigned char " + aName + "_data[] = " +
+                                    bytesToCArray(raw) + ";");
+                            w.println("static const int " + aName + "_len = " + raw.length + ";");
+                            break;
+                        }
+                        case INTEGER: {
+                            int v = (Integer) arg;
+                            w.println("static const int " + aName + "_ival = " + v + ";");
+                            // 也需要 data/len 占位
+                            w.println("static const unsigned char " + aName + "_data[] = {0};");
+                            w.println("static const int " + aName + "_len = 0;");
+                            break;
+                        }
+                        case LONG: {
+                            long v = (Long) arg;
+                            w.println("static const long long " + aName + "_jval = " + v + "LL;");
+                            w.println("static const unsigned char " + aName + "_data[] = {0};");
+                            w.println("static const int " + aName + "_len = 0;");
+                            break;
+                        }
+                        case FLOAT: {
+                            float v = (Float) arg;
+                            w.println("static const float " + aName + "_fval = " + formatFloat(v) + ";");
+                            w.println("static const unsigned char " + aName + "_data[] = {0};");
+                            w.println("static const int " + aName + "_len = 0;");
+                            break;
+                        }
+                        case DOUBLE: {
+                            double v = (Double) arg;
+                            w.println("static const double " + aName + "_dval = " + formatDouble(v) + ";");
+                            w.println("static const unsigned char " + aName + "_data[] = {0};");
+                            w.println("static const int " + aName + "_len = 0;");
+                            break;
+                        }
+                    }
                 }
 
-                // 然后构建指针数组和长度数组
+                // 指针数组
                 w.print("static const unsigned char* " + bPrefix + "_argp[] = {");
                 for (int j = 0; j < args.size(); j++) {
                     if (j > 0) w.print(", ");
-                    w.print(bPrefix + "_a" + j);
+                    w.print(bPrefix + "_a" + j + "_data");
                 }
                 w.println("};");
 
-                w.print("static int " + bPrefix + "_argl[] = {");
+                w.print("static const int " + bPrefix + "_argl[] = {");
                 for (int j = 0; j < args.size(); j++) {
                     if (j > 0) w.print(", ");
                     w.print(bPrefix + "_a" + j + "_len");
                 }
                 w.println("};");
+
+                w.print("static const int " + bPrefix + "_argt[] = {");
+                for (int j = 0; j < args.size(); j++) {
+                    if (j > 0) w.print(", ");
+                    w.print(bPrefix + "_a" + j + "_type");
+                }
+                w.println("};");
             }
         }
 
-        // 第二趟：构建 VMBootstrapEntry 数组
+        // VMBootstrapEntry 数组
         w.println("static VMBootstrapEntry " + prefix + "_bsm[] = {");
         for (int i = 0; i < bsm.size(); i++) {
             BootstrapEntry b = bsm.get(i);
@@ -695,6 +762,22 @@ public class NativeCodeGenerator {
         }
         w.println("};");
     }
+
+    /**
+     * 将 byte[] 转为 C 数组字面量，处理特殊字符（包括 \0, \1 等）
+     */
+    private String bytesToCArray(byte[] data) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("{");
+        for (int i = 0; i < data.length; i++) {
+            if (i > 0) sb.append(",");
+            if (i % 16 == 0) sb.append("\n    ");
+            sb.append(String.format("0x%02x", data[i] & 0xFF));
+        }
+        sb.append("\n}");
+        return sb.toString();
+    }
+
     // ========================================================
     // 工具方法
     // ========================================================
@@ -765,12 +848,18 @@ public class NativeCodeGenerator {
             writeInterpreterSource(w);
         }
     }
+
     private void writeInterpreterSource(PrintWriter w) {
         w.println("/*");
         w.println(" * vm_interpreter.c — JNVM 栈式字节码解释器");
         w.println(" * 自动生成，请勿手动修改");
         w.println(" */");
-        w.println();
+        if (config.isDebug()) {
+            w.println("#define VM_DEBUG 1");
+        } else {
+            w.println("#define VM_DEBUG 0");
+        }
+
         w.println("#include \"vm_interpreter.h\"");
         w.println("#include \"vm_data.h\"");
         w.println("#include \"chacha20.h\"");
@@ -778,7 +867,49 @@ public class NativeCodeGenerator {
         w.println("#include <stdlib.h>");
         w.println("#include <stdio.h>");
         w.println("#include <math.h>");
+        w.println();
 
+
+        w.println("#if VM_DEBUG");
+        w.println("static inline void VM_LOG(const char *fmt, ...) {");
+        w.println("    va_list args;");
+        w.println("    va_start(args, fmt);");
+        w.println("    vfprintf(stderr, fmt, args);");
+        w.println("    va_end(args);");
+        w.println("}");
+        w.println("#else");
+        w.println("#define VM_LOG(...) ((void)0)");
+        w.println("#endif");
+        w.println();
+
+        w.println();
+        w.println("/* Boxing 缓存 — 定义在 vm_bridge.c，这里 extern */");
+        w.println("extern jclass cls_Integer;");
+        w.println("extern jclass cls_Long;");
+        w.println("extern jclass cls_Float;");
+        w.println("extern jclass cls_Double;");
+        w.println("extern jclass cls_Boolean;");
+        w.println("extern jclass cls_Byte;");
+        w.println("extern jclass cls_Short;");
+        w.println("extern jclass cls_Character;");
+        w.println();
+        w.println("extern jmethodID mid_Integer_intValue;");
+        w.println("extern jmethodID mid_Long_longValue;");
+        w.println("extern jmethodID mid_Float_floatValue;");
+        w.println("extern jmethodID mid_Double_doubleValue;");
+        w.println("extern jmethodID mid_Boolean_booleanValue;");
+        w.println("extern jmethodID mid_Byte_byteValue;");
+        w.println("extern jmethodID mid_Short_shortValue;");
+        w.println("extern jmethodID mid_Character_charValue;");
+        w.println();
+        w.println("extern jmethodID mid_Integer_valueOf;");
+        w.println("extern jmethodID mid_Long_valueOf;");
+        w.println("extern jmethodID mid_Float_valueOf;");
+        w.println("extern jmethodID mid_Double_valueOf;");
+        w.println("extern jmethodID mid_Boolean_valueOf;");
+        w.println("extern jmethodID mid_Byte_valueOf;");
+        w.println("extern jmethodID mid_Short_valueOf;");
+        w.println("extern jmethodID mid_Character_valueOf;");
         w.println();
 
         // ============ 读取宏 ============
@@ -1104,16 +1235,26 @@ public class NativeCodeGenerator {
         w.println("    vm_decrypt_str(entry->val.ref.owner, entry->val.ref.owner_len, owner_buf);");
         w.println("    vm_decrypt_str(entry->val.ref.name, entry->val.ref.name_len, name_buf);");
         w.println("    vm_decrypt_str(entry->val.ref.desc, entry->val.ref.desc_len, desc_buf);");
+        w.println("    VM_LOG(\"[VM] resolve_field: %s.%s:%s static=%d\\n\",owner_buf,name_buf,desc_buf,is_static);");
         w.println("    jclass cls = (*env)->FindClass(env, owner_buf);");
-        w.println("    if (!cls) return;");
+        w.println("    if (!cls) {");
+        w.println("        VM_LOG(\"[VM] resolve_field: class not found: %s\\n\",owner_buf);");
+        w.println("        return;");
+        w.println("    }");
         w.println("    if (is_static) {");
         w.println("        entry->cached_field = (*env)->GetStaticFieldID(env, cls, name_buf, desc_buf);");
         w.println("    } else {");
         w.println("        entry->cached_field = (*env)->GetFieldID(env, cls, name_buf, desc_buf);");
         w.println("    }");
+        w.println("    if (!entry->cached_field) {");
+        w.println("        VM_LOG(\"[VM] resolve_field: field not found: %s.%s:%s\\n\",owner_buf,name_buf,desc_buf);");
+        w.println("        if((*env)->ExceptionCheck(env)) (*env)->ExceptionDescribe(env);");
+        w.println("        return;");
+        w.println("    }");
         w.println("    entry->cached_class = (jclass)(*env)->NewGlobalRef(env, cls);");
         w.println("    (*env)->DeleteLocalRef(env, cls);");
         w.println("    entry->resolved = 1;");
+        w.println("    VM_LOG(\"[VM] resolve_field: OK class=%p field=%p\\n\",(void*)entry->cached_class,(void*)entry->cached_field);");
         w.println("}");
         w.println();
     }
@@ -1177,87 +1318,304 @@ public class NativeCodeGenerator {
         w.println("    } while(0)");
         w.println();
     }
+
     private void writeIndyHandler(PrintWriter w) {
-        w.println("/**");
-        w.println(" * 执行 invokedynamic：解析 bootstrap → 获取 CallSite → 调用 target");
-        w.println(" */");
-        w.println("static jobject vm_invoke_dynamic(JNIEnv* env, VMMethodInfo* method,");
-        w.println("                                  VMCPEntry* cpEntry, VMValue* stack, int* sp) {");
-        w.println("    /* 获取 bootstrap 信息 */");
-        w.println("    int bsm_idx = cpEntry->val.indy.bsm_index;");
-        w.println("    VMBootstrapEntry* bsm = &method->bootstraps[bsm_idx];");
-        w.println();
-        w.println("    char bsm_owner[512], bsm_name[256], bsm_desc[512];");
-        w.println("    vm_decrypt_str(bsm->owner, bsm->owner_len, bsm_owner);");
-        w.println("    vm_decrypt_str(bsm->name, bsm->name_len, bsm_name);");
-        w.println("    vm_decrypt_str(bsm->desc, bsm->desc_len, bsm_desc);");
+        w.println("static void vm_execute_indy(JNIEnv* env, VMMethodInfo* method,");
+        w.println("                             VMCPEntry* cpEntry, VMFrame* f) {");
         w.println();
         w.println("    char indy_name[256], indy_desc[512];");
         w.println("    vm_decrypt_str(cpEntry->val.indy.name, cpEntry->val.indy.name_len, indy_name);");
         w.println("    vm_decrypt_str(cpEntry->val.indy.desc, cpEntry->val.indy.desc_len, indy_desc);");
         w.println();
-        w.println("    /* MethodHandles.Lookup */");
-        w.println("    jclass mhLookup = (*env)->FindClass(env, \"java/lang/invoke/MethodHandles$Lookup\");");
-        w.println("    jclass mhClass = (*env)->FindClass(env, \"java/lang/invoke/MethodHandles\");");
-        w.println("    jmethodID lookupMid = (*env)->GetStaticMethodID(env, mhClass,");
-        w.println("        \"lookup\", \"()Ljava/lang/invoke/MethodHandles$Lookup;\");");
-        w.println("    jobject lookup = (*env)->CallStaticObjectMethod(env, mhClass, lookupMid);");
+        w.println("    VM_LOG(\"[VM-INDY] name=%s desc=%s bsm_idx=%d\\n\",");
+        w.println("        indy_name, indy_desc, cpEntry->val.indy.bsm_index);");
         w.println();
-        w.println("    /* 解析 bootstrap method class */");
-        w.println("    jclass bsmClass = (*env)->FindClass(env, bsm_owner);");
-        w.println("    if (!bsmClass) return NULL;");
+        w.println("    int bsm_idx = cpEntry->val.indy.bsm_index;");
+        w.println("    VMBootstrapEntry* bsm = &method->bootstraps[bsm_idx];");
+        w.println("    char bo[512],bn[256],bd[512];");
+        w.println("    vm_decrypt_str(bsm->owner,bsm->owner_len,bo);");
+        w.println("    vm_decrypt_str(bsm->name,bsm->name_len,bn);");
+        w.println("    vm_decrypt_str(bsm->desc,bsm->desc_len,bd);");
+        w.println("    VM_LOG(\"[VM-INDY] BSM=%s.%s%s args=%d\\n\",bo,bn,bd,bsm->arg_count);");
         w.println();
-        w.println("    /* 找到 bsm 方法 */");
-        w.println("    jmethodID bsmMid = (*env)->GetStaticMethodID(env, bsmClass, bsm_name, bsm_desc);");
-        w.println("    if (!bsmMid) return NULL;");
-        w.println();
-        w.println("    /* 调用名和类型 */");
-        w.println("    jstring indyNameStr = (*env)->NewStringUTF(env, indy_name);");
-        w.println();
-        w.println("    /* MethodType.fromMethodDescriptorString */");
-        w.println("    jclass mtClass = (*env)->FindClass(env, \"java/lang/invoke/MethodType\");");
-        w.println("    jmethodID fromDesc = (*env)->GetStaticMethodID(env, mtClass,");
-        w.println("        \"fromMethodDescriptorString\",");
-        w.println("        \"(Ljava/lang/String;Ljava/lang/ClassLoader;)Ljava/lang/invoke/MethodType;\");");
-        w.println("    jstring descStr = (*env)->NewStringUTF(env, indy_desc);");
-        w.println("    jobject methodType = (*env)->CallStaticObjectMethod(env, mtClass, fromDesc,");
-        w.println("        descStr, NULL);");
-        w.println();
-        w.println("    /* 调用 BSM - 简化实现：通过反射调用 bootstrap 方法 */");
-        w.println("    /* 注意：这是一个简化版本，完整实现需要解析 bootstrap 参数 */");
-        w.println("    /* 对于 LambdaMetafactory.metafactory，我们尝试创建一个简单的 CallSite */");
-        w.println("    ");
-        w.println("    jobject callSite = NULL;");
-        w.println("    ");
-        w.println("    /* 检查是否是 LambdaMetafactory.metafactory */");
-        w.println("    if (strcmp(bsm_owner, \"java/lang/invoke/LambdaMetafactory\") == 0 &&");
-        w.println("        strcmp(bsm_name, \"metafactory\") == 0) {");
-        w.println("        ");
-        w.println("        /* 简化：对于 lambda 表达式，我们无法完全支持 bootstrap 调用 */");
-        w.println("        /* 因为需要 MethodHandle 和额外的参数 */");
-        w.println("        /* 暂时返回 NULL，让调用方处理 */");
-        w.println("        return NULL;");
+
+        // 解析参数类型
+        w.println("    int param_count = 0;");
+        w.println("    char param_types[256];");
+        w.println("    const char* dp = indy_desc + 1;");
+        w.println("    while (*dp != ')') {");
+        w.println("        switch (*dp) {");
+        w.println("            case 'B':case 'C':case 'S':case 'Z':case 'I':");
+        w.println("                param_types[param_count++]='I'; dp++; break;");
+        w.println("            case 'J': param_types[param_count++]='J'; dp++; break;");
+        w.println("            case 'F': param_types[param_count++]='F'; dp++; break;");
+        w.println("            case 'D': param_types[param_count++]='D'; dp++; break;");
+        w.println("            case 'L': param_types[param_count++]='L';");
+        w.println("                while(*dp!=';')dp++; dp++; break;");
+        w.println("            case '[': param_types[param_count++]='L';");
+        w.println("                while(*dp=='[')dp++;");
+        w.println("                if(*dp=='L'){while(*dp!=';')dp++;dp++;}");
+        w.println("                else dp++; break;");
+        w.println("            default: dp++; break;");
+        w.println("        }");
         w.println("    }");
-        w.println("    ");
-        w.println("    /* 尝试简单的 3 参数调用 */");
-        w.println("    callSite = (*env)->CallStaticObjectMethod(env, bsmClass, bsmMid,");
-        w.println("        lookup, indyNameStr, methodType);");
-        w.println("    ");
-        w.println("    if ((*env)->ExceptionCheck(env)) {");
-        w.println("        (*env)->ExceptionClear(env);");
-        w.println("        return NULL;");
+        w.println("    dp++;");
+        w.println("    char ret_type = *dp;");
+        w.println("    VM_LOG(\"[VM-INDY] params=%d ret=%c\\n\",param_count,ret_type);");
+        w.println();
+
+        // 弹出参数
+        w.println("    jclass objCls = (*env)->FindClass(env, \"java/lang/Object\");");
+        w.println("    VMValue pvals[256];");
+        w.println("    for (int i=param_count-1;i>=0;i--) pvals[i]=f->stack[--f->sp];");
+        w.println("    jobjectArray argArray=(*env)->NewObjectArray(env,param_count,objCls,NULL);");
+        w.println("    for (int i=0;i<param_count;i++){");
+        w.println("        jobject boxed=NULL;");
+        w.println("        switch(param_types[i]){");
+        w.println("            case 'I':boxed=(*env)->CallStaticObjectMethod(env,cls_Integer,mid_Integer_valueOf,pvals[i].i);break;");
+        w.println("            case 'J':boxed=(*env)->CallStaticObjectMethod(env,cls_Long,mid_Long_valueOf,pvals[i].j);break;");
+        w.println("            case 'F':boxed=(*env)->CallStaticObjectMethod(env,cls_Float,mid_Float_valueOf,pvals[i].f);break;");
+        w.println("            case 'D':boxed=(*env)->CallStaticObjectMethod(env,cls_Double,mid_Double_valueOf,pvals[i].d);break;");
+        w.println("            default:boxed=pvals[i].l;break;");
+        w.println("        }");
+        w.println("        (*env)->SetObjectArrayElement(env,argArray,i,boxed);");
         w.println("    }");
         w.println();
-        w.println("    /* CallSite.getTarget() → MethodHandle */");
-        w.println("    jclass csClass = (*env)->FindClass(env, \"java/lang/invoke/CallSite\");");
-        w.println("    jmethodID getTarget = (*env)->GetMethodID(env, csClass,");
-        w.println("        \"getTarget\", \"()Ljava/lang/invoke/MethodHandle;\");");
-        w.println("    jobject mh = (*env)->CallObjectMethod(env, callSite, getTarget);");
+
+        // 缓存检查
+        w.println("    int indy_idx=-1;");
+        w.println("    {int cnt=0;for(int i=0;i<method->cp_count;i++){");
+        w.println("        if(method->cp[i].type==CP_INVOKE_DYNAMIC){");
+        w.println("            if(&method->cp[i]==cpEntry){indy_idx=cnt;break;}cnt++;}}}");
+        w.println("    VM_LOG(\"[VM-INDY] cache_idx=%d cache_count=%d\\n\",indy_idx,method->indy_cache_count);");
         w.println();
-        w.println("    return mh; /* 返回 MethodHandle，由调用者 invokeExact */");
+
+        w.println("    jobject methodHandle=NULL;");
+        w.println("    if(indy_idx>=0&&indy_idx<method->indy_cache_count&&method->indy_cache[indy_idx]!=NULL){");
+        w.println("        methodHandle=method->indy_cache[indy_idx];");
+        w.println("        VM_LOG(\"[VM-INDY] using cached MH\\n\");");
+        w.println("    } else {");
+        w.println("        VM_LOG(\"[VM-INDY] resolving BSM...\\n\");");
+        w.println();
+
+        // Lookup
+        w.println("        jclass mhsC=(*env)->FindClass(env,\"java/lang/invoke/MethodHandles\");");
+        w.println("        jmethodID luMid=(*env)->GetStaticMethodID(env,mhsC,\"lookup\",");
+        w.println("            \"()Ljava/lang/invoke/MethodHandles$Lookup;\");");
+        w.println("        jobject lookup=(*env)->CallStaticObjectMethod(env,mhsC,luMid);");
+        w.println();
+
+        // MethodType
+        w.println("        jstring nameStr=(*env)->NewStringUTF(env,indy_name);");
+        w.println("        jclass mtC=(*env)->FindClass(env,\"java/lang/invoke/MethodType\");");
+        w.println("        jmethodID fromDesc=(*env)->GetStaticMethodID(env,mtC,");
+        w.println("            \"fromMethodDescriptorString\",");
+        w.println("            \"(Ljava/lang/String;Ljava/lang/ClassLoader;)Ljava/lang/invoke/MethodType;\");");
+        w.println("        jstring descStr=(*env)->NewStringUTF(env,indy_desc);");
+        w.println("        jobject mt=(*env)->CallStaticObjectMethod(env,mtC,fromDesc,descStr,NULL);");
+        w.println("        if((*env)->ExceptionCheck(env)){");
+        w.println("            VM_LOG(\"[VM-INDY] MethodType parse failed\\n\");");
+        w.println("            (*env)->ExceptionDescribe(env);return;}");
+        w.println();
+
+        // 直接用 BSM 原始签名调用
+        w.println("        jclass bsmC=(*env)->FindClass(env,bo);");
+        w.println("        if(!bsmC||(*env)->ExceptionCheck(env)){");
+        w.println("            VM_LOG(\"[VM-INDY] BSM class not found: %s\\n\",bo);return;}");
+        w.println();
+
+        // 构建 BSM 额外参数
+        w.println("        /* 构建 BSM 额外参数 */");
+        w.println("        jobject callSite=NULL;");
+        w.println();
+
+        // 尝试通过 BSM 的实际签名调用
+        w.println("        /* 尝试原始签名 */");
+        w.println("        jmethodID bsmMid=(*env)->GetStaticMethodID(env,bsmC,bn,bd);");
+        w.println("        if(!bsmMid||(*env)->ExceptionCheck(env)){");
+        w.println("            VM_LOG(\"[VM-INDY] BSM method not found: %s.%s%s\\n\",bo,bn,bd);");
+        w.println("            (*env)->ExceptionClear(env);return;}");
+        w.println();
+
+        // StringConcatFactory 特判
+        w.println("        /* 检测是否是 StringConcatFactory */");
+        w.println("        int is_string_concat = 0;");
+        w.println("        if(strstr(bo,\"StringConcatFactory\")!=NULL) is_string_concat=1;");
+        w.println();
+
+        w.println("        if(is_string_concat && bsm->arg_count>=1) {");
+        w.println("            VM_LOG(\"[VM-INDY] StringConcatFactory detected, args=%d\\n\",bsm->arg_count);");
+        w.println("            /* recipe 字符串 — 从 raw bytes 构建 */");
+        w.println("            const unsigned char* rdata=bsm->arg_data[0];");
+        w.println("            int rlen=bsm->arg_lens[0];");
+        w.println("            jbyteArray rba=(*env)->NewByteArray(env,rlen);");
+        w.println("            (*env)->SetByteArrayRegion(env,rba,0,rlen,(const jbyte*)rdata);");
+        w.println("            jclass strC=(*env)->FindClass(env,\"java/lang/String\");");
+        w.println("            jmethodID strInit=(*env)->GetMethodID(env,strC,\"<init>\",\"([BLjava/lang/String;)V\");");
+        w.println("            jstring charset=(*env)->NewStringUTF(env,\"UTF-8\");");
+        w.println("            jstring recipe=(jstring)(*env)->NewObject(env,strC,strInit,rba,charset);");
+        w.println("            VM_LOG(\"[VM-INDY] recipe len=%d\\n\",rlen);");
+        w.println();
+        w.println("            /* 构建 Object[] 用于 varargs (可能为空) */");
+        w.println("            int extra=bsm->arg_count-1;");
+        w.println("            jobjectArray constants=(*env)->NewObjectArray(env,extra,objCls,NULL);");
+        w.println("            for(int i=0;i<extra;i++){");
+        w.println("                /* 额外常量参数 */");
+        w.println("                const unsigned char* ed=bsm->arg_data[1+i];");
+        w.println("                int el=bsm->arg_lens[1+i];");
+        w.println("                if(el>0){");
+        w.println("                    char firstByte=(char)ed[0];");
+        w.println("                    if(firstByte=='('){");
+        w.println("                        /* MethodType */");
+        w.println("                        jbyteArray eba=(*env)->NewByteArray(env,el);");
+        w.println("                        (*env)->SetByteArrayRegion(env,eba,0,el,(const jbyte*)ed);");
+        w.println("                        jstring es=(jstring)(*env)->NewObject(env,strC,strInit,eba,charset);");
+        w.println("                        jobject emt=(*env)->CallStaticObjectMethod(env,mtC,fromDesc,es,NULL);");
+        w.println("                        if((*env)->ExceptionCheck(env)){(*env)->ExceptionClear(env);emt=es;}");
+        w.println("                        (*env)->SetObjectArrayElement(env,constants,i,emt);");
+        w.println("                    } else {");
+        w.println("                        jbyteArray eba=(*env)->NewByteArray(env,el);");
+        w.println("                        (*env)->SetByteArrayRegion(env,eba,0,el,(const jbyte*)ed);");
+        w.println("                        jstring es=(jstring)(*env)->NewObject(env,strC,strInit,eba,charset);");
+        w.println("                        (*env)->SetObjectArrayElement(env,constants,i,es);");
+        w.println("                    }");
+        w.println("                }");
+        w.println("            }");
+        w.println();
+        w.println("            /* 调用: makeConcatWithConstants(Lookup,String,MethodType,String,Object[]) */");
+        w.println("            callSite=(*env)->CallStaticObjectMethod(env,bsmC,bsmMid,");
+        w.println("                lookup,nameStr,mt,recipe,constants);");
+        w.println("            if((*env)->ExceptionCheck(env)){");
+        w.println("                VM_LOG(\"[VM-INDY] StringConcatFactory BSM call failed\\n\");");
+        w.println("                (*env)->ExceptionDescribe(env);return;}");
+        w.println("            VM_LOG(\"[VM-INDY] StringConcatFactory BSM OK\\n\");");
+        w.println();
+
+        // LambdaMetafactory 特判
+        w.println("        } else if(strstr(bo,\"LambdaMetafactory\")!=NULL && bsm->arg_count>=3) {");
+        w.println("            VM_LOG(\"[VM-INDY] LambdaMetafactory detected\\n\");");
+        w.println("            /* 3个标准参数: MethodType, MethodHandle, MethodType */");
+        w.println("            jclass strC=(*env)->FindClass(env,\"java/lang/String\");");
+        w.println("            jmethodID strInit=(*env)->GetMethodID(env,strC,\"<init>\",\"([BLjava/lang/String;)V\");");
+        w.println("            jstring charset=(*env)->NewStringUTF(env,\"UTF-8\");");
+        w.println();
+        w.println("            /* arg0: MethodType (samMethodType) */");
+        w.println("            jbyteArray a0ba=(*env)->NewByteArray(env,bsm->arg_lens[0]);");
+        w.println("            (*env)->SetByteArrayRegion(env,a0ba,0,bsm->arg_lens[0],(const jbyte*)bsm->arg_data[0]);");
+        w.println("            jstring a0s=(jstring)(*env)->NewObject(env,strC,strInit,a0ba,charset);");
+        w.println("            jobject samMT=(*env)->CallStaticObjectMethod(env,mtC,fromDesc,a0s,NULL);");
+        w.println("            if((*env)->ExceptionCheck(env)){(*env)->ExceptionDescribe(env);return;}");
+        w.println();
+        w.println("            /* arg1: MethodHandle (implMethod) — 解析 \"tag:owner:name:desc\" */");
+        w.println("            char mhBuf[1024];");
+        w.println("            memcpy(mhBuf,bsm->arg_data[1],bsm->arg_lens[1]);");
+        w.println("            mhBuf[bsm->arg_lens[1]]='\\0';");
+        w.println("            int mhTag=0; char mhOwner[256],mhName[256],mhDesc[512];");
+        w.println("            sscanf(mhBuf,\"%d:%[^:]:%[^:]:%s\",&mhTag,mhOwner,mhName,mhDesc);");
+        w.println("            VM_LOG(\"[VM-INDY] implMethod tag=%d %s.%s%s\\n\",mhTag,mhOwner,mhName,mhDesc);");
+        w.println();
+        w.println("            jclass implC=(*env)->FindClass(env,mhOwner);");
+        w.println("            if(!implC||(*env)->ExceptionCheck(env)){");
+        w.println("                VM_LOG(\"[VM-INDY] impl class not found\\n\");return;}");
+        w.println("            jstring implDescStr=(*env)->NewStringUTF(env,mhDesc);");
+        w.println("            jobject implMT=(*env)->CallStaticObjectMethod(env,mtC,fromDesc,implDescStr,NULL);");
+        w.println("            if((*env)->ExceptionCheck(env)){(*env)->ExceptionDescribe(env);return;}");
+        w.println();
+        w.println("            /* 获取 impl MethodHandle */");
+        w.println("            jclass luC=(*env)->FindClass(env,\"java/lang/invoke/MethodHandles$Lookup\");");
+        w.println("            jstring implNameStr=(*env)->NewStringUTF(env,mhName);");
+        w.println("            jobject implMH=NULL;");
+        w.println("            if(mhTag==6){/* invokestatic */");
+        w.println("                jmethodID fsMid=(*env)->GetMethodID(env,luC,\"findStatic\",");
+        w.println("                    \"(Ljava/lang/Class;Ljava/lang/String;Ljava/lang/invoke/MethodType;)Ljava/lang/invoke/MethodHandle;\");");
+        w.println("                implMH=(*env)->CallObjectMethod(env,lookup,fsMid,implC,implNameStr,implMT);");
+        w.println("            } else if(mhTag==5||mhTag==9){/* invokevirtual/invokeinterface */");
+        w.println("                jmethodID fvMid=(*env)->GetMethodID(env,luC,\"findVirtual\",");
+        w.println("                    \"(Ljava/lang/Class;Ljava/lang/String;Ljava/lang/invoke/MethodType;)Ljava/lang/invoke/MethodHandle;\");");
+        w.println("                implMH=(*env)->CallObjectMethod(env,lookup,fvMid,implC,implNameStr,implMT);");
+        w.println("            } else if(mhTag==7){/* invokespecial */");
+        w.println("                jmethodID fsMid=(*env)->GetMethodID(env,luC,\"findSpecial\",");
+        w.println("                    \"(Ljava/lang/Class;Ljava/lang/String;Ljava/lang/invoke/MethodType;Ljava/lang/Class;)Ljava/lang/invoke/MethodHandle;\");");
+        w.println("                implMH=(*env)->CallObjectMethod(env,lookup,fsMid,implC,implNameStr,implMT,implC);");
+        w.println("            }");
+        w.println("            if(!implMH||(*env)->ExceptionCheck(env)){");
+        w.println("                VM_LOG(\"[VM-INDY] impl MH resolve failed\\n\");");
+        w.println("                (*env)->ExceptionDescribe(env);return;}");
+        w.println();
+        w.println("            /* arg2: MethodType (instantiatedMethodType) */");
+        w.println("            jbyteArray a2ba=(*env)->NewByteArray(env,bsm->arg_lens[2]);");
+        w.println("            (*env)->SetByteArrayRegion(env,a2ba,0,bsm->arg_lens[2],(const jbyte*)bsm->arg_data[2]);");
+        w.println("            jstring a2s=(jstring)(*env)->NewObject(env,strC,strInit,a2ba,charset);");
+        w.println("            jobject instMT=(*env)->CallStaticObjectMethod(env,mtC,fromDesc,a2s,NULL);");
+        w.println("            if((*env)->ExceptionCheck(env)){(*env)->ExceptionDescribe(env);return;}");
+        w.println();
+        w.println("            /* 调用 LambdaMetafactory.metafactory(Lookup,String,MethodType,MethodType,MethodHandle,MethodType) */");
+        w.println("            callSite=(*env)->CallStaticObjectMethod(env,bsmC,bsmMid,");
+        w.println("                lookup,nameStr,mt,samMT,implMH,instMT);");
+        w.println("            if((*env)->ExceptionCheck(env)){");
+        w.println("                VM_LOG(\"[VM-INDY] LambdaMetafactory BSM failed\\n\");");
+        w.println("                (*env)->ExceptionDescribe(env);return;}");
+        w.println("            VM_LOG(\"[VM-INDY] LambdaMetafactory BSM OK\\n\");");
+        w.println();
+
+        // 通用 BSM — 3 参数
+        w.println("        } else {");
+        w.println("            VM_LOG(\"[VM-INDY] generic BSM (3 args)\\n\");");
+        w.println("            callSite=(*env)->CallStaticObjectMethod(env,bsmC,bsmMid,lookup,nameStr,mt);");
+        w.println("            if((*env)->ExceptionCheck(env)){");
+        w.println("                VM_LOG(\"[VM-INDY] generic BSM failed\\n\");");
+        w.println("                (*env)->ExceptionDescribe(env);return;}");
+        w.println("        }");
+        w.println();
+
+        // getTarget
+        w.println("        if(!callSite){VM_LOG(\"[VM-INDY] callSite is NULL\\n\");return;}");
+        w.println("        jclass csC=(*env)->FindClass(env,\"java/lang/invoke/CallSite\");");
+        w.println("        jmethodID gtMid=(*env)->GetMethodID(env,csC,\"getTarget\",");
+        w.println("            \"()Ljava/lang/invoke/MethodHandle;\");");
+        w.println("        methodHandle=(*env)->CallObjectMethod(env,callSite,gtMid);");
+        w.println("        VM_LOG(\"[VM-INDY] got target MH=%p\\n\",(void*)methodHandle);");
+        w.println();
+        w.println("        if(methodHandle&&indy_idx>=0&&indy_idx<method->indy_cache_count){");
+        w.println("            method->indy_cache[indy_idx]=(*env)->NewGlobalRef(env,methodHandle);");
+        w.println("        }");
+        w.println("    }");
+        w.println();
+
+        // invokeWithArguments
+        w.println("    if(!methodHandle||(*env)->ExceptionCheck(env)){");
+        w.println("        VM_LOG(\"[VM-INDY] no methodHandle, aborting\\n\");return;}");
+        w.println();
+        w.println("    VM_LOG(\"[VM-INDY] invokeWithArguments, %d args\\n\",param_count);");
+        w.println("    jclass mhC2=(*env)->FindClass(env,\"java/lang/invoke/MethodHandle\");");
+        w.println("    jmethodID iwaMid=(*env)->GetMethodID(env,mhC2,\"invokeWithArguments\",");
+        w.println("        \"([Ljava/lang/Object;)Ljava/lang/Object;\");");
+        w.println("    jobject result=(*env)->CallObjectMethod(env,methodHandle,iwaMid,argArray);");
+        w.println("    if((*env)->ExceptionCheck(env)){");
+        w.println("        VM_LOG(\"[VM-INDY] invokeWithArguments failed\\n\");");
+        w.println("        (*env)->ExceptionDescribe(env);return;}");
+        w.println("    VM_LOG(\"[VM-INDY] result=%p\\n\",(void*)result);");
+        w.println();
+
+        // 压栈
+        w.println("    switch(ret_type){");
+        w.println("    case 'V':break;");
+        w.println("    case 'I':case 'B':case 'C':case 'S':case 'Z':");
+        w.println("        f->stack[f->sp].i=(*env)->CallIntMethod(env,result,mid_Integer_intValue);f->sp++;break;");
+        w.println("    case 'J':");
+        w.println("        f->stack[f->sp].j=(*env)->CallLongMethod(env,result,mid_Long_longValue);f->sp++;break;");
+        w.println("    case 'F':");
+        w.println("        f->stack[f->sp].f=(*env)->CallFloatMethod(env,result,mid_Float_floatValue);f->sp++;break;");
+        w.println("    case 'D':");
+        w.println("        f->stack[f->sp].d=(*env)->CallDoubleMethod(env,result,mid_Double_doubleValue);f->sp++;break;");
+        w.println("    default:");
+        w.println("        f->stack[f->sp].l=result;f->sp++;break;");
+        w.println("    }");
+        w.println("    VM_LOG(\"[VM-INDY] done, sp=%d\\n\",f->sp);");
         w.println("}");
         w.println();
     }
+
     private void writeInvokeHelper(PrintWriter w) {
         w.println("/**");
         w.println(" * 通过 JNI 调用方法，根据返回类型装箱/拆箱。");
@@ -1391,21 +1749,15 @@ public class NativeCodeGenerator {
     }
 
     private void writeDescriptorParser(PrintWriter w) {
-        w.println("/* 获取描述符的返回类型字符 */");
-        w.println("static char vm_get_return_type(const char* desc) {");
-        w.println("    const char* p = desc;");
-        w.println("    while (*p != ')') p++;");
-        w.println("    return *(p + 1);");
-        w.println("}");
-        w.println();
-        w.println("/* 获取字段描述符的类型字符 */");
         w.println("static char vm_get_field_type(const unsigned char* enc_desc, int len) {");
         w.println("    char buf[256];");
         w.println("    vm_decrypt_str(enc_desc, len, buf);");
+        w.println("    VM_LOG(\"[VM] field_desc decrypted: '%s' (len=%d)\\n\", buf, len);");
         w.println("    return buf[0];");
         w.println("}");
         w.println();
     }
+
     private void writeMainInterpreter(PrintWriter w) {
         w.println("VMValue vm_interpret(JNIEnv* env, VMMethodInfo* method,");
         w.println("                     VMValue* args, int arg_count) {");
@@ -1438,6 +1790,9 @@ public class NativeCodeGenerator {
         w.println("    while (frame.pc < method->code_length) {");
         w.println("        int instr_pc = frame.pc;");
         w.println("        uint8_t opcode = READ_U1(code, frame.pc);");
+        w.println();
+        w.println("        VM_LOG(\"[VM] method=%d pc=%d opcode=0x%02x sp=%d\\n\",");
+        w.println("               method->method_id, instr_pc, opcode, frame.sp);");
         w.println();
         w.println("        switch (opcode) {");
         w.println();
@@ -1755,14 +2110,21 @@ public class NativeCodeGenerator {
         w.println("            uint16_t idx = READ_U2(code,frame.pc);");
         w.println("            VMCPEntry* e = &method->cp[idx];");
         w.println("            vm_resolve_field(env, e, 1);");
+        w.println("            if((*env)->ExceptionCheck(env)){CHECK_EXCEPTION();break;}");
         w.println("            char ft = vm_get_field_type(e->val.ref.desc, e->val.ref.desc_len);");
+        w.println("            VM_LOG(\"[VM] GETSTATIC cp=%d type=%c class=%p field=%p\\n\",idx,ft,(void*)e->cached_class,(void*)e->cached_field);");
+        w.println("            if(!e->cached_class||!e->cached_field){");
+        w.println("                VM_LOG(\"[VM] GETSTATIC resolve failed!\\n\");");
+        w.println("                PUSH_L(NULL);break;}");
         w.println("            switch(ft) {");
         w.println("                case 'I':case 'B':case 'C':case 'S':case 'Z': PUSH_I((*env)->GetStaticIntField(env,e->cached_class,e->cached_field));break;");
         w.println("                case 'J': PUSH_J((*env)->GetStaticLongField(env,e->cached_class,e->cached_field));break;");
         w.println("                case 'F': PUSH_F((*env)->GetStaticFloatField(env,e->cached_class,e->cached_field));break;");
         w.println("                case 'D': PUSH_D((*env)->GetStaticDoubleField(env,e->cached_class,e->cached_field));break;");
         w.println("                default:  PUSH_L((*env)->GetStaticObjectField(env,e->cached_class,e->cached_field));break;");
-        w.println("            } break;");
+        w.println("            }");
+        w.println("            VM_LOG(\"[VM] GETSTATIC result: sp=%d top_obj=%p\\n\",frame.sp,(void*)frame.stack[frame.sp-1].l);");
+        w.println("            break;");
         w.println("        }");
         w.println("        case OP_PUTSTATIC: {");
         w.println("            uint16_t idx = READ_U2(code,frame.pc);");
@@ -1781,15 +2143,25 @@ public class NativeCodeGenerator {
         w.println("            uint16_t idx = READ_U2(code,frame.pc);");
         w.println("            VMCPEntry* e = &method->cp[idx];");
         w.println("            vm_resolve_field(env, e, 0);");
+        w.println("            if((*env)->ExceptionCheck(env)){CHECK_EXCEPTION();break;}");
         w.println("            jobject obj = POP_L();");
         w.println("            char ft = vm_get_field_type(e->val.ref.desc, e->val.ref.desc_len);");
+        w.println("            VM_LOG(\"[VM] GETFIELD cp=%d type=%c obj=%p\\n\",idx,ft,(void*)obj);");
+        w.println("            if(!obj){");
+        w.println("                jclass npe=(*env)->FindClass(env,\"java/lang/NullPointerException\");");
+        w.println("                (*env)->ThrowNew(env,npe,\"GETFIELD on null\");");
+        w.println("                CHECK_EXCEPTION();break;}");
+        w.println("            if(!e->cached_field){");
+        w.println("                VM_LOG(\"[VM] GETFIELD resolve failed!\\n\");");
+        w.println("                PUSH_L(NULL);break;}");
         w.println("            switch(ft) {");
         w.println("                case 'I':case 'B':case 'C':case 'S':case 'Z': PUSH_I((*env)->GetIntField(env,obj,e->cached_field));break;");
         w.println("                case 'J': PUSH_J((*env)->GetLongField(env,obj,e->cached_field));break;");
         w.println("                case 'F': PUSH_F((*env)->GetFloatField(env,obj,e->cached_field));break;");
         w.println("                case 'D': PUSH_D((*env)->GetDoubleField(env,obj,e->cached_field));break;");
         w.println("                default:  PUSH_L((*env)->GetObjectField(env,obj,e->cached_field));break;");
-        w.println("            } break;");
+        w.println("            }");
+        w.println("            break;");
         w.println("        }");
         w.println("        case OP_PUTFIELD: {");
         w.println("            uint16_t idx = READ_U2(code,frame.pc);");
@@ -1825,144 +2197,13 @@ public class NativeCodeGenerator {
         w.println("            CHECK_EXCEPTION();");
         w.println("            break;");
         w.println("        }");
+        // 找到这段并替换:
         w.println("        case OP_INVOKEDYNAMIC: {");
         w.println("            uint16_t idx = READ_U2(code,frame.pc);");
         w.println("            frame.pc += 2; /* skip padding */");
         w.println("            VMCPEntry* e = &method->cp[idx];");
-        w.println("            ");
-        w.println("            /* 获取调用描述符 */");
-        w.println("            char indy_desc[512];");
-        w.println("            vm_decrypt_str(e->val.indy.desc, e->val.indy.desc_len, indy_desc);");
-        w.println("            ");
-        w.println("            /* 解析参数个数和返回类型 */");
-        w.println("            int param_count = 0;");
-        w.println("            int param_slots[256];");
-        w.println("            const char* p = indy_desc + 1; /* skip '(' */");
-        w.println("            while (*p != ')') {");
-        w.println("                switch (*p) {");
-        w.println("                    case 'B': case 'C': case 'S': case 'Z': case 'I':");
-        w.println("                        param_slots[param_count++] = 1; p++; break;");
-        w.println("                    case 'J':");
-        w.println("                        param_slots[param_count++] = 2; p++; break;");
-        w.println("                    case 'F':");
-        w.println("                        param_slots[param_count++] = 3; p++; break;");
-        w.println("                    case 'D':");
-        w.println("                        param_slots[param_count++] = 4; p++; break;");
-        w.println("                    case 'L':");
-        w.println("                        param_slots[param_count++] = 0;");
-        w.println("                        while (*p != ';') p++; p++; break;");
-        w.println("                    case '[':");
-        w.println("                        param_slots[param_count] = 0;");
-        w.println("                        while (*p == '[') p++;");
-        w.println("                        if (*p == 'L') { while (*p != ';') p++; p++; }");
-        w.println("                        else p++;");
-        w.println("                        param_count++; break;");
-        w.println("                    default: p++; break;");
-        w.println("                }");
-        w.println("            }");
-        w.println("            p++; /* skip ')' */");
-        w.println("            char ret_type = *p;");
-        w.println("            ");
-        w.println("            /* 调用 bootstrap 获取 MethodHandle */");
-        w.println("            jobject mh = vm_invoke_dynamic(env, method, e, frame.stack, &frame.sp);");
+        w.println("            vm_execute_indy(env, method, e, &frame);");
         w.println("            CHECK_EXCEPTION();");
-        w.println("            ");
-        w.println("            if (!mh) {");
-        w.println("                /* bootstrap 调用失败或返回 null */");
-        w.println("                break;");
-        w.println("            }");
-        w.println("            ");
-        w.println("            /* 准备参数 - 从栈上弹出 */");
-        w.println("            jvalue jargs[256];");
-        w.println("            for (int i = param_count - 1; i >= 0; i--) {");
-        w.println("                VMValue v = frame.stack[--frame.sp];");
-        w.println("                switch (param_slots[i]) {");
-        w.println("                    case 0: jargs[i].l = v.l; break;");
-        w.println("                    case 1: jargs[i].i = v.i; break;");
-        w.println("                    case 2: jargs[i].j = v.j; break;");
-        w.println("                    case 3: jargs[i].f = v.f; break;");
-        w.println("                    case 4: jargs[i].d = v.d; break;");
-        w.println("                }");
-        w.println("            }");
-        w.println("            ");
-        w.println("            /* 使用 MethodHandle.invokeWithArguments 调用 */");
-        w.println("            jclass mhClass = (*env)->FindClass(env, \"java/lang/invoke/MethodHandle\");");
-        w.println("            jmethodID invokeMid = (*env)->GetMethodID(env, mhClass, ");
-        w.println("                \"invokeWithArguments\", \"([Ljava/lang/Object;)Ljava/lang/Object;\");");
-        w.println("            ");
-        w.println("            /* 将参数转换为 Object[] */");
-        w.println("            jobjectArray argsArray = (*env)->NewObjectArray(env, param_count, ");
-        w.println("                (*env)->FindClass(env, \"java/lang/Object\"), NULL);");
-        w.println("            ");
-        w.println("            for (int i = 0; i < param_count; i++) {");
-        w.println("                jobject argObj = NULL;");
-        w.println("                switch (param_slots[i]) {");
-        w.println("                    case 0: /* object */");
-        w.println("                        argObj = jargs[i].l;");
-        w.println("                        break;");
-        w.println("                    case 1: /* int */");
-        w.println("                        argObj = (*env)->NewObject(env, (*env)->FindClass(env, \"java/lang/Integer\"),");
-        w.println("                            (*env)->GetMethodID(env, (*env)->FindClass(env, \"java/lang/Integer\"), ");
-        w.println("                            \"<init>\", \"(I)V\"), jargs[i].i);");
-        w.println("                        break;");
-        w.println("                    case 2: /* long */");
-        w.println("                        argObj = (*env)->NewObject(env, (*env)->FindClass(env, \"java/lang/Long\"),");
-        w.println("                            (*env)->GetMethodID(env, (*env)->FindClass(env, \"java/lang/Long\"), ");
-        w.println("                            \"<init>\", \"(J)V\"), jargs[i].j);");
-        w.println("                        break;");
-        w.println("                    case 3: /* float */");
-        w.println("                        argObj = (*env)->NewObject(env, (*env)->FindClass(env, \"java/lang/Float\"),");
-        w.println("                            (*env)->GetMethodID(env, (*env)->FindClass(env, \"java/lang/Float\"), ");
-        w.println("                            \"<init>\", \"(F)V\"), jargs[i].f);");
-        w.println("                        break;");
-        w.println("                    case 4: /* double */");
-        w.println("                        argObj = (*env)->NewObject(env, (*env)->FindClass(env, \"java/lang/Double\"),");
-        w.println("                            (*env)->GetMethodID(env, (*env)->FindClass(env, \"java/lang/Double\"), ");
-        w.println("                            \"<init>\", \"(D)V\"), jargs[i].d);");
-        w.println("                        break;");
-        w.println("                }");
-        w.println("                (*env)->SetObjectArrayElement(env, argsArray, i, argObj);");
-        w.println("            }");
-        w.println("            ");
-        w.println("            jobject result = (*env)->CallObjectMethod(env, mh, invokeMid, argsArray);");
-        w.println("            CHECK_EXCEPTION();");
-        w.println("            ");
-        w.println("            /* 处理返回值 */");
-        w.println("            switch (ret_type) {");
-        w.println("                case 'V':");
-        w.println("                    break;");
-        w.println("                case 'I': case 'B': case 'C': case 'S': case 'Z': {");
-        w.println("                    jint r = (*env)->CallIntMethod(env, result,");
-        w.println("                        (*env)->GetMethodID(env, (*env)->FindClass(env, \"java/lang/Integer\"), ");
-        w.println("                        \"intValue\", \"()I\"));");
-        w.println("                    PUSH_I(r);");
-        w.println("                    break;");
-        w.println("                }");
-        w.println("                case 'J': {");
-        w.println("                    jlong r = (*env)->CallLongMethod(env, result,");
-        w.println("                        (*env)->GetMethodID(env, (*env)->FindClass(env, \"java/lang/Long\"), ");
-        w.println("                        \"longValue\", \"()J\"));");
-        w.println("                    PUSH_J(r);");
-        w.println("                    break;");
-        w.println("                }");
-        w.println("                case 'F': {");
-        w.println("                    jfloat r = (*env)->CallFloatMethod(env, result,");
-        w.println("                        (*env)->GetMethodID(env, (*env)->FindClass(env, \"java/lang/Float\"), ");
-        w.println("                        \"floatValue\", \"()F\"));");
-        w.println("                    PUSH_F(r);");
-        w.println("                    break;");
-        w.println("                }");
-        w.println("                case 'D': {");
-        w.println("                    jdouble r = (*env)->CallDoubleMethod(env, result,");
-        w.println("                        (*env)->GetMethodID(env, (*env)->FindClass(env, \"java/lang/Double\"), ");
-        w.println("                        \"doubleValue\", \"()D\"));");
-        w.println("                    PUSH_D(r);");
-        w.println("                    break;");
-        w.println("                }");
-        w.println("                case 'L': case '[':");
-        w.println("                    PUSH_L(result);");
-        w.println("                    break;");
-        w.println("            }");
         w.println("            break;");
         w.println("        }");
         w.println();
@@ -2369,36 +2610,36 @@ public class NativeCodeGenerator {
         w.println();
 
         // 缓存的类和方法 ID
-        w.println("static jclass cls_Integer   = NULL;");
-        w.println("static jclass cls_Long      = NULL;");
-        w.println("static jclass cls_Float     = NULL;");
-        w.println("static jclass cls_Double    = NULL;");
-        w.println("static jclass cls_Boolean   = NULL;");
-        w.println("static jclass cls_Byte      = NULL;");
-        w.println("static jclass cls_Short     = NULL;");
-        w.println("static jclass cls_Character = NULL;");
+        w.println("jclass cls_Integer   = NULL;");
+        w.println("jclass cls_Long      = NULL;");
+        w.println("jclass cls_Float     = NULL;");
+        w.println("jclass cls_Double    = NULL;");
+        w.println("jclass cls_Boolean   = NULL;");
+        w.println("jclass cls_Byte      = NULL;");
+        w.println("jclass cls_Short     = NULL;");
+        w.println("jclass cls_Character = NULL;");
         w.println();
-        w.println("static jmethodID mid_Integer_intValue     = NULL;");
-        w.println("static jmethodID mid_Long_longValue       = NULL;");
-        w.println("static jmethodID mid_Float_floatValue     = NULL;");
-        w.println("static jmethodID mid_Double_doubleValue   = NULL;");
-        w.println("static jmethodID mid_Boolean_booleanValue = NULL;");
-        w.println("static jmethodID mid_Byte_byteValue       = NULL;");
-        w.println("static jmethodID mid_Short_shortValue     = NULL;");
-        w.println("static jmethodID mid_Character_charValue  = NULL;");
+        w.println("jmethodID mid_Integer_intValue     = NULL;");
+        w.println("jmethodID mid_Long_longValue       = NULL;");
+        w.println("jmethodID mid_Float_floatValue     = NULL;");
+        w.println("jmethodID mid_Double_doubleValue   = NULL;");
+        w.println("jmethodID mid_Boolean_booleanValue = NULL;");
+        w.println("jmethodID mid_Byte_byteValue       = NULL;");
+        w.println("jmethodID mid_Short_shortValue     = NULL;");
+        w.println("jmethodID mid_Character_charValue  = NULL;");
         w.println();
-        w.println("static jmethodID mid_Integer_valueOf   = NULL;");
-        w.println("static jmethodID mid_Long_valueOf      = NULL;");
-        w.println("static jmethodID mid_Float_valueOf     = NULL;");
-        w.println("static jmethodID mid_Double_valueOf    = NULL;");
-        w.println("static jmethodID mid_Boolean_valueOf   = NULL;");
-        w.println("static jmethodID mid_Byte_valueOf      = NULL;");
-        w.println("static jmethodID mid_Short_valueOf     = NULL;");
-        w.println("static jmethodID mid_Character_valueOf = NULL;");
+        w.println("jmethodID mid_Integer_valueOf   = NULL;");
+        w.println("jmethodID mid_Long_valueOf      = NULL;");
+        w.println("jmethodID mid_Float_valueOf     = NULL;");
+        w.println("jmethodID mid_Double_valueOf    = NULL;");
+        w.println("jmethodID mid_Boolean_valueOf   = NULL;");
+        w.println("jmethodID mid_Byte_valueOf      = NULL;");
+        w.println("jmethodID mid_Short_valueOf     = NULL;");
+        w.println("jmethodID mid_Character_valueOf = NULL;");
         w.println();
 
         // 初始化缓存
-        w.println("static void vm_init_boxing(JNIEnv* env) {");
+        w.println("void vm_init_boxing(JNIEnv* env) {");
         w.println("    #define CACHE_CLASS(var, name) \\");
         w.println("        { jclass c = (*env)->FindClass(env, name); \\");
         w.println("          var = (jclass)(*env)->NewGlobalRef(env, c); \\");
@@ -2554,6 +2795,22 @@ public class NativeCodeGenerator {
         w.println("        return NULL;");
         w.println("    }");
         w.println("    VMMethodInfo* method = &vm_methods[methodId];");
+
+        if (config.isDebug()) {
+            w.println();
+            w.println("    {");
+            w.println("        char dbg_owner[512], dbg_name[256], dbg_desc[512];");
+            w.println("        vm_decrypt_str(method->owner, method->owner_len, dbg_owner);");
+            w.println("        vm_decrypt_str(method->name, method->name_len, dbg_name);");
+            w.println("        vm_decrypt_str(method->desc, method->desc_len, dbg_desc);");
+            w.println("        printf(\"[VM-ENTER] id=%d %s.%s%s static=%d sync=%d stack=%d locals=%d code=%d cp=%d exc=%d bsm=%d\",");
+            w.println("            methodId, dbg_owner, dbg_name, dbg_desc,");
+            w.println("            method->is_static, method->is_synchronized,");
+            w.println("            method->max_stack, method->max_locals,");
+            w.println("            method->code_length, method->cp_count,");
+            w.println("            method->exception_count, method->bootstrap_count);");
+            w.println("    }");
+        }
         w.println();
 
         // 解析描述符

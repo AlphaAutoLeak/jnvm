@@ -18,6 +18,12 @@ public class ProtectConfig {
     private boolean globalBridge = true;
     private File nativeDir;
 
+    private boolean debug = false;
+
+    public boolean isDebug() { return debug; }
+    public void setDebug(boolean debug) { this.debug = debug; }
+
+
     /**
      * 校验 + 合并 configFile 中的规则
      */
