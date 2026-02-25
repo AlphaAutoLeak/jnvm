@@ -46,3 +46,4 @@ bin/
 demo-protected.jar
 demo.jar
 calculations.txt
+/test_invokedynamic/

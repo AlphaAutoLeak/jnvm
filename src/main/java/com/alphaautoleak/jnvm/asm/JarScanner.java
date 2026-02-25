@@ -111,6 +111,64 @@ public class JarScanner {
                 continue;
             }
 
+            // 跳过构造函数 (<init>) - 它们需要正确的 this 引用初始化
+            if (mn.name.equals("<init>")) {
+                continue;
+            }
+
+            // 跳过实例方法 - 只保护静态方法
+            // 实例方法需要正确的 this 引用，原生调用会破坏它
+            if ((mn.access & Opcodes.ACC_STATIC) == 0) {
+                continue;
+            }
+
+            // 跳过 lambda 方法 (lambda$...) - 它们使用 invokedynamic
+            if (mn.name.contains("lambda$")) {
+                continue;
+            }
+
+            // 跳过包含 invokedynamic 的方法
+            // invokedynamic 使用 bootstrap methods，原生调用对它的支持还不完善
+            // 需要完整的 LambdaMetafactory.metafactory 支持（6个参数）
+            boolean hasInvokeDynamic = false;
+            if (mn.instructions != null) {
+                for (Object insn : mn.instructions) {
+                    if (insn instanceof InvokeDynamicInsnNode) {
+                        hasInvokeDynamic = true;
+                        break;
+                    }
+                }
+            }
+            if (hasInvokeDynamic) {
+                continue;
+            }
+
+            // 跳过返回对象引用的方法
+            // 原生调用可能会破坏对象引用，只保护 void 和基本类型返回的方法
+            char returnType = mn.desc.charAt(mn.desc.indexOf(')') + 1);
+            if (returnType == 'L' || returnType == '[') {
+                // 返回对象或数组，跳过
+                continue;
+            }
+
+            // 跳过接收对象参数的方法
+            // 原生调用可能会破坏对象参数的引用
+            boolean hasObjectParam = false;
+            int paramEnd = mn.desc.indexOf(')');
+            if (paramEnd > 0) {
+                String params = mn.desc.substring(1, paramEnd); // skip '('
+                for (int i = 0; i < params.length(); i++) {
+                    char c = params.charAt(i);
+                    if (c == 'L' || c == '[') {
+                        hasObjectParam = true;
+                        break;
+                    }
+                }
+            }
+            if (hasObjectParam) {
+                continue;
+            }
+
             // 判断是否需要保护
             boolean shouldProtect = false;
 
