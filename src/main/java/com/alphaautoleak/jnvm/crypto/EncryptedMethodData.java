@@ -1,7 +1,7 @@
 package com.alphaautoleak.jnvm.crypto;
 
 import com.alphaautoleak.jnvm.asm.BootstrapEntry;
-import com.alphaautoleak.jnvm.asm.CPEntry;
+import com.alphaautoleak.jnvm.asm.BytecodeExtractor.MetaEntry;
 import com.alphaautoleak.jnvm.asm.ExceptionEntry;
 import com.alphaautoleak.jnvm.asm.MethodInfo;
 
@@ -46,8 +46,14 @@ public class EncryptedMethodData {
     /** max_locals */
     private final int maxLocals;
 
-    /** 自定义常量池 */
-    private final List<CPEntry> constantPool;
+    /** 元数据列表（新格式） */
+    private final List<MetaEntry> metadata;
+
+    /** PC -> 元数据索引映射 */
+    private final int[] pcToMetaIdx;
+
+    /** 字符串池 */
+    private final List<String> stringPool;
 
     /** 异常表 */
     private final List<ExceptionEntry> exceptionTable;
@@ -74,7 +80,9 @@ public class EncryptedMethodData {
         this.nonce = nonce;
         this.maxStack = info.getMaxStack();
         this.maxLocals = info.getMaxLocals();
-        this.constantPool = info.getConstantPool();
+        this.metadata = info.getMetadata();
+        this.pcToMetaIdx = info.getPcToMetaIdx();
+        this.stringPool = info.getStringPool();
         this.exceptionTable = info.getExceptionTable();
         this.bootstrapMethods = info.getBootstrapMethods();
         this.isStatic = info.isStatic();
@@ -94,7 +102,9 @@ public class EncryptedMethodData {
     public byte[] getNonce() { return nonce; }
     public int getMaxStack() { return maxStack; }
     public int getMaxLocals() { return maxLocals; }
-    public List<CPEntry> getConstantPool() { return constantPool; }
+    public List<MetaEntry> getMetadata() { return metadata; }
+    public int[] getPcToMetaIdx() { return pcToMetaIdx; }
+    public List<String> getStringPool() { return stringPool; }
     public List<ExceptionEntry> getExceptionTable() { return exceptionTable; }
     public List<BootstrapEntry> getBootstrapMethods() { return bootstrapMethods; }
     public boolean isStatic() { return isStatic; }
@@ -103,10 +113,10 @@ public class EncryptedMethodData {
     @Override
     public String toString() {
         return String.format(
-                "Encrypted{id=%d, %s.%s, bytecode=%d→%d bytes, cp=%d, exc=%d, bsm=%d}",
+                "Encrypted{id=%d, %s.%s, bytecode=%d→%d bytes, meta=%d, strings=%d, exc=%d, bsm=%d}",
                 methodId, owner, name,
                 originalLength, encryptedBytecode.length,
-                constantPool.size(), exceptionTable.size(), bootstrapMethods.size()
+                metadata.size(), stringPool.size(), exceptionTable.size(), bootstrapMethods.size()
         );
     }
 }

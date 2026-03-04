@@ -3,37 +3,35 @@ package com.alphaautoleak.jnvm.asm;
 import org.objectweb.asm.*;
 import org.objectweb.asm.tree.*;
 
-import java.io.ByteArrayOutputStream;
-import java.io.DataOutputStream;
-import java.io.IOException;
 import java.util.*;
 
 /**
  * 将 ASM 的 InsnList 序列化为自定义格式的字节码。
  *
- * 自定义字节码格式：
- *   - opcode 保持原始 JVM opcode（1 字节）
- *   - 操作数统一使用 2 字节无符号 index（指向自定义常量池）
- *   - 跳转指令使用 4 字节有符号偏移（相对当前指令起始位置）
- *   - tableswitch / lookupswitch 使用自定义紧凑格式
+ * 新格式设计：
+ *   - 字节码：每条指令只有 opcode（1 字节）
+ *   - 元数据：指令操作数存储在独立的 MetaEntry 数组中
+ *   - pcToMetaIdx：PC -> 元数据索引的映射数组
  *
- * 这样 C 解释器可以用简单的 switch(opcode) + 读取固定长度操作数来解释执行。
+ * 这样 C 解释器可以通过 pcToMetaIdx[pc] 获取当前指令的元数据。
  */
 public class BytecodeExtractor {
 
     private final ClassNode classNode;
     private final MethodNode methodNode;
 
-    /** 自定义字节码输出 */
-    private final ByteArrayOutputStream bytecodeOut = new ByteArrayOutputStream(256);
-    private final DataOutputStream dos = new DataOutputStream(bytecodeOut);
-
-    /** 自定义常量池 */
-    private final List<CPEntry> constantPool = new ArrayList<>();
-    private int nextCpIndex = 0;
-
-    /** 去重：key → cp index */
-    private final Map<String, Integer> cpDedup = new HashMap<>();
+    /** 字节码缓冲区 */
+    private final List<Integer> bytecodes = new ArrayList<>();
+    
+    /** 元数据列表 */
+    private final List<MetaEntry> metadataList = new ArrayList<>();
+    
+    /** PC -> 元数据索引映射 */
+    private final Map<Integer, Integer> pcToMetaIdx = new HashMap<>();
+    
+    /** 字符串池 */
+    private final List<String> stringPool = new ArrayList<>();
+    private final Map<String, Integer> stringPoolIdx = new HashMap<>();
 
     /** 异常表 */
     private final List<ExceptionEntry> exceptionTable = new ArrayList<>();
@@ -41,14 +39,14 @@ public class BytecodeExtractor {
     /** Bootstrap 方法表 */
     private final List<BootstrapEntry> bootstrapMethods = new ArrayList<>();
 
-    /** Label → 字节码偏移量映射（两遍扫描） */
-    private final Map<LabelNode, Integer> labelOffsets = new HashMap<>();
-
-    /** 需要回填的跳转指令：(bytecodePosition, targetLabel) */
-    private final List<JumpPatch> jumpPatches = new ArrayList<>();
-
-    /** switch 回填 */
-    private final List<SwitchPatch> switchPatches = new ArrayList<>();
+    /** Label -> PC 映射 */
+    private final Map<LabelNode, Integer> labelToPc = new HashMap<>();
+    
+    /** 需要回填的跳转：(元数据索引, 目标 Label) */
+    private final List<JumpBackpatch> jumpBackpatches = new ArrayList<>();
+    
+    /** Switch 回填 */
+    private final List<SwitchBackpatch> switchBackpatches = new ArrayList<>();
 
     public BytecodeExtractor(ClassNode cn, MethodNode mn) {
         this.classNode = cn;
@@ -56,435 +54,366 @@ public class BytecodeExtractor {
     }
 
     /**
-     * 执行提取：两遍扫描
-     * 第一遍：生成字节码 + 记录 label 位置 + 记录回填点
-     * 第二遍：回填跳转偏移
+     * 执行提取
      */
     public void extract() {
-        try {
-            // 收集 bootstrap methods（类级别）
-            extractBootstrapMethods();
-
-            // 第一遍：生成字节码
-            firstPass();
-
-            // 回填跳转
-            backpatchJumps();
-
-            // 转换异常表
-            extractExceptionTable();
-
-        } catch (IOException e) {
-            throw new RuntimeException("Bytecode extraction failed", e);
-        }
+        // 第一遍：生成字节码和元数据
+        firstPass();
+        
+        // 回填跳转目标
+        backpatchJumps();
+        
+        // 提取异常表
+        extractExceptionTable();
     }
 
     /**
-     * 第一遍扫描：遍历 InsnList，生成自定义字节码
+     * 第一遍：遍历指令，生成字节码和元数据
      */
-    private void firstPass() throws IOException {
+    private void firstPass() {
         InsnList insns = methodNode.instructions;
-
+        
         for (int i = 0; i < insns.size(); i++) {
             AbstractInsnNode node = insns.get(i);
-
+            
             // 记录 Label 位置
             if (node instanceof LabelNode) {
-                labelOffsets.put((LabelNode) node, bytecodeOut.size());
-                continue; // Label 不生成字节码
+                labelToPc.put((LabelNode) node, bytecodes.size());
+                continue;
             }
-
-            // 跳过 LineNumber 和 Frame 节点
+            
+            // 跳过 LineNumber 和 Frame
             if (node instanceof LineNumberNode || node instanceof FrameNode) {
                 continue;
             }
-
+            
+            // 发射指令
             emitInstruction(node);
         }
     }
 
-    /**
-     * 发射单条指令的自定义字节码
-     */
-    private void emitInstruction(AbstractInsnNode node) throws IOException {
+    private void emitInstruction(AbstractInsnNode node) {
         int opcode = node.getOpcode();
-
+        int pc = bytecodes.size();
+        
+        // 写入 opcode
+        bytecodes.add(opcode);
+        
         switch (node.getType()) {
             case AbstractInsnNode.INSN:
-                // 无操作数指令：nop, aconst_null, iconst_m1~5, return, iadd, ...
-                emitOpcode(opcode);
+                // 无操作数指令
+                pcToMetaIdx.put(pc, -1);
                 break;
-
+                
             case AbstractInsnNode.INT_INSN:
-                emitIntInsn((IntInsnNode) node);
+                emitIntInsn((IntInsnNode) node, pc);
                 break;
-
+                
             case AbstractInsnNode.VAR_INSN:
-                emitVarInsn((VarInsnNode) node);
+                emitVarInsn((VarInsnNode) node, pc);
                 break;
-
+                
             case AbstractInsnNode.TYPE_INSN:
-                emitTypeInsn((TypeInsnNode) node);
+                emitTypeInsn((TypeInsnNode) node, pc);
                 break;
-
+                
             case AbstractInsnNode.FIELD_INSN:
-                emitFieldInsn((FieldInsnNode) node);
+                emitFieldInsn((FieldInsnNode) node, pc);
                 break;
-
+                
             case AbstractInsnNode.METHOD_INSN:
-                emitMethodInsn((MethodInsnNode) node);
+                emitMethodInsn((MethodInsnNode) node, pc);
                 break;
-
+                
             case AbstractInsnNode.INVOKE_DYNAMIC_INSN:
-                emitInvokeDynamicInsn((InvokeDynamicInsnNode) node);
+                emitInvokeDynamicInsn((InvokeDynamicInsnNode) node, pc);
                 break;
-
+                
             case AbstractInsnNode.JUMP_INSN:
-                emitJumpInsn((JumpInsnNode) node);
+                emitJumpInsn((JumpInsnNode) node, pc);
                 break;
-
+                
             case AbstractInsnNode.LDC_INSN:
-                emitLdcInsn((LdcInsnNode) node);
+                emitLdcInsn((LdcInsnNode) node, pc);
                 break;
-
+                
             case AbstractInsnNode.IINC_INSN:
-                emitIincInsn((IincInsnNode) node);
+                emitIincInsn((IincInsnNode) node, pc);
                 break;
-
+                
             case AbstractInsnNode.TABLESWITCH_INSN:
-                emitTableSwitchInsn((TableSwitchInsnNode) node);
+                emitTableSwitchInsn((TableSwitchInsnNode) node, pc);
                 break;
-
+                
             case AbstractInsnNode.LOOKUPSWITCH_INSN:
-                emitLookupSwitchInsn((LookupSwitchInsnNode) node);
+                emitLookupSwitchInsn((LookupSwitchInsnNode) node, pc);
                 break;
-
+                
             case AbstractInsnNode.MULTIANEWARRAY_INSN:
-                emitMultiANewArrayInsn((MultiANewArrayInsnNode) node);
+                emitMultiANewArrayInsn((MultiANewArrayInsnNode) node, pc);
                 break;
-
+                
             default:
-                // 未知节点类型，跳过
+                pcToMetaIdx.put(pc, -1);
                 break;
         }
     }
 
-    // ===== 各类型指令的发射 =====
+    // ===== 各类型指令的元数据生成 =====
 
-    private void emitOpcode(int opcode) throws IOException {
-        dos.writeByte(opcode);
+    private void emitIntInsn(IntInsnNode node, int pc) {
+        MetaEntry meta = new MetaEntry();
+        meta.type = MetaType.META_INT;
+        meta.intVal = node.operand;
+        int idx = metadataList.size();
+        metadataList.add(meta);
+        pcToMetaIdx.put(pc, idx);
     }
 
-    /**
-     * bipush / sipush / newarray
-     */
-    private void emitIntInsn(IntInsnNode node) throws IOException {
-        dos.writeByte(node.getOpcode());
-        if (node.getOpcode() == Opcodes.BIPUSH) {
-            dos.writeByte(node.operand); // 1 byte
-        } else if (node.getOpcode() == Opcodes.SIPUSH) {
-            dos.writeShort(node.operand); // 2 bytes
-        } else {
-            // NEWARRAY: operand is array type
-            dos.writeByte(node.operand);
-        }
+    private void emitVarInsn(VarInsnNode node, int pc) {
+        MetaEntry meta = new MetaEntry();
+        meta.type = MetaType.META_LOCAL;
+        meta.intVal = node.var;
+        int idx = metadataList.size();
+        metadataList.add(meta);
+        pcToMetaIdx.put(pc, idx);
     }
 
-    /**
-     * xLOAD / xSTORE / RET — 操作数是 local 变量索引
-     * 统一用 2 字节（支持 wide）
-     */
-    private void emitVarInsn(VarInsnNode node) throws IOException {
-        dos.writeByte(node.getOpcode());
-        dos.writeShort(node.var); // 2 bytes, 统一格式
+    private void emitTypeInsn(TypeInsnNode node, int pc) {
+        MetaEntry meta = new MetaEntry();
+        meta.type = MetaType.META_CLASS;
+        meta.classIdx = getStringIndex(node.desc);
+        meta.classLen = node.desc.length();
+        int idx = metadataList.size();
+        metadataList.add(meta);
+        pcToMetaIdx.put(pc, idx);
     }
 
-    /**
-     * NEW / ANEWARRAY / CHECKCAST / INSTANCEOF
-     * 操作数：自定义 CP 中的 CLASS 索引
-     */
-    private void emitTypeInsn(TypeInsnNode node) throws IOException {
-        int cpIdx = getOrCreateClassEntry(node.desc);
-        dos.writeByte(node.getOpcode());
-        dos.writeShort(cpIdx);
+    private void emitFieldInsn(FieldInsnNode node, int pc) {
+        MetaEntry meta = new MetaEntry();
+        meta.type = MetaType.META_FIELD;
+        meta.ownerIdx = getStringIndex(node.owner);
+        meta.ownerLen = node.owner.length();
+        meta.nameIdx = getStringIndex(node.name);
+        meta.nameLen = node.name.length();
+        meta.descIdx = getStringIndex(node.desc);
+        meta.descLen = node.desc.length();
+        int idx = metadataList.size();
+        metadataList.add(meta);
+        pcToMetaIdx.put(pc, idx);
     }
 
-    /**
-     * GETFIELD / PUTFIELD / GETSTATIC / PUTSTATIC
-     * 操作数：自定义 CP 中的 FIELD_REF 索引
-     */
-    private void emitFieldInsn(FieldInsnNode node) throws IOException {
-        int cpIdx = getOrCreateFieldRefEntry(node.owner, node.name, node.desc);
-        dos.writeByte(node.getOpcode());
-        dos.writeShort(cpIdx);
+    private void emitMethodInsn(MethodInsnNode node, int pc) {
+        MetaEntry meta = new MetaEntry();
+        meta.type = MetaType.META_METHOD;
+        meta.ownerIdx = getStringIndex(node.owner);
+        meta.ownerLen = node.owner.length();
+        meta.nameIdx = getStringIndex(node.name);
+        meta.nameLen = node.name.length();
+        meta.descIdx = getStringIndex(node.desc);
+        meta.descLen = node.desc.length();
+        int idx = metadataList.size();
+        metadataList.add(meta);
+        pcToMetaIdx.put(pc, idx);
     }
 
-    /**
-     * INVOKEVIRTUAL / INVOKESPECIAL / INVOKESTATIC / INVOKEINTERFACE
-     * 操作数：自定义 CP 中的 METHOD_REF 或 INTERFACE_METHOD_REF 索引
-     */
-    private void emitMethodInsn(MethodInsnNode node) throws IOException {
-        int cpIdx;
-        if (node.itf) {
-            cpIdx = getOrCreateInterfaceMethodRefEntry(node.owner, node.name, node.desc);
-        } else {
-            cpIdx = getOrCreateMethodRefEntry(node.owner, node.name, node.desc);
-        }
-        dos.writeByte(node.getOpcode());
-        dos.writeShort(cpIdx);
-        if (node.getOpcode() == Opcodes.INVOKEINTERFACE) {
-            // 额外写入参数 count + 0 padding（与标准 JVM 格式兼容）
-            int argCount = Type.getArgumentTypes(node.desc).length + 1;
-            dos.writeByte(argCount);
-            dos.writeByte(0);
-        }
+    private void emitInvokeDynamicInsn(InvokeDynamicInsnNode node, int pc) {
+        int bsmIdx = findOrCreateBootstrapMethod(node.bsm, node.bsmArgs);
+        
+        MetaEntry meta = new MetaEntry();
+        meta.type = MetaType.META_INVOKE_DYNAMIC;
+        meta.bsmIdx = bsmIdx;
+        meta.nameIdx = getStringIndex(node.name);
+        meta.nameLen = node.name.length();
+        meta.descIdx = getStringIndex(node.desc);
+        meta.descLen = node.desc.length();
+        int idx = metadataList.size();
+        metadataList.add(meta);
+        pcToMetaIdx.put(pc, idx);
     }
 
-    /**
-     * INVOKEDYNAMIC
-     * 操作数：自定义 CP 中的 INVOKE_DYNAMIC 索引
-     */
-    private void emitInvokeDynamicInsn(InvokeDynamicInsnNode node) throws IOException {
-        int bsmIdx = findBootstrapMethodIndex(node.bsm, node.bsmArgs);
-        int cpIdx = getOrCreateInvokeDynamicEntry(bsmIdx, node.name, node.desc);
-        dos.writeByte(Opcodes.INVOKEDYNAMIC);
-        dos.writeShort(cpIdx);
-        dos.writeByte(0); // padding
-        dos.writeByte(0); // padding
+    private void emitJumpInsn(JumpInsnNode node, int pc) {
+        MetaEntry meta = new MetaEntry();
+        meta.type = MetaType.META_JUMP;
+        // 偏移量稍后回填
+        meta.jumpOffset = 0;
+        int idx = metadataList.size();
+        metadataList.add(meta);
+        pcToMetaIdx.put(pc, idx);
+        jumpBackpatches.add(new JumpBackpatch(idx, pc, node.label));
     }
 
-    /**
-     * GOTO / IF_xxx / JSR 等跳转
-     * 统一用 4 字节有符号偏移（指令起始位置到目标 label 的偏移）
-     */
-    private void emitJumpInsn(JumpInsnNode node) throws IOException {
-        int instrStart = bytecodeOut.size();
-        dos.writeByte(node.getOpcode());
-
-        // 先写占位 4 字节，后续回填
-        jumpPatches.add(new JumpPatch(bytecodeOut.size(), instrStart, node.label));
-        dos.writeInt(0); // placeholder
-    }
-
-    /**
-     * LDC / LDC_W / LDC2_W
-     * 操作数：自定义 CP 索引
-     */
-    private void emitLdcInsn(LdcInsnNode node) throws IOException {
-        int cpIdx;
+    private void emitLdcInsn(LdcInsnNode node, int pc) {
+        MetaEntry meta = new MetaEntry();
         Object cst = node.cst;
-
+        
         if (cst instanceof Integer) {
-            cpIdx = getOrCreateIntEntry((Integer) cst);
-            dos.writeByte(Opcodes.LDC);
+            meta.type = MetaType.META_INT;
+            meta.intVal = (Integer) cst;
         } else if (cst instanceof Long) {
-            cpIdx = getOrCreateLongEntry((Long) cst);
-            dos.writeByte(Opcodes.LDC); // 统一用 LDC
+            meta.type = MetaType.META_LONG;
+            meta.longVal = (Long) cst;
         } else if (cst instanceof Float) {
-            cpIdx = getOrCreateFloatEntry((Float) cst);
-            dos.writeByte(Opcodes.LDC);
+            meta.type = MetaType.META_FLOAT;
+            meta.floatVal = (Float) cst;
         } else if (cst instanceof Double) {
-            cpIdx = getOrCreateDoubleEntry((Double) cst);
-            dos.writeByte(Opcodes.LDC);
+            meta.type = MetaType.META_DOUBLE;
+            meta.doubleVal = (Double) cst;
         } else if (cst instanceof String) {
-            cpIdx = getOrCreateStringEntry((String) cst);
-            dos.writeByte(Opcodes.LDC);
+            meta.type = MetaType.META_STRING;
+            meta.strIdx = getStringIndex((String) cst);
+            meta.strLen = ((String) cst).length();
         } else if (cst instanceof Type) {
             Type t = (Type) cst;
-            if (t.getSort() == Type.OBJECT || t.getSort() == Type.ARRAY) {
-                cpIdx = getOrCreateClassEntry(t.getInternalName());
-            } else if (t.getSort() == Type.METHOD) {
-                cpIdx = getOrCreateStringEntry(t.getDescriptor());
-            } else {
-                cpIdx = getOrCreateStringEntry(t.getDescriptor());
-            }
-            dos.writeByte(Opcodes.LDC);
+            meta.type = MetaType.META_CLASS;
+            String desc = t.getDescriptor();
+            meta.classIdx = getStringIndex(desc);
+            meta.classLen = desc.length();
         } else if (cst instanceof Handle) {
+            // MethodHandle - 暂时作为字符串存储
             Handle h = (Handle) cst;
-            cpIdx = getOrCreateMethodHandleEntry(h.getTag(), h.getOwner(), h.getName(), h.getDesc());
-            dos.writeByte(Opcodes.LDC);
+            meta.type = MetaType.META_METHOD;
+            meta.ownerIdx = getStringIndex(h.getOwner());
+            meta.ownerLen = h.getOwner().length();
+            meta.nameIdx = getStringIndex(h.getName());
+            meta.nameLen = h.getName().length();
+            meta.descIdx = getStringIndex(h.getDesc());
+            meta.descLen = h.getDesc().length();
         } else {
-            throw new RuntimeException("Unsupported LDC constant type: " + cst.getClass());
+            throw new RuntimeException("Unsupported LDC constant: " + cst.getClass());
         }
-
-        dos.writeShort(cpIdx);
+        
+        int idx = metadataList.size();
+        metadataList.add(meta);
+        pcToMetaIdx.put(pc, idx);
     }
 
-    /**
-     * IINC: local变量索引 + 增量
-     */
-    private void emitIincInsn(IincInsnNode node) throws IOException {
-        dos.writeByte(Opcodes.IINC);
-        dos.writeShort(node.var);
-        dos.writeShort(node.incr);
+    private void emitIincInsn(IincInsnNode node, int pc) {
+        MetaEntry meta = new MetaEntry();
+        meta.type = MetaType.META_IINC;
+        meta.iincIndex = node.var;
+        meta.iincConst = node.incr;
+        int idx = metadataList.size();
+        metadataList.add(meta);
+        pcToMetaIdx.put(pc, idx);
     }
 
-    /**
-     * TABLESWITCH
-     * 自定义格式：opcode(1) + default_offset(4) + low(4) + high(4) + offsets(4 * n)
-     */
-    private void emitTableSwitchInsn(TableSwitchInsnNode node) throws IOException {
-        int instrStart = bytecodeOut.size();
-        dos.writeByte(Opcodes.TABLESWITCH);
-
-        // default offset - placeholder
-        int defaultPos = bytecodeOut.size();
-        dos.writeInt(0);
-
-        dos.writeInt(node.min);
-        dos.writeInt(node.max);
-
-        // jump offsets - placeholders
-        List<int[]> patches = new ArrayList<>();
-        for (int i = 0; i < node.labels.size(); i++) {
-            int pos = bytecodeOut.size();
-            dos.writeInt(0);
-            patches.add(new int[]{pos, i});
-        }
-
-        switchPatches.add(new SwitchPatch(instrStart, defaultPos, node.dflt, patches, node.labels));
+    private void emitTableSwitchInsn(TableSwitchInsnNode node, int pc) {
+        MetaEntry meta = new MetaEntry();
+        meta.type = MetaType.META_SWITCH;
+        meta.switchLow = node.min;
+        meta.switchHigh = node.max;
+        meta.switchOffsets = new int[node.labels.size() + 1]; // default + cases
+        
+        int idx = metadataList.size();
+        metadataList.add(meta);
+        pcToMetaIdx.put(pc, idx);
+        
+        switchBackpatches.add(new SwitchBackpatch(idx, pc, node.dflt, node.labels));
     }
 
-    /**
-     * LOOKUPSWITCH
-     * 自定义格式：opcode(1) + default_offset(4) + npairs(4) + [key(4) + offset(4)] * npairs
-     */
-    private void emitLookupSwitchInsn(LookupSwitchInsnNode node) throws IOException {
-        int instrStart = bytecodeOut.size();
-        dos.writeByte(Opcodes.LOOKUPSWITCH);
-
-        // default offset - placeholder
-        int defaultPos = bytecodeOut.size();
-        dos.writeInt(0);
-
-        dos.writeInt(node.keys.size());
-
-        List<int[]> patches = new ArrayList<>();
+    private void emitLookupSwitchInsn(LookupSwitchInsnNode node, int pc) {
+        MetaEntry meta = new MetaEntry();
+        meta.type = MetaType.META_SWITCH;
+        meta.switchKeys = new int[node.keys.size()];
+        meta.switchOffsets = new int[node.keys.size() + 1]; // default + cases
+        
         for (int i = 0; i < node.keys.size(); i++) {
-            dos.writeInt(node.keys.get(i));
-            int pos = bytecodeOut.size();
-            dos.writeInt(0);
-            patches.add(new int[]{pos, i});
+            meta.switchKeys[i] = node.keys.get(i);
         }
-
-        switchPatches.add(new SwitchPatch(instrStart, defaultPos, node.dflt, patches, node.labels));
+        
+        int idx = metadataList.size();
+        metadataList.add(meta);
+        pcToMetaIdx.put(pc, idx);
+        
+        switchBackpatches.add(new SwitchBackpatch(idx, pc, node.dflt, node.labels));
     }
 
-    /**
-     * MULTIANEWARRAY
-     */
-    private void emitMultiANewArrayInsn(MultiANewArrayInsnNode node) throws IOException {
-        int cpIdx = getOrCreateClassEntry(node.desc);
-        dos.writeByte(Opcodes.MULTIANEWARRAY);
-        dos.writeShort(cpIdx);
-        dos.writeByte(node.dims);
+    private void emitMultiANewArrayInsn(MultiANewArrayInsnNode node, int pc) {
+        MetaEntry meta = new MetaEntry();
+        meta.type = MetaType.META_TYPE;
+        meta.classIdx = getStringIndex(node.desc);
+        meta.classLen = node.desc.length();
+        meta.dims = node.dims;
+        int idx = metadataList.size();
+        metadataList.add(meta);
+        pcToMetaIdx.put(pc, idx);
     }
 
-    // ===== 回填跳转偏移 =====
+    // ===== 回填跳转 =====
 
     private void backpatchJumps() {
-        byte[] code = bytecodeOut.toByteArray();
-
         // 回填普通跳转
-        for (JumpPatch patch : jumpPatches) {
-            Integer targetOffset = labelOffsets.get(patch.targetLabel);
-            if (targetOffset == null) {
-                throw new RuntimeException("Unresolved label in jump instruction");
+        for (JumpBackpatch bp : jumpBackpatches) {
+            Integer targetPc = labelToPc.get(bp.targetLabel);
+            if (targetPc == null) {
+                throw new RuntimeException("Unresolved label in jump");
             }
-            int relOffset = targetOffset - patch.instrStart;
-            writeInt(code, patch.patchPosition, relOffset);
+            MetaEntry meta = metadataList.get(bp.metaIdx);
+            meta.jumpOffset = targetPc - bp.srcPc;
         }
-
+        
         // 回填 switch
-        for (SwitchPatch patch : switchPatches) {
-            // default
-            Integer defOffset = labelOffsets.get(patch.defaultLabel);
-            if (defOffset == null) throw new RuntimeException("Unresolved default label");
-            writeInt(code, patch.defaultPatchPos, defOffset - patch.instrStart);
-
-            // cases
-            for (int[] p : patch.casePatchPositions) {
-                int pos = p[0];
-                int idx = p[1];
-                LabelNode label = patch.caseLabels.get(idx);
-                Integer caseOffset = labelOffsets.get(label);
-                if (caseOffset == null) throw new RuntimeException("Unresolved case label");
-                writeInt(code, pos, caseOffset - patch.instrStart);
+        for (SwitchBackpatch bp : switchBackpatches) {
+            Integer defaultPc = labelToPc.get(bp.defaultLabel);
+            if (defaultPc == null) {
+                throw new RuntimeException("Unresolved default label in switch");
+            }
+            
+            MetaEntry meta = metadataList.get(bp.metaIdx);
+            meta.switchOffsets[0] = defaultPc - bp.srcPc;
+            
+            for (int i = 0; i < bp.caseLabels.size(); i++) {
+                Integer casePc = labelToPc.get(bp.caseLabels.get(i));
+                if (casePc == null) {
+                    throw new RuntimeException("Unresolved case label in switch");
+                }
+                meta.switchOffsets[i + 1] = casePc - bp.srcPc;
             }
         }
-
-        // 回写
-        bytecodeOut.reset();
-        try {
-            bytecodeOut.write(code);
-        } catch (IOException e) {
-            throw new RuntimeException(e);
-        }
-    }
-
-    private void writeInt(byte[] buf, int pos, int value) {
-        buf[pos] = (byte) (value >> 24);
-        buf[pos + 1] = (byte) (value >> 16);
-        buf[pos + 2] = (byte) (value >> 8);
-        buf[pos + 3] = (byte) value;
     }
 
     // ===== 异常表提取 =====
 
     private void extractExceptionTable() {
         if (methodNode.tryCatchBlocks == null) return;
-
+        
         for (TryCatchBlockNode tcb : methodNode.tryCatchBlocks) {
-            Integer startPc = labelOffsets.get(tcb.start);
-            Integer endPc = labelOffsets.get(tcb.end);
-            Integer handlerPc = labelOffsets.get(tcb.handler);
-
+            Integer startPc = labelToPc.get(tcb.start);
+            Integer endPc = labelToPc.get(tcb.end);
+            Integer handlerPc = labelToPc.get(tcb.handler);
+            
             if (startPc == null || endPc == null || handlerPc == null) {
-                System.err.println("[WARN] Unresolved exception table label, skipping");
                 continue;
             }
-
+            
             ExceptionEntry entry = new ExceptionEntry(startPc, endPc, handlerPc, tcb.type);
-
-            // 如果有 catch type，加入常量池
-            if (tcb.type != null) {
-                int cpIdx = getOrCreateClassEntry(tcb.type);
-                entry.setCatchTypeCpIndex(cpIdx);
-            }
-
             exceptionTable.add(entry);
         }
     }
 
-    // ===== Bootstrap Methods 提取 =====
+    // ===== Bootstrap Methods =====
 
-    private void extractBootstrapMethods() {
-        // Bootstrap methods 是类级别的，从 ClassNode 获取
-        // ASM 的 InvokeDynamicInsnNode 已经内联了 bsm 信息
-        // 这里不需要预提取，在 emitInvokeDynamicInsn 时按需创建
-    }
-
-    private int findBootstrapMethodIndex(Handle bsm, Object[] bsmArgs) {
-        // 检查是否已存在
+    private int findOrCreateBootstrapMethod(Handle bsm, Object[] bsmArgs) {
         for (int i = 0; i < bootstrapMethods.size(); i++) {
             BootstrapEntry e = bootstrapMethods.get(i);
             if (e.getHandleTag() == bsm.getTag() &&
-                    e.getHandleOwner().equals(bsm.getOwner()) &&
-                    e.getHandleName().equals(bsm.getName()) &&
-                    e.getHandleDescriptor().equals(bsm.getDesc())) {
+                e.getHandleOwner().equals(bsm.getOwner()) &&
+                e.getHandleName().equals(bsm.getName()) &&
+                e.getHandleDescriptor().equals(bsm.getDesc())) {
                 return i;
             }
         }
-
+        
         BootstrapEntry entry = new BootstrapEntry();
         entry.setHandleTag(bsm.getTag());
         entry.setHandleOwner(bsm.getOwner());
         entry.setHandleName(bsm.getName());
         entry.setHandleDescriptor(bsm.getDesc());
-
+        
         List<Object> args = new ArrayList<>();
         List<BootstrapEntry.ArgType> argTypes = new ArrayList<>();
-
+        
         if (bsmArgs != null) {
             for (Object arg : bsmArgs) {
                 if (arg instanceof Integer) {
@@ -508,7 +437,6 @@ public class BytecodeExtractor {
                     argTypes.add(BootstrapEntry.ArgType.METHOD_TYPE);
                 } else if (arg instanceof Handle) {
                     Handle h = (Handle) arg;
-                    // 序列化为 "tag:owner:name:desc"
                     String serialized = h.getTag() + ":" + h.getOwner() + ":" +
                             h.getName() + ":" + h.getDesc();
                     args.add(serialized);
@@ -519,123 +447,52 @@ public class BytecodeExtractor {
                 }
             }
         }
-
+        
         entry.setArguments(args);
         entry.setArgumentTypes(argTypes);
-
+        
         int idx = bootstrapMethods.size();
         bootstrapMethods.add(entry);
         return idx;
     }
-    // ===== 常量池管理（去重） =====
 
-    private int getOrCreateIntEntry(int value) {
-        String key = "INT:" + value;
-        return cpDedup.computeIfAbsent(key, k -> {
-            int idx = nextCpIndex++;
-            constantPool.add(CPEntry.ofInt(idx, value));
-            return idx;
-        });
-    }
+    // ===== 字符串池管理 =====
 
-    private int getOrCreateLongEntry(long value) {
-        String key = "LONG:" + value;
-        return cpDedup.computeIfAbsent(key, k -> {
-            int idx = nextCpIndex++;
-            constantPool.add(CPEntry.ofLong(idx, value));
-            return idx;
-        });
-    }
-
-    private int getOrCreateFloatEntry(float value) {
-        String key = "FLOAT:" + Float.floatToIntBits(value);
-        return cpDedup.computeIfAbsent(key, k -> {
-            int idx = nextCpIndex++;
-            constantPool.add(CPEntry.ofFloat(idx, value));
-            return idx;
-        });
-    }
-
-    private int getOrCreateDoubleEntry(double value) {
-        String key = "DOUBLE:" + Double.doubleToLongBits(value);
-        return cpDedup.computeIfAbsent(key, k -> {
-            int idx = nextCpIndex++;
-            constantPool.add(CPEntry.ofDouble(idx, value));
-            return idx;
-        });
-    }
-
-    private int getOrCreateStringEntry(String value) {
-        String key = "STRING:" + value;
-        return cpDedup.computeIfAbsent(key, k -> {
-            int idx = nextCpIndex++;
-            constantPool.add(CPEntry.ofString(idx, value));
-            return idx;
-        });
-    }
-
-    private int getOrCreateClassEntry(String className) {
-        String key = "CLASS:" + className;
-        return cpDedup.computeIfAbsent(key, k -> {
-            int idx = nextCpIndex++;
-            constantPool.add(CPEntry.ofClass(idx, className));
-            return idx;
-        });
-    }
-
-    private int getOrCreateMethodRefEntry(String owner, String name, String desc) {
-        String key = "METHOD:" + owner + "." + name + desc;
-        return cpDedup.computeIfAbsent(key, k -> {
-            int idx = nextCpIndex++;
-            constantPool.add(CPEntry.ofMethodRef(idx, owner, name, desc));
-            return idx;
-        });
-    }
-
-    private int getOrCreateInterfaceMethodRefEntry(String owner, String name, String desc) {
-        String key = "IMETHOD:" + owner + "." + name + desc;
-        return cpDedup.computeIfAbsent(key, k -> {
-            int idx = nextCpIndex++;
-            constantPool.add(CPEntry.ofInterfaceMethodRef(idx, owner, name, desc));
-            return idx;
-        });
-    }
-
-    private int getOrCreateFieldRefEntry(String owner, String name, String desc) {
-        String key = "FIELD:" + owner + "." + name + ":" + desc;
-        return cpDedup.computeIfAbsent(key, k -> {
-            int idx = nextCpIndex++;
-            constantPool.add(CPEntry.ofFieldRef(idx, owner, name, desc));
-            return idx;
-        });
-    }
-
-    private int getOrCreateInvokeDynamicEntry(int bsmIdx, String name, String desc) {
-        String key = "INDY:" + bsmIdx + ":" + name + desc;
-        return cpDedup.computeIfAbsent(key, k -> {
-            int idx = nextCpIndex++;
-            constantPool.add(CPEntry.ofInvokeDynamic(idx, bsmIdx, name, desc));
-            return idx;
-        });
-    }
-
-    private int getOrCreateMethodHandleEntry(int tag, String owner, String name, String desc) {
-        String key = "HANDLE:" + tag + ":" + owner + "." + name + desc;
-        return cpDedup.computeIfAbsent(key, k -> {
-            int idx = nextCpIndex++;
-            constantPool.add(CPEntry.ofMethodHandle(idx, tag, owner, name, desc));
-            return idx;
-        });
+    private int getStringIndex(String s) {
+        Integer idx = stringPoolIdx.get(s);
+        if (idx != null) return idx;
+        
+        idx = stringPool.size();
+        stringPool.add(s);
+        stringPoolIdx.put(s, idx);
+        return idx;
     }
 
     // ===== 结果获取 =====
 
-    public byte[] getBytecodeBytes() {
-        return bytecodeOut.toByteArray();
+    public byte[] getBytecode() {
+        byte[] result = new byte[bytecodes.size()];
+        for (int i = 0; i < bytecodes.size(); i++) {
+            result[i] = (byte) bytecodes.get(i).intValue();
+        }
+        return result;
     }
 
-    public List<CPEntry> getConstantPool() {
-        return constantPool;
+    public List<MetaEntry> getMetadata() {
+        return metadataList;
+    }
+
+    public int[] getPcToMetaIdx() {
+        int[] result = new int[bytecodes.size()];
+        for (int i = 0; i < bytecodes.size(); i++) {
+            Integer idx = pcToMetaIdx.get(i);
+            result[i] = idx != null ? idx : -1;
+        }
+        return result;
+    }
+
+    public List<String> getStringPool() {
+        return stringPool;
     }
 
     public List<ExceptionEntry> getExceptionTable() {
@@ -646,33 +503,103 @@ public class BytecodeExtractor {
         return bootstrapMethods;
     }
 
-    // ===== 回填辅助结构 =====
+    // ===== 内部类型 =====
 
-    private static class JumpPatch {
-        final int patchPosition;  // bytecode 中要回填的位置
-        final int instrStart;     // 跳转指令起始位置
+    public enum MetaType {
+        META_NONE(0),
+        META_INT(1),
+        META_LONG(2),
+        META_FLOAT(3),
+        META_DOUBLE(4),
+        META_STRING(5),
+        META_CLASS(6),
+        META_FIELD(7),
+        META_METHOD(8),
+        META_INVOKE_DYNAMIC(9),
+        META_JUMP(10),
+        META_SWITCH(11),
+        META_LOCAL(12),
+        META_IINC(13),
+        META_NEWARRAY(14),
+        META_TYPE(15);
+
+        public final int value;
+        MetaType(int v) { this.value = v; }
+    }
+
+    public static class MetaEntry {
+        public MetaType type = MetaType.META_NONE;
+        
+        // META_INT, META_LOCAL, META_NEWARRAY
+        public int intVal;
+        
+        // META_LONG
+        public long longVal;
+        
+        // META_FLOAT
+        public float floatVal;
+        
+        // META_DOUBLE
+        public double doubleVal;
+        
+        // META_STRING
+        public int strIdx;
+        public int strLen;
+        
+        // META_CLASS
+        public int classIdx;
+        public int classLen;
+        
+        // META_FIELD, META_METHOD
+        public int ownerIdx;
+        public int ownerLen;
+        public int nameIdx;
+        public int nameLen;
+        public int descIdx;
+        public int descLen;
+        
+        // META_INVOKE_DYNAMIC
+        public int bsmIdx;
+        
+        // META_JUMP
+        public int jumpOffset;
+        
+        // META_IINC
+        public int iincIndex;
+        public int iincConst;
+        
+        // META_SWITCH
+        public int switchLow;
+        public int switchHigh;
+        public int[] switchKeys;
+        public int[] switchOffsets;
+        
+        // META_TYPE (multianewarray)
+        public int dims;
+    }
+
+    private static class JumpBackpatch {
+        final int metaIdx;
+        final int srcPc;
         final LabelNode targetLabel;
-
-        JumpPatch(int patchPosition, int instrStart, LabelNode targetLabel) {
-            this.patchPosition = patchPosition;
-            this.instrStart = instrStart;
+        
+        JumpBackpatch(int metaIdx, int srcPc, LabelNode targetLabel) {
+            this.metaIdx = metaIdx;
+            this.srcPc = srcPc;
             this.targetLabel = targetLabel;
         }
     }
 
-    private static class SwitchPatch {
-        final int instrStart;
-        final int defaultPatchPos;
+    private static class SwitchBackpatch {
+        final int metaIdx;
+        final int srcPc;
         final LabelNode defaultLabel;
-        final List<int[]> casePatchPositions; // [bytePos, caseIndex]
         final List<LabelNode> caseLabels;
-
-        SwitchPatch(int instrStart, int defaultPatchPos, LabelNode defaultLabel,
-                    List<int[]> casePatchPositions, List<LabelNode> caseLabels) {
-            this.instrStart = instrStart;
-            this.defaultPatchPos = defaultPatchPos;
+        
+        SwitchBackpatch(int metaIdx, int srcPc, LabelNode defaultLabel, List<LabelNode> caseLabels) {
+            this.metaIdx = metaIdx;
+            this.srcPc = srcPc;
             this.defaultLabel = defaultLabel;
-            this.casePatchPositions = casePatchPositions;
             this.caseLabels = caseLabels;
         }
     }

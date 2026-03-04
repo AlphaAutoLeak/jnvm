@@ -1,0 +1,35 @@
+package com.alphaautoleak.jnvm.codegen.emitter.instruction.object;
+
+import com.alphaautoleak.jnvm.codegen.emitter.Instruction;
+
+import java.io.PrintWriter;
+
+/**
+ * GETSTATIC 指令
+ */
+public class GetStaticInstruction extends Instruction {
+    public GetStaticInstruction() {
+        super(0xb2, "GETSTATIC");
+    }
+
+    @Override
+    protected void generateBody(PrintWriter w) {
+        w.println("                { const char* owner = vm_strings[meta->ownerIdx].data;");
+        w.println("                  const char* name = vm_strings[meta->nameIdx].data;");
+        w.println("                  const char* desc = vm_strings[meta->descIdx].data;");
+        w.println("                  jclass cls = (*env)->FindClass(env, owner);");
+        w.println("                  jfieldID fid = (*env)->GetStaticFieldID(env, cls, name, desc);");
+        w.println("                  char t = desc[0];");
+        w.println("                  if (t == 'I' || t == 'B' || t == 'C' || t == 'S' || t == 'Z')");
+        w.println("                      frame.stack[frame.sp++].i = (*env)->GetStaticIntField(env, cls, fid);");
+        w.println("                  else if (t == 'J')");
+        w.println("                      frame.stack[frame.sp++].j = (*env)->GetStaticLongField(env, cls, fid);");
+        w.println("                  else if (t == 'F')");
+        w.println("                      frame.stack[frame.sp++].f = (*env)->GetStaticFloatField(env, cls, fid);");
+        w.println("                  else if (t == 'D')");
+        w.println("                      frame.stack[frame.sp++].d = (*env)->GetStaticDoubleField(env, cls, fid);");
+        w.println("                  else");
+        w.println("                      frame.stack[frame.sp++].l = (*env)->GetStaticObjectField(env, cls, fid); }");
+        pcIncBreak(w);
+    }
+}

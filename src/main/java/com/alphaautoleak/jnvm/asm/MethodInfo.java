@@ -1,5 +1,7 @@
 package com.alphaautoleak.jnvm.asm;
 
+import com.alphaautoleak.jnvm.asm.BytecodeExtractor.MetaEntry;
+
 import java.util.ArrayList;
 import java.util.List;
 
@@ -36,8 +38,14 @@ public class MethodInfo {
     /** 异常表 */
     private List<ExceptionEntry> exceptionTable = new ArrayList<>();
 
-    /** 自定义常量池条目（该方法引用的所有常量） */
-    private List<CPEntry> constantPool = new ArrayList<>();
+    /** 元数据列表（新格式：每条指令的操作数） */
+    private List<MetaEntry> metadata = new ArrayList<>();
+
+    /** PC -> 元数据索引映射 */
+    private int[] pcToMetaIdx;
+
+    /** 字符串池 */
+    private List<String> stringPool = new ArrayList<>();
 
     /** Bootstrap 方法表（invokedynamic 用） */
     private List<BootstrapEntry> bootstrapMethods = new ArrayList<>();
@@ -140,8 +148,14 @@ public class MethodInfo {
     public List<ExceptionEntry> getExceptionTable() { return exceptionTable; }
     public void setExceptionTable(List<ExceptionEntry> exceptionTable) { this.exceptionTable = exceptionTable; }
 
-    public List<CPEntry> getConstantPool() { return constantPool; }
-    public void setConstantPool(List<CPEntry> constantPool) { this.constantPool = constantPool; }
+    public List<MetaEntry> getMetadata() { return metadata; }
+    public void setMetadata(List<MetaEntry> metadata) { this.metadata = metadata; }
+
+    public int[] getPcToMetaIdx() { return pcToMetaIdx; }
+    public void setPcToMetaIdx(int[] pcToMetaIdx) { this.pcToMetaIdx = pcToMetaIdx; }
+
+    public List<String> getStringPool() { return stringPool; }
+    public void setStringPool(List<String> stringPool) { this.stringPool = stringPool; }
 
     public List<BootstrapEntry> getBootstrapMethods() { return bootstrapMethods; }
     public void setBootstrapMethods(List<BootstrapEntry> bootstrapMethods) { this.bootstrapMethods = bootstrapMethods; }
@@ -151,9 +165,9 @@ public class MethodInfo {
 
     @Override
     public String toString() {
-        return String.format("MethodInfo{id=%d, %s.%s%s, stack=%d, locals=%d, bytecode=%d bytes, cp=%d entries, exceptions=%d}",
+        return String.format("MethodInfo{id=%d, %s.%s%s, stack=%d, locals=%d, bytecode=%d bytes, meta=%d, strings=%d, exceptions=%d}",
                 methodId, owner, name, descriptor, maxStack, maxLocals,
                 bytecode != null ? bytecode.length : 0,
-                constantPool.size(), exceptionTable.size());
+                metadata.size(), stringPool.size(), exceptionTable.size());
     }
 }

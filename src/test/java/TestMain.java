@@ -7,7 +7,7 @@ public class TestMain {
                 "--jar", "demo.jar",
                 "--out", "demo-protected.jar",
                 "--target", "x86_64-windows-gnu",
-                "--anti-debug", "true",   // 调试时关掉
+                "--anti-debug", "true",
                 "--native-dir", "native",
                 "--debug", "true"
         });

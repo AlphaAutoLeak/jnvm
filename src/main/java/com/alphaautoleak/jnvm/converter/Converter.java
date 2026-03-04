@@ -44,13 +44,13 @@ public class Converter {
         System.out.println("  Methods to protect: " + protectedMethods.size());
         System.out.println("  Classes affected:   " + affectedClasses.size());
         int totalBytecode = 0;
-        int totalCpEntries = 0;
+        int totalMetadata = 0;
         for (MethodInfo m : protectedMethods) {
             totalBytecode += m.getBytecode().length;
-            totalCpEntries += m.getConstantPool().size();
+            totalMetadata += m.getMetadata().size();
         }
         System.out.println("  Total bytecode:     " + totalBytecode + " bytes");
-        System.out.println("  Total CP entries:   " + totalCpEntries);
+        System.out.println("  Total metadata:     " + totalMetadata + " entries");
         System.out.println();
 
         // ===== STEP 2: 加密字节码 =====

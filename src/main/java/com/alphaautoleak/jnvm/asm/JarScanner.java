@@ -167,12 +167,14 @@ public class JarScanner {
         info.setMaxLocals(mn.maxLocals);
         info.setSignature(mn.signature);
 
-        // ===== 提取字节码 + 构建自定义常量池 =====
+        // ===== 提取字节码 + 元数据（新格式） =====
         BytecodeExtractor extractor = new BytecodeExtractor(cn, mn);
         extractor.extract();
 
-        info.setBytecode(extractor.getBytecodeBytes());
-        info.setConstantPool(extractor.getConstantPool());
+        info.setBytecode(extractor.getBytecode());
+        info.setMetadata(extractor.getMetadata());
+        info.setPcToMetaIdx(extractor.getPcToMetaIdx());
+        info.setStringPool(extractor.getStringPool());
         info.setExceptionTable(extractor.getExceptionTable());
         info.setBootstrapMethods(extractor.getBootstrapMethods());
 
