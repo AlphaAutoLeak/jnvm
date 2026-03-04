@@ -119,6 +119,10 @@ public class VmDataGenerator {
                 if (pool != null) {
                     allStrings.addAll(pool);
                 }
+                // 添加方法描述符到字符串池
+                if (method.getDescriptor() != null) {
+                    allStrings.add(method.getDescriptor());
+                }
             }
             
             // 添加 BSM 相关的字符串到全局池
@@ -198,7 +202,16 @@ public class VmDataGenerator {
                 w.printf("}, ");
                 w.printf(".metadata=m%d_meta, .metadataCount=%d, ",
                     method.getMethodId(), method.getMetadata().size());
-                w.printf(".pcToMetaIdx=m%d_pc2meta },\n", method.getMethodId());
+                w.printf(".pcToMetaIdx=m%d_pc2meta, ", method.getMethodId());
+                // 添加 descIdx 和 descLen
+                String desc = method.getDescriptor();
+                Integer descIdx = globalStringIndexMap.get(desc);
+                if (descIdx != null) {
+                    w.printf(".descIdx=%d, .descLen=%d, ", descIdx, desc.length());
+                } else {
+                    w.printf(".descIdx=-1, .descLen=0, ");
+                }
+                w.printf(".isStatic=%d },\n", method.isStatic() ? 1 : 0);
             }
             w.println("};");
         }

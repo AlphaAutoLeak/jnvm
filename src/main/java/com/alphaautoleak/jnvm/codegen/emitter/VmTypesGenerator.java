@@ -129,6 +129,9 @@ public class VmTypesGenerator {
             w.println("    MetaEntry* metadata;     // 元数据数组");
             w.println("    int metadataCount;");
             w.println("    int* pcToMetaIdx;        // PC -> 元数据索引映射");
+            w.println("    int descIdx;             // 方法描述符索引");
+            w.println("    int descLen;             // 方法描述符长度");
+            w.println("    int isStatic;            // 是否静态方法");
             w.println("} VMMethod;");
             w.println();
 
