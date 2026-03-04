@@ -1,7 +1,9 @@
 package com.alphaautoleak.jnvm.codegen.emitter.instruction.arithmetic;
 
+import com.alphaautoleak.jnvm.codegen.emitter.instruction.InstructionRegistry;
+
 /**
- * 算术指令注册
+ * Arithmetic instructions registration
  */
 public class ArithmeticInstructions {
     
@@ -63,7 +65,7 @@ public class ArithmeticInstructions {
         registry.register(new CmpInstruction(0x97, "DCMPL", "d"));
         registry.register(new CmpInstruction(0x98, "DCMPG", "d"));
         
-        // 类型转换指令
+        // Type conversion instructions
         registry.register(new CastInstruction(0x85, "I2L", "i", "j", "jlong"));
         registry.register(new CastInstruction(0x86, "I2F", "i", "f", "jfloat"));
         registry.register(new CastInstruction(0x87, "I2D", "i", "d", "jdouble"));

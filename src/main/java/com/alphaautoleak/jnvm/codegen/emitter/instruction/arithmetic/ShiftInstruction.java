@@ -5,7 +5,7 @@ import com.alphaautoleak.jnvm.codegen.emitter.Instruction;
 import java.io.PrintWriter;
 
 /**
- * 移位指令 (ISHL, LSHL, ISHR, LSHR, IUSHR, LUSHR)
+ * Shift instruction (ISHL, LSHL, ISHR, LSHR, IUSHR, LUSHR)
  */
 public class ShiftInstruction extends Instruction {
     private final String type;

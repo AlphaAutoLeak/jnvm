@@ -8,7 +8,8 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * 指令注册表接�? */
+ * Instruction registry interface
+ */
 public class InstructionRegistry {
     
     private final Map<Integer, Instruction> instructions = new HashMap<>();

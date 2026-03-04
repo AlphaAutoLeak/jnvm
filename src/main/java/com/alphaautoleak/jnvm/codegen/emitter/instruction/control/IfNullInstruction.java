@@ -5,7 +5,7 @@ import com.alphaautoleak.jnvm.codegen.emitter.Instruction;
 import java.io.PrintWriter;
 
 /**
- * IFNULL/IFNONNULL 指令
+ * IFNULL/IFNONNULL instruction
  */
 public class IfNullInstruction extends Instruction {
     private final String condition;

@@ -3,7 +3,8 @@ package com.alphaautoleak.jnvm.codegen.emitter.instruction.object;
 import java.io.PrintWriter;
 
 /**
- * 方法调用指令辅助�? */
+ * Method invocation helper
+ */
 public class InvokeHelper {
     
     public static void generate(PrintWriter w, boolean isStatic) {

@@ -5,7 +5,7 @@ import com.alphaautoleak.jnvm.codegen.emitter.Instruction;
 import java.io.PrintWriter;
 
 /**
- * GOTO 指令
+ * GOTO instruction
  */
 public class GotoInstruction extends Instruction {
     public GotoInstruction() {

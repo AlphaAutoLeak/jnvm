@@ -5,7 +5,7 @@ import com.alphaautoleak.jnvm.codegen.emitter.Instruction;
 import java.io.PrintWriter;
 
 /**
- * 二元运算指令 (IADD, LADD, FADD, DADD, ISUB, etc.)
+ * Binary operation instruction (IADD, LADD, FADD, DADD, ISUB, etc.)
  */
 public class BinaryOpInstruction extends Instruction {
     private final String type;

@@ -5,7 +5,7 @@ import com.alphaautoleak.jnvm.codegen.emitter.Instruction;
 import java.io.PrintWriter;
 
 /**
- * INVOKESPECIAL 指令
+ * INVOKESPECIAL instruction
  */
 public class InvokeSpecialInstruction extends Instruction {
     public InvokeSpecialInstruction() {

@@ -5,7 +5,7 @@ import com.alphaautoleak.jnvm.codegen.emitter.Instruction;
 import java.io.PrintWriter;
 
 /**
- * ARRAYLENGTH 指令
+ * ARRAYLENGTH instruction
  */
 public class ArrayLengthInstruction extends Instruction {
     public ArrayLengthInstruction() {

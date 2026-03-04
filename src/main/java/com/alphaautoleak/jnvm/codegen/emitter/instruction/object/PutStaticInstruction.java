@@ -5,7 +5,7 @@ import com.alphaautoleak.jnvm.codegen.emitter.Instruction;
 import java.io.PrintWriter;
 
 /**
- * PUTSTATIC 指令
+ * PUTSTATIC instruction
  */
 public class PutStaticInstruction extends Instruction {
     public PutStaticInstruction() {

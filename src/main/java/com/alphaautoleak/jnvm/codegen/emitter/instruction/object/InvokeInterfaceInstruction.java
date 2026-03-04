@@ -5,7 +5,7 @@ import com.alphaautoleak.jnvm.codegen.emitter.Instruction;
 import java.io.PrintWriter;
 
 /**
- * INVOKEINTERFACE 指令
+ * INVOKEINTERFACE instruction
  */
 public class InvokeInterfaceInstruction extends Instruction {
     public InvokeInterfaceInstruction() {

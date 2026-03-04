@@ -5,7 +5,7 @@ import com.alphaautoleak.jnvm.codegen.emitter.Instruction;
 import java.io.PrintWriter;
 
 /**
- * 除法指令 (IDIV, LDIV, IREM, LREM)
+ * Division instruction (IDIV, LDIV, IREM, LREM)
  */
 public class DivInstruction extends Instruction {
     private final String type;

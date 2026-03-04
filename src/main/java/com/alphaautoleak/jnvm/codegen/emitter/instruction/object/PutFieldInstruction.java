@@ -5,7 +5,7 @@ import com.alphaautoleak.jnvm.codegen.emitter.Instruction;
 import java.io.PrintWriter;
 
 /**
- * PUTFIELD 指令
+ * PUTFIELD instruction
  */
 public class PutFieldInstruction extends Instruction {
     public PutFieldInstruction() {

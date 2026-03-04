@@ -5,7 +5,7 @@ import com.alphaautoleak.jnvm.codegen.emitter.Instruction;
 import java.io.PrintWriter;
 
 /**
- * INVOKEDYNAMIC 指令
+ * INVOKEDYNAMIC instruction
  */
 public class InvokeDynamicInstruction extends Instruction {
     public InvokeDynamicInstruction() {
@@ -14,7 +14,7 @@ public class InvokeDynamicInstruction extends Instruction {
 
     @Override
     protected void generateBody(PrintWriter w) {
-        w.println("                { // INVOKEDYNAMIC - Lambda 支持");
+        w.println("                { // INVOKEDYNAMIC - Lambda support");
         w.println("                  jobject result = vm_invoke_dynamic(env, &frame, meta);");
         w.println("                  if (result != NULL) frame.stack[frame.sp++].l = result; }");
         w.println("                frame.pc++;");

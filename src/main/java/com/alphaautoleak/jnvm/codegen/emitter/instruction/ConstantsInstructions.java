@@ -5,11 +5,11 @@ import com.alphaautoleak.jnvm.codegen.emitter.Instruction;
 import java.io.PrintWriter;
 
 /**
- * 常量加载指令
+ * Constant loading instructions
  */
 public class ConstantsInstructions {
     
-    /** LDC 指令 */
+    /** LDC instruction */
     public static class LdcInstruction extends Instruction {
         public LdcInstruction() {
             super(0x12, "LDC");
@@ -50,9 +50,10 @@ public class ConstantsInstructions {
     }
     
     /**
-     * 注册所有常量加载指�?     */
+     * Register all constant loading instructions
+     */
     public static void registerAll(InstructionRegistry registry) {
-        // ICONST_M1 �?ICONST_5
+        // ICONST_M1 to ICONST_5
         registry.register(new BaseInstructions.SimpleInstruction(0x02, "ICONST_M1", "frame.stack[frame.sp++].i = -1;"));
         for (int i = 0; i <= 5; i++) {
             registry.register(new BaseInstructions.SimpleInstruction(0x03 + i, "ICONST_" + i, 
@@ -80,7 +81,7 @@ public class ConstantsInstructions {
         registry.register(new BaseInstructions.MetaInstruction(0x10, "BIPUSH", "frame.stack[frame.sp++].i = meta->intVal;"));
         registry.register(new BaseInstructions.MetaInstruction(0x11, "SIPUSH", "frame.stack[frame.sp++].i = meta->intVal;"));
         
-        // LDC 系列
+        // LDC series
         registry.register(new LdcInstruction());
     }
 }

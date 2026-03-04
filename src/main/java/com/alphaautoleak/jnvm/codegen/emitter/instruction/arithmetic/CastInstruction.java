@@ -5,7 +5,7 @@ import com.alphaautoleak.jnvm.codegen.emitter.Instruction;
 import java.io.PrintWriter;
 
 /**
- * 类型转换指令 (I2L, I2F, I2D, L2I, etc.)
+ * Type cast instruction (I2L, I2F, I2D, L2I, etc.)
  */
 public class CastInstruction extends Instruction {
     private final String fromType;

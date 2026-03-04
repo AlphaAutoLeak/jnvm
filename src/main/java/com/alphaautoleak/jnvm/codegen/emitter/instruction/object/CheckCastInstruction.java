@@ -5,7 +5,7 @@ import com.alphaautoleak.jnvm.codegen.emitter.Instruction;
 import java.io.PrintWriter;
 
 /**
- * CHECKCAST 指令
+ * CHECKCAST instruction
  */
 public class CheckCastInstruction extends Instruction {
     public CheckCastInstruction() {

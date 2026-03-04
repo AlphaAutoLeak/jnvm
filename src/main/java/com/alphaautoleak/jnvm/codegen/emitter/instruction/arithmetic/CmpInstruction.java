@@ -5,7 +5,7 @@ import com.alphaautoleak.jnvm.codegen.emitter.Instruction;
 import java.io.PrintWriter;
 
 /**
- * 比较指令 (LCMP, FCMPL, FCMPG, DCMPL, DCMPG)
+ * Compare instruction (LCMP, FCMPL, FCMPG, DCMPL, DCMPG)
  */
 public class CmpInstruction extends Instruction {
     private final String type;

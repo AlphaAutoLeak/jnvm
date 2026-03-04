@@ -5,7 +5,7 @@ import com.alphaautoleak.jnvm.codegen.emitter.Instruction;
 import java.io.PrintWriter;
 
 /**
- * INVOKESTATIC 指令
+ * INVOKESTATIC instruction
  */
 public class InvokeStaticInstruction extends Instruction {
     public InvokeStaticInstruction() {

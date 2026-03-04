@@ -5,7 +5,7 @@ import com.alphaautoleak.jnvm.codegen.emitter.Instruction;
 import java.io.PrintWriter;
 
 /**
- * GETSTATIC 指令
+ * GETSTATIC instruction
  */
 public class GetStaticInstruction extends Instruction {
     public GetStaticInstruction() {

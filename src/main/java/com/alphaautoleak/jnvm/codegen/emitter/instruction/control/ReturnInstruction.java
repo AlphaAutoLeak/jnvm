@@ -5,7 +5,7 @@ import com.alphaautoleak.jnvm.codegen.emitter.Instruction;
 import java.io.PrintWriter;
 
 /**
- * 返回指令 (RETURN, IRETURN, LRETURN, FRETURN, DRETURN, ARETURN)
+ * Return instruction (RETURN, IRETURN, LRETURN, FRETURN, DRETURN, ARETURN)
  */
 public class ReturnInstruction extends Instruction {
     private final boolean hasValue;

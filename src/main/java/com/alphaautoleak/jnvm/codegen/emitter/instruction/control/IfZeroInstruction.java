@@ -5,7 +5,7 @@ import com.alphaautoleak.jnvm.codegen.emitter.Instruction;
 import java.io.PrintWriter;
 
 /**
- * IF 条件跳转指令 (IFEQ, IFNE, IFLT, IFGE, IFGT, IFLE)
+ * IF conditional jump instruction (IFEQ, IFNE, IFLT, IFGE, IFGT, IFLE)
  */
 public class IfZeroInstruction extends Instruction {
     private final String condition;

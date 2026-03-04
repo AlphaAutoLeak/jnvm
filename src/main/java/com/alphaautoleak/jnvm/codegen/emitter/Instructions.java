@@ -1,11 +1,16 @@
 package com.alphaautoleak.jnvm.codegen.emitter;
 
 import com.alphaautoleak.jnvm.codegen.emitter.instruction.*;
+import com.alphaautoleak.jnvm.codegen.emitter.instruction.stack.StackInstructions;
+import com.alphaautoleak.jnvm.codegen.emitter.instruction.arithmetic.ArithmeticInstructions;
+import com.alphaautoleak.jnvm.codegen.emitter.instruction.control.ControlInstructions;
+import com.alphaautoleak.jnvm.codegen.emitter.instruction.object.ObjectInstructions;
+import com.alphaautoleak.jnvm.codegen.emitter.instruction.array.ArrayInstructions;
 
 import java.util.List;
 
 /**
- * JVM 指令注册表 - 聚合所有指令分类
+ * JVM instruction registry - aggregates all instruction categories
  */
 public class Instructions {
     
@@ -17,25 +22,25 @@ public class Instructions {
     }
     
     private void registerAll() {
-        // 常量加载指令
+        // Constant loading instructions
         ConstantsInstructions.registerAll(registry);
         
-        // 加载/存储指令
+        // Load/Store instructions
         LoadStoreInstructions.registerAll(registry);
         
-        // 栈操作指令
+        // Stack operation instructions
         StackInstructions.registerAll(registry);
         
-        // 算术指令
+        // Arithmetic instructions
         ArithmeticInstructions.registerAll(registry);
         
-        // 控制流指令
+        // Control flow instructions
         ControlInstructions.registerAll(registry);
         
-        // 对象和字段操作指令
+        // Object and field operation instructions
         ObjectInstructions.registerAll(registry);
         
-        // 数组操作指令
+        // Array operation instructions
         ArrayInstructions.registerAll(registry);
         
         // NOP

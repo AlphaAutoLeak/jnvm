@@ -5,7 +5,7 @@ import com.alphaautoleak.jnvm.codegen.emitter.Instruction;
 import java.io.PrintWriter;
 
 /**
- * NEWARRAY 指令 - 创建基本类型数组
+ * NEWARRAY instruction - create primitive type array
  */
 public class NewArrayInstruction extends Instruction {
     public NewArrayInstruction() {

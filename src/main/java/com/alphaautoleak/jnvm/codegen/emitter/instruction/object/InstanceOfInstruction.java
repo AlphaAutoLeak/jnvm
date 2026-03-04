@@ -5,7 +5,7 @@ import com.alphaautoleak.jnvm.codegen.emitter.Instruction;
 import java.io.PrintWriter;
 
 /**
- * INSTANCEOF 指令
+ * INSTANCEOF instruction
  */
 public class InstanceOfInstruction extends Instruction {
     public InstanceOfInstruction() {

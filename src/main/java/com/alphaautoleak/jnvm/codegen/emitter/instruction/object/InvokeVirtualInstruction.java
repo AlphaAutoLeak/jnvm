@@ -5,7 +5,7 @@ import com.alphaautoleak.jnvm.codegen.emitter.Instruction;
 import java.io.PrintWriter;
 
 /**
- * INVOKEVIRTUAL 指令
+ * INVOKEVIRTUAL instruction
  */
 public class InvokeVirtualInstruction extends Instruction {
     public InvokeVirtualInstruction() {

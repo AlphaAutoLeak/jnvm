@@ -1,14 +1,17 @@
-package com.alphaautoleak.jnvm.codegen.emitter.instruction;
+package com.alphaautoleak.jnvm.codegen.emitter.instruction.stack;
 
 import com.alphaautoleak.jnvm.codegen.emitter.Instruction;
+import com.alphaautoleak.jnvm.codegen.emitter.instruction.BaseInstructions;
+import com.alphaautoleak.jnvm.codegen.emitter.instruction.InstructionRegistry;
 
 import java.io.PrintWriter;
 
 /**
- * 栈操作指�? */
+ * Stack operation instructions
+ */
 public class StackInstructions {
     
-    /** DUP 指令 */
+    /** DUP instruction */
     public static class DupInstruction extends Instruction {
         public DupInstruction(int opcode, String name) {
             super(opcode, name);
@@ -22,7 +25,7 @@ public class StackInstructions {
         }
     }
     
-    /** DUP_X1 指令 */
+    /** DUP_X1 instruction */
     public static class DupX1Instruction extends Instruction {
         public DupX1Instruction() {
             super(0x5a, "DUP_X1");
@@ -38,7 +41,7 @@ public class StackInstructions {
         }
     }
     
-    /** DUP2 指令 */
+    /** DUP2 instruction */
     public static class Dup2Instruction extends Instruction {
         public Dup2Instruction() {
             super(0x5c, "DUP2");
@@ -53,7 +56,7 @@ public class StackInstructions {
         }
     }
     
-    /** SWAP 指令 */
+    /** SWAP instruction */
     public static class SwapInstruction extends Instruction {
         public SwapInstruction() {
             super(0x5f, "SWAP");
@@ -69,7 +72,7 @@ public class StackInstructions {
     }
     
     /**
-     * 注册所有栈操作指令
+     * Register all stack operation instructions
      */
     public static void registerAll(InstructionRegistry registry) {
         registry.register(new BaseInstructions.SimpleInstruction(0x57, "POP", "frame.sp--;"));

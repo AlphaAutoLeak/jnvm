@@ -1,7 +1,10 @@
 package com.alphaautoleak.jnvm.codegen.emitter.instruction.array;
 
+import com.alphaautoleak.jnvm.codegen.emitter.instruction.BaseInstructions;
+import com.alphaautoleak.jnvm.codegen.emitter.instruction.InstructionRegistry;
+
 /**
- * 数组操作指令注册
+ * Array operation instructions registration
  */
 public class ArrayInstructions {
     
@@ -10,11 +13,11 @@ public class ArrayInstructions {
         registry.register(new ANewArrayInstruction());
         registry.register(new ArrayLengthInstruction());
         
-        // 基本类型数组加载
+        // Primitive type array load
         registry.register(new IALoadInstruction());
         registry.register(new AALoadInstruction());
         
-        // 其他类型数组加载
+        // Other type array load
         registry.register(new BaseInstructions.SimpleInstruction(0x2f, "LALOAD", 
             "jint idx = frame.stack[--frame.sp].i; jlongArray arr = (jlongArray)frame.stack[--frame.sp].l; " +
             "jlong* elems = (*env)->GetLongArrayElements(env, arr, NULL); frame.stack[frame.sp++].j = elems[idx]; " +
@@ -40,11 +43,11 @@ public class ArrayInstructions {
             "jshort* elems = (*env)->GetShortArrayElements(env, arr, NULL); frame.stack[frame.sp++].i = elems[idx]; " +
             "(*env)->ReleaseShortArrayElements(env, arr, elems, 0);"));
         
-        // 基本类型数组存储
+        // Primitive type array store
         registry.register(new IAStoreInstruction());
         registry.register(new AAStoreInstruction());
         
-        // 其他类型数组存储
+        // Other type array store
         registry.register(new BaseInstructions.SimpleInstruction(0x50, "LASTORE",
             "jlong val = frame.stack[--frame.sp].j; jint idx = frame.stack[--frame.sp].i; " +
             "jlongArray arr = (jlongArray)frame.stack[--frame.sp].l; jlong* elems = (*env)->GetLongArrayElements(env, arr, NULL); " +

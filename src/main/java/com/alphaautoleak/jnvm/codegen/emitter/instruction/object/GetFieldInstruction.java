@@ -5,7 +5,7 @@ import com.alphaautoleak.jnvm.codegen.emitter.Instruction;
 import java.io.PrintWriter;
 
 /**
- * GETFIELD 指令
+ * GETFIELD instruction
  */
 public class GetFieldInstruction extends Instruction {
     public GetFieldInstruction() {

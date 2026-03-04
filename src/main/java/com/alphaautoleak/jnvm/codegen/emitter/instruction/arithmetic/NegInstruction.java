@@ -5,7 +5,7 @@ import com.alphaautoleak.jnvm.codegen.emitter.Instruction;
 import java.io.PrintWriter;
 
 /**
- * 取负指令 (INEG, LNEG, FNEG, DNEG)
+ * Negation instruction (INEG, LNEG, FNEG, DNEG)
  */
 public class NegInstruction extends Instruction {
     private final String type;

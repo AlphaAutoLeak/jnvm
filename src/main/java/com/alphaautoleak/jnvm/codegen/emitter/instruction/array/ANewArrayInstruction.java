@@ -5,7 +5,7 @@ import com.alphaautoleak.jnvm.codegen.emitter.Instruction;
 import java.io.PrintWriter;
 
 /**
- * ANEWARRAY 指令 - 创建引用类型数组
+ * ANEWARRAY instruction - create reference type array
  */
 public class ANewArrayInstruction extends Instruction {
     public ANewArrayInstruction() {

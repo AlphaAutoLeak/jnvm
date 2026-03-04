@@ -1,7 +1,10 @@
 package com.alphaautoleak.jnvm.codegen.emitter.instruction.control;
 
+import com.alphaautoleak.jnvm.codegen.emitter.instruction.InstructionRegistry;
+
 /**
- * 控制流指令注�? */
+ * Control flow instructions registration
+ */
 public class ControlInstructions {
     
     public static void registerAll(InstructionRegistry registry) {

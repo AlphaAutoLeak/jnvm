@@ -5,7 +5,7 @@ import com.alphaautoleak.jnvm.codegen.emitter.Instruction;
 import java.io.PrintWriter;
 
 /**
- * IF_ICMP 条件跳转指令 (IF_ICMPEQ, IF_ICMPNE, IF_ICMPLT, IF_ICMPGE, IF_ICMPGT, IF_ICMPLE)
+ * IF_ICMP conditional jump instruction
  */
 public class IfCmpInstruction extends Instruction {
     private final String op;

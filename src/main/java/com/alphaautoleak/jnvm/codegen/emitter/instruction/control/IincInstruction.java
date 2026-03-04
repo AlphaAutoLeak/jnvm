@@ -5,7 +5,7 @@ import com.alphaautoleak.jnvm.codegen.emitter.Instruction;
 import java.io.PrintWriter;
 
 /**
- * IINC 指令
+ * IINC instruction
  */
 public class IincInstruction extends Instruction {
     public IincInstruction() {

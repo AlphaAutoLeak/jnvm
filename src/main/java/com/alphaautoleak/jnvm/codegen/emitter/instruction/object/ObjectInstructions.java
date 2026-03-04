@@ -1,7 +1,10 @@
 package com.alphaautoleak.jnvm.codegen.emitter.instruction.object;
 
+import com.alphaautoleak.jnvm.codegen.emitter.instruction.InstructionRegistry;
+
 /**
- * 对象和字段操作指令注�? */
+ * Object and field operation instructions registration
+ */
 public class ObjectInstructions {
     
     public static void registerAll(InstructionRegistry registry) {
