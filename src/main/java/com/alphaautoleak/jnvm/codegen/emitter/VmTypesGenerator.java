@@ -117,6 +117,16 @@ public class VmTypesGenerator {
             w.println("} MetaEntry;");
             w.println();
 
+            // 异常表条目 - 必须在 VMMethod 之前定义
+            w.println("/* 异常表条目 */");
+            w.println("typedef struct {");
+            w.println("    int startPc;             // try 块起始 PC（含）");
+            w.println("    int endPc;               // try 块结束 PC（不含）");
+            w.println("    int handlerPc;           // catch handler 起始 PC");
+            w.println("    int catchTypeIdx;        // 捕获的异常类型索引（-1 表示 catch-all/finally）");
+            w.println("} VMExceptionEntry;");
+            w.println();
+
             // 方法结构
             w.println("/* 方法定义 */");
             w.println("typedef struct {");
@@ -133,6 +143,8 @@ public class VmTypesGenerator {
             w.println("    int descIdx;             // 方法描述符索引");
             w.println("    int descLen;             // 方法描述符长度");
             w.println("    int isStatic;            // 是否静态方法");
+            w.println("    VMExceptionEntry* exceptionTable;  // 异常表");
+            w.println("    int exceptionTableLength;         // 异常表长度");
             w.println("} VMMethod;");
             w.println();
 

@@ -123,6 +123,15 @@ public class VmDataGenerator {
                 if (method.getDescriptor() != null) {
                     allStrings.add(method.getDescriptor());
                 }
+                // 添加异常表中的 catch 类型到字符串池
+                List<ExceptionEntry> excTable = method.getExceptionTable();
+                if (excTable != null) {
+                    for (ExceptionEntry e : excTable) {
+                        if (e.getCatchType() != null) {
+                            allStrings.add(e.getCatchType());
+                        }
+                    }
+                }
             }
             
             // 添加 BSM 相关的字符串到全局池
@@ -210,6 +219,14 @@ public class VmDataGenerator {
                     w.printf(".descIdx=%d, .descLen=%d, ", descIdx, desc.length());
                 } else {
                     w.printf(".descIdx=-1, .descLen=0, ");
+                }
+                // 添加异常表
+                List<ExceptionEntry> excTable = method.getExceptionTable();
+                if (excTable != null && !excTable.isEmpty()) {
+                    w.printf(".exceptionTable=m%d_exc, .exceptionTableLength=%d, ",
+                        method.getMethodId(), excTable.size());
+                } else {
+                    w.printf(".exceptionTable=NULL, .exceptionTableLength=0, ");
                 }
                 w.printf(".isStatic=%d },\n", method.isStatic() ? 1 : 0);
             }
@@ -538,6 +555,23 @@ public class VmDataGenerator {
         }
         w.println("\n};");
         w.println();
+        
+        // 异常表
+        List<ExceptionEntry> excTable = method.getExceptionTable();
+        if (excTable != null && !excTable.isEmpty()) {
+            w.printf("static VMExceptionEntry m%d_exc[] = {", id);
+            for (int i = 0; i < excTable.size(); i++) {
+                ExceptionEntry e = excTable.get(i);
+                int catchTypeIdx = -1;
+                if (e.getCatchType() != null) {
+                    catchTypeIdx = getOrAddStringIndex(e.getCatchType());
+                }
+                w.printf("\n    { .startPc=%d, .endPc=%d, .handlerPc=%d, .catchTypeIdx=%d },",
+                    e.getStartPc(), e.getEndPc(), e.getHandlerPc(), catchTypeIdx);
+            }
+            w.println("\n};");
+            w.println();
+        }
     }
     
     private void emitMetaEntry(PrintWriter w, int methodId, int idx, MetaEntry m) {
