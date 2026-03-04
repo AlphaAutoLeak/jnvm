@@ -111,6 +111,7 @@ public class VmTypesGenerator {
             w.println("    int switchLow;");
             w.println("    int switchHigh;");
             w.println("    int* switchOffsets;");
+            w.println("    int* switchKeys;        // LOOKUPSWITCH keys (NULL for TABLESWITCH)");
             w.println("    // META_TYPE (multianewarray)");
             w.println("    int dims;");
             w.println("} MetaEntry;");

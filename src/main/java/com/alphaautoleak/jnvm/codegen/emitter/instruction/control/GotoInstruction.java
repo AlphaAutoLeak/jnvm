@@ -6,6 +6,7 @@ import java.io.PrintWriter;
 
 /**
  * GOTO instruction
+ * jumpOffset is now an absolute PC value
  */
 public class GotoInstruction extends Instruction {
     public GotoInstruction() {
@@ -14,7 +15,7 @@ public class GotoInstruction extends Instruction {
 
     @Override
     protected void generateBody(PrintWriter w) {
-        w.println("                frame.pc += meta->jumpOffset;");
+        w.println("                frame.pc = meta->jumpOffset;");
         w.println("                break;");
     }
 

@@ -47,6 +47,35 @@ public class BytecodeExtractor {
     
     /** Switch 回填 */
     private final List<SwitchBackpatch> switchBackpatches = new ArrayList<>();
+    
+    /** Switch 回填信息 */
+    private static class SwitchBackpatch {
+        final int metaIdx;
+        final int srcPc;
+        final LabelNode defaultLabel;
+        final List<LabelNode> caseLabels;
+        
+        SwitchBackpatch(int metaIdx, int srcPc, LabelNode defaultLabel, List<LabelNode> caseLabels) {
+            this.metaIdx = metaIdx;
+            this.srcPc = srcPc;
+            this.defaultLabel = defaultLabel;
+            this.caseLabels = caseLabels;
+        }
+    }
+    
+    /** 跳转回填信息 */
+    private static class JumpBackpatch {
+        final int metaIdx;
+        final int srcPc;
+        final LabelNode targetLabel;
+        
+        JumpBackpatch(int metaIdx, int srcPc, LabelNode targetLabel) {
+            this.metaIdx = metaIdx;
+            this.srcPc = srcPc;
+            this.targetLabel = targetLabel;
+        }
+    }
+
 
     public BytecodeExtractor(ClassNode cn, MethodNode mn) {
         this.classNode = cn;
@@ -69,16 +98,31 @@ public class BytecodeExtractor {
 
     /**
      * 第一遍：遍历指令，生成字节码和元数据
+     * 对于 Label，使用 ASM 提供的原始字节码偏移量
      */
     private void firstPass() {
         InsnList insns = methodNode.instructions;
         
+        // 遍历所有指令，生成字节码和元数据
+        // 同时收集 Label 的偏移量
         for (int i = 0; i < insns.size(); i++) {
             AbstractInsnNode node = insns.get(i);
             
-            // 记录 Label 位置
+            // 处理 Label
             if (node instanceof LabelNode) {
-                labelToPc.put((LabelNode) node, bytecodes.size());
+                LabelNode labelNode = (LabelNode) node;
+                int offset;
+                try {
+                    // ASM 的 Label.getOffset() 返回原始字节码偏移量
+                    offset = labelNode.getLabel().getOffset();
+                    // 调试：打印 Label 偏移量
+                    // System.out.println("Label offset: " + offset);
+                } catch (IllegalStateException e) {
+                    // 如果 Label 还没有被解析，使用当前字节码位置作为备选
+                    offset = bytecodes.size();
+                    System.out.println("Warning: Label not resolved, using fallback offset: " + offset);
+                }
+                labelToPc.put(labelNode, offset);
                 continue;
             }
             
@@ -315,8 +359,10 @@ public class BytecodeExtractor {
     private void emitLookupSwitchInsn(LookupSwitchInsnNode node, int pc) {
         MetaEntry meta = new MetaEntry();
         meta.type = MetaType.META_SWITCH;
+        meta.switchLow = node.keys.size();  // npairs (number of key-offset pairs)
+        meta.switchHigh = 0;                // unused for LOOKUPSWITCH
         meta.switchKeys = new int[node.keys.size()];
-        meta.switchOffsets = new int[node.keys.size() + 1]; // default + cases
+        meta.switchOffsets = new int[node.keys.size() + 1]; // cases + default
         
         for (int i = 0; i < node.keys.size(); i++) {
             meta.switchKeys[i] = node.keys.get(i);
@@ -350,7 +396,8 @@ public class BytecodeExtractor {
                 throw new RuntimeException("Unresolved label in jump");
             }
             MetaEntry meta = metadataList.get(bp.metaIdx);
-            meta.jumpOffset = targetPc - bp.srcPc;
+            // 存储绝对 PC 而不是偏移量
+            meta.jumpOffset = targetPc;
         }
         
         // 回填 switch
@@ -361,14 +408,15 @@ public class BytecodeExtractor {
             }
             
             MetaEntry meta = metadataList.get(bp.metaIdx);
-            meta.switchOffsets[0] = defaultPc - bp.srcPc;
+            // 存储绝对 PC 而不是偏移量
+            meta.switchOffsets[0] = defaultPc;
             
             for (int i = 0; i < bp.caseLabels.size(); i++) {
                 Integer casePc = labelToPc.get(bp.caseLabels.get(i));
                 if (casePc == null) {
                     throw new RuntimeException("Unresolved case label in switch");
                 }
-                meta.switchOffsets[i + 1] = casePc - bp.srcPc;
+                meta.switchOffsets[i + 1] = casePc;
             }
         }
     }
@@ -607,31 +655,5 @@ public class BytecodeExtractor {
         
         // META_TYPE (multianewarray)
         public int dims;
-    }
-
-    private static class JumpBackpatch {
-        final int metaIdx;
-        final int srcPc;
-        final LabelNode targetLabel;
-        
-        JumpBackpatch(int metaIdx, int srcPc, LabelNode targetLabel) {
-            this.metaIdx = metaIdx;
-            this.srcPc = srcPc;
-            this.targetLabel = targetLabel;
-        }
-    }
-
-    private static class SwitchBackpatch {
-        final int metaIdx;
-        final int srcPc;
-        final LabelNode defaultLabel;
-        final List<LabelNode> caseLabels;
-        
-        SwitchBackpatch(int metaIdx, int srcPc, LabelNode defaultLabel, List<LabelNode> caseLabels) {
-            this.metaIdx = metaIdx;
-            this.srcPc = srcPc;
-            this.defaultLabel = defaultLabel;
-            this.caseLabels = caseLabels;
-        }
     }
 }

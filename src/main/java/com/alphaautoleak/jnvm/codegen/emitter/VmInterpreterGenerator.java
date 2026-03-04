@@ -320,6 +320,11 @@ public class VmInterpreterGenerator {
         w.println("    chacha20_encrypt(m->key, m->nonce, m->bytecode, bytecode, m->bytecodeLen);");
         w.println();
         
+        // Result storage for return values
+        w.println("    VMValue result = {0};");
+        w.println("    char resultType = 'V';  // 'V'=void, 'I'=int, 'J'=long, 'F'=float, 'D'=double, 'L'=object");
+        w.println();
+        
         w.println("    // Initialize frame");
         w.println("    VMFrame frame = { .pc = 0, .sp = 0 };");
         w.println("    frame.stack = (VMValue*)calloc(m->maxStack, sizeof(VMValue));");
@@ -443,12 +448,76 @@ public class VmInterpreterGenerator {
         w.println("        }");
         w.println("    }");
         w.println();
-        w.println("    jobject result = (frame.sp > 0) ? frame.stack[--frame.sp].l : NULL;");
-        w.println("    VM_LOG(\"Method %d finished, result=%p\\n\", methodId, result);");
+        w.println("method_exit:");
+        w.println("    ;");
+        w.println("    ");
+        w.println("    // Get method return type from descriptor");
+        w.println("    char methodReturnType = 'V';");
+        w.println("    const char* methodDesc = (m->descIdx >= 0) ? vm_strings[m->descIdx].data : NULL;");
+        w.println("    if (methodDesc) {");
+        w.println("        const char* p = methodDesc;");
+        w.println("        while (*p && *p != ')') p++;");
+        w.println("        if (*p == ')') methodReturnType = *(p + 1);");
+        w.println("    }");
+        w.println("    ");
+        w.println("    VM_LOG(\"Method %d finished, resultType=%c, methodReturnType=%c\\n\", methodId, resultType, methodReturnType);");
+        w.println("    ");
+        w.println("    jobject resultObj = NULL;");
+        w.println("    ");
+        w.println("    // Box result based on method return type (not instruction type)");
+        w.println("    switch (methodReturnType) {");
+        w.println("        case 'V':");
+        w.println("            resultObj = NULL;");
+        w.println("            break;");
+        w.println("        case 'Z':");  // boolean
+        w.println("            { jclass cls = (*env)->FindClass(env, \"java/lang/Boolean\");");
+        w.println("              jmethodID mid = (*env)->GetMethodID(env, cls, \"<init>\", \"(Z)V\");");
+        w.println("              resultObj = (*env)->NewObject(env, cls, mid, result.i ? JNI_TRUE : JNI_FALSE); }");
+        w.println("            break;");
+        w.println("        case 'B':");  // byte
+        w.println("            { jclass cls = (*env)->FindClass(env, \"java/lang/Byte\");");
+        w.println("              jmethodID mid = (*env)->GetMethodID(env, cls, \"<init>\", \"(B)V\");");
+        w.println("              resultObj = (*env)->NewObject(env, cls, mid, (jbyte)result.i); }");
+        w.println("            break;");
+        w.println("        case 'C':");  // char
+        w.println("            { jclass cls = (*env)->FindClass(env, \"java/lang/Character\");");
+        w.println("              jmethodID mid = (*env)->GetMethodID(env, cls, \"<init>\", \"(C)V\");");
+        w.println("              resultObj = (*env)->NewObject(env, cls, mid, (jchar)result.i); }");
+        w.println("            break;");
+        w.println("        case 'S':");  // short
+        w.println("            { jclass cls = (*env)->FindClass(env, \"java/lang/Short\");");
+        w.println("              jmethodID mid = (*env)->GetMethodID(env, cls, \"<init>\", \"(S)V\");");
+        w.println("              resultObj = (*env)->NewObject(env, cls, mid, (jshort)result.i); }");
+        w.println("            break;");
+        w.println("        case 'I':");  // int
+        w.println("            { jclass cls = (*env)->FindClass(env, \"java/lang/Integer\");");
+        w.println("              jmethodID mid = (*env)->GetMethodID(env, cls, \"<init>\", \"(I)V\");");
+        w.println("              resultObj = (*env)->NewObject(env, cls, mid, result.i); }");
+        w.println("            break;");
+        w.println("        case 'J':");  // long
+        w.println("            { jclass cls = (*env)->FindClass(env, \"java/lang/Long\");");
+        w.println("              jmethodID mid = (*env)->GetMethodID(env, cls, \"<init>\", \"(J)V\");");
+        w.println("              resultObj = (*env)->NewObject(env, cls, mid, result.j); }");
+        w.println("            break;");
+        w.println("        case 'F':");  // float
+        w.println("            { jclass cls = (*env)->FindClass(env, \"java/lang/Float\");");
+        w.println("              jmethodID mid = (*env)->GetMethodID(env, cls, \"<init>\", \"(F)V\");");
+        w.println("              resultObj = (*env)->NewObject(env, cls, mid, result.f); }");
+        w.println("            break;");
+        w.println("        case 'D':");  // double
+        w.println("            { jclass cls = (*env)->FindClass(env, \"java/lang/Double\");");
+        w.println("              jmethodID mid = (*env)->GetMethodID(env, cls, \"<init>\", \"(D)V\");");
+        w.println("              resultObj = (*env)->NewObject(env, cls, mid, result.d); }");
+        w.println("            break;");
+        w.println("        default:");  // object
+        w.println("            resultObj = result.l;");
+        w.println("            break;");
+        w.println("    }");
+        w.println("    ");
         w.println("    free(frame.locals);");
         w.println("    free(frame.stack);");
         w.println("    free(bytecode);");
-        w.println("    return result;");
+        w.println("    return resultObj;");
         w.println("}");
     }
 }

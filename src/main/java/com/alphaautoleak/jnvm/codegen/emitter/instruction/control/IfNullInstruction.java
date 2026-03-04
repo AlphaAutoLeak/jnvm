@@ -6,6 +6,7 @@ import java.io.PrintWriter;
 
 /**
  * IFNULL/IFNONNULL instruction
+ * jumpOffset is now an absolute PC value
  */
 public class IfNullInstruction extends Instruction {
     private final String condition;
@@ -17,7 +18,7 @@ public class IfNullInstruction extends Instruction {
 
     @Override
     protected void generateBody(PrintWriter w) {
-        w.println("                if (frame.stack[--frame.sp].l " + condition + ") frame.pc += meta->jumpOffset;");
+        w.println("                if (frame.stack[--frame.sp].l " + condition + ") frame.pc = meta->jumpOffset;");
         w.println("                else frame.pc++;");
         w.println("                break;");
     }

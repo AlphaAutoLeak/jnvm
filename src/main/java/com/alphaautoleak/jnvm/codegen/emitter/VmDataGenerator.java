@@ -508,6 +508,10 @@ public class VmDataGenerator {
                         w.printf(".switchLow=%d, .switchHigh=%d, ",
                             m.switchLow, m.switchHigh);
                         w.printf(".switchOffsets=m%d_meta%d_offs", id, i);
+                        // Add switchKeys for LOOKUPSWITCH (when keys are present)
+                        if (m.switchKeys != null && m.switchKeys.length > 0) {
+                            w.printf(", .switchKeys=m%d_meta%d_keys", id, i);
+                        }
                         break;
                     case META_TYPE:
                         w.printf(".classIdx=%d, .classLen=%d, .dims=%d",
@@ -538,11 +542,21 @@ public class VmDataGenerator {
     
     private void emitMetaEntry(PrintWriter w, int methodId, int idx, MetaEntry m) {
         if (m.type == MetaType.META_SWITCH && m.switchOffsets != null) {
+            // Emit switchOffsets array
             w.printf("static int m%d_meta%d_offs[] = {", methodId, idx);
             for (int i = 0; i < m.switchOffsets.length; i++) {
                 w.printf("%d%s", m.switchOffsets[i], (i < m.switchOffsets.length - 1 ? ", " : ""));
             }
             w.println("};");
+            
+            // Emit switchKeys array for LOOKUPSWITCH (non-null keys means LOOKUPSWITCH)
+            if (m.switchKeys != null && m.switchKeys.length > 0) {
+                w.printf("static int m%d_meta%d_keys[] = {", methodId, idx);
+                for (int i = 0; i < m.switchKeys.length; i++) {
+                    w.printf("%d%s", m.switchKeys[i], (i < m.switchKeys.length - 1 ? ", " : ""));
+                }
+                w.println("};");
+            }
         }
     }
     

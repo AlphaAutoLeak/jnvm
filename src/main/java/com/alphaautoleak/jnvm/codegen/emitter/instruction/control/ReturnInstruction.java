@@ -7,8 +7,10 @@ import java.io.PrintWriter;
 /**
  * Return instruction (RETURN, IRETURN, LRETURN, FRETURN, DRETURN, ARETURN)
  * 
- * 重要：由于 VMBridge.execute() 返回 Object，native 端必须将基本类型返回值装箱。
- * Java 端的 JarPatcher 会根据方法返回类型进行拆箱。
+ * 重要：返回指令使用 goto exit_label 跳转到统一退出点，
+ * 在那里根据方法描述符的返回类型进行正确的装箱。
+ * 这样 IRETURN 可以根据方法返回 boolean/int/byte/short/char 
+ * 选择正确的装箱类型 (Boolean/Integer/Byte/Short/Character)。
  */
 public class ReturnInstruction extends Instruction {
     private final String returnType; // "void", "int", "long", "float", "double", "object"
@@ -22,40 +24,40 @@ public class ReturnInstruction extends Instruction {
     protected void generateBody(PrintWriter w) {
         switch (returnType) {
             case "void":
-                w.println("                return NULL;");
+                // void 方法直接跳转到退出点
+                w.println("                goto method_exit;");
                 break;
             case "int":
-                // int 需要装箱为 Integer
-                w.println("                { jint val = frame.stack[--frame.sp].i;");
-                w.println("                  jclass cls = (*env)->FindClass(env, \"java/lang/Integer\");");
-                w.println("                  jmethodID mid = (*env)->GetMethodID(env, cls, \"<init>\", \"(I)V\");");
-                w.println("                  return (*env)->NewObject(env, cls, mid, val); }");
+                // IRETURN: 弹出 int 值并存储到 result 中，设置 resultType 标记
+                // 注意：不在这里装箱，在 method_exit 处根据方法描述符装箱
+                w.println("                result.i = frame.stack[--frame.sp].i;");
+                w.println("                resultType = 'I';");
+                w.println("                goto method_exit;");
                 break;
             case "long":
-                // long 需要装箱为 Long
-                w.println("                { jlong val = frame.stack[--frame.sp].j;");
-                w.println("                  jclass cls = (*env)->FindClass(env, \"java/lang/Long\");");
-                w.println("                  jmethodID mid = (*env)->GetMethodID(env, cls, \"<init>\", \"(J)V\");");
-                w.println("                  return (*env)->NewObject(env, cls, mid, val); }");
+                // LRETURN: 弹出 long 值
+                w.println("                result.j = frame.stack[--frame.sp].j;");
+                w.println("                resultType = 'J';");
+                w.println("                goto method_exit;");
                 break;
             case "float":
-                // float 需要装箱为 Float
-                w.println("                { jfloat val = frame.stack[--frame.sp].f;");
-                w.println("                  jclass cls = (*env)->FindClass(env, \"java/lang/Float\");");
-                w.println("                  jmethodID mid = (*env)->GetMethodID(env, cls, \"<init>\", \"(F)V\");");
-                w.println("                  return (*env)->NewObject(env, cls, mid, val); }");
+                // FRETURN: 弹出 float 值
+                w.println("                result.f = frame.stack[--frame.sp].f;");
+                w.println("                resultType = 'F';");
+                w.println("                goto method_exit;");
                 break;
             case "double":
-                // double 需要装箱为 Double
-                w.println("                { jdouble val = frame.stack[--frame.sp].d;");
-                w.println("                  jclass cls = (*env)->FindClass(env, \"java/lang/Double\");");
-                w.println("                  jmethodID mid = (*env)->GetMethodID(env, cls, \"<init>\", \"(D)V\");");
-                w.println("                  return (*env)->NewObject(env, cls, mid, val); }");
+                // DRETURN: 弹出 double 值
+                w.println("                result.d = frame.stack[--frame.sp].d;");
+                w.println("                resultType = 'D';");
+                w.println("                goto method_exit;");
                 break;
             case "object":
             default:
-                // 对象类型直接返回
-                w.println("                return frame.stack[--frame.sp].l;");
+                // ARETURN: 弹出对象引用
+                w.println("                result.l = frame.stack[--frame.sp].l;");
+                w.println("                resultType = 'L';");
+                w.println("                goto method_exit;");
                 break;
         }
     }

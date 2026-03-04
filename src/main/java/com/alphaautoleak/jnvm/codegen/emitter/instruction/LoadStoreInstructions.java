@@ -2,6 +2,8 @@ package com.alphaautoleak.jnvm.codegen.emitter.instruction;
 
 import com.alphaautoleak.jnvm.codegen.emitter.Instruction;
 
+import java.io.PrintWriter;
+
 /**
  * Load/Store instructions
  */
@@ -11,33 +13,50 @@ public class LoadStoreInstructions {
      * Register all load/store instructions
      */
     public static void registerAll(InstructionRegistry registry) {
-        // ILOAD, LLOAD, FLOAD, DLOAD, ALOAD
-        registry.register(new BaseInstructions.MetaInstruction(0x15, "ILOAD", "frame.stack[frame.sp++] = frame.locals[meta->intVal];"));
-        registry.register(new BaseInstructions.MetaInstruction(0x16, "LLOAD", "frame.stack[frame.sp++] = frame.locals[meta->intVal];"));
-        registry.register(new BaseInstructions.MetaInstruction(0x17, "FLOAD", "frame.stack[frame.sp++] = frame.locals[meta->intVal];"));
-        registry.register(new BaseInstructions.MetaInstruction(0x18, "DLOAD", "frame.stack[frame.sp++] = frame.locals[meta->intVal];"));
-        registry.register(new BaseInstructions.MetaInstruction(0x19, "ALOAD", "frame.stack[frame.sp++] = frame.locals[meta->intVal];"));
+        // ILOAD - simple load (unboxing already done during parameter setup)
+        registry.register(new BaseInstructions.MetaInstruction(0x15, "ILOAD", 
+            "frame.stack[frame.sp++] = frame.locals[meta->intVal];"));
+        
+        // LLOAD - simple load
+        registry.register(new BaseInstructions.MetaInstruction(0x16, "LLOAD", 
+            "frame.stack[frame.sp++] = frame.locals[meta->intVal];"));
+        
+        // FLOAD - simple load
+        registry.register(new BaseInstructions.MetaInstruction(0x17, "FLOAD", 
+            "frame.stack[frame.sp++] = frame.locals[meta->intVal];"));
+        
+        // DLOAD - simple load
+        registry.register(new BaseInstructions.MetaInstruction(0x18, "DLOAD", 
+            "frame.stack[frame.sp++] = frame.locals[meta->intVal];"));
+        
+        // ALOAD - no unboxing needed
+        registry.register(new BaseInstructions.MetaInstruction(0x19, "ALOAD", 
+            "frame.stack[frame.sp++] = frame.locals[meta->intVal];"));
         
         // ILOAD_0 to ILOAD_3
         for (int i = 0; i < 4; i++) {
             registry.register(new BaseInstructions.SimpleInstruction(0x1a + i, "ILOAD_" + i,
                 "frame.stack[frame.sp++] = frame.locals[" + i + "];"));
         }
+        
         // LLOAD_0 to LLOAD_3
         for (int i = 0; i < 4; i++) {
             registry.register(new BaseInstructions.SimpleInstruction(0x1e + i, "LLOAD_" + i,
                 "frame.stack[frame.sp++] = frame.locals[" + i + "];"));
         }
+        
         // FLOAD_0 to FLOAD_3
         for (int i = 0; i < 4; i++) {
             registry.register(new BaseInstructions.SimpleInstruction(0x22 + i, "FLOAD_" + i,
                 "frame.stack[frame.sp++] = frame.locals[" + i + "];"));
         }
+        
         // DLOAD_0 to DLOAD_3
         for (int i = 0; i < 4; i++) {
             registry.register(new BaseInstructions.SimpleInstruction(0x26 + i, "DLOAD_" + i,
                 "frame.stack[frame.sp++] = frame.locals[" + i + "];"));
         }
+        
         // ALOAD_0 to ALOAD_3
         for (int i = 0; i < 4; i++) {
             registry.register(new BaseInstructions.SimpleInstruction(0x2a + i, "ALOAD_" + i,

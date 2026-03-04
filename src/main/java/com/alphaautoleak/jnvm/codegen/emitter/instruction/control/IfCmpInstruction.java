@@ -6,6 +6,7 @@ import java.io.PrintWriter;
 
 /**
  * IF_ICMP conditional jump instruction
+ * jumpOffset is now an absolute PC value
  */
 public class IfCmpInstruction extends Instruction {
     private final String op;
@@ -18,7 +19,7 @@ public class IfCmpInstruction extends Instruction {
     @Override
     protected void generateBody(PrintWriter w) {
         w.println("                { jint b = frame.stack[--frame.sp].i, a = frame.stack[--frame.sp].i;");
-        w.println("                  if (a " + op + " b) frame.pc += meta->jumpOffset;");
+        w.println("                  if (a " + op + " b) frame.pc = meta->jumpOffset;");
         w.println("                  else frame.pc++; }");
         w.println("                break;");
     }
