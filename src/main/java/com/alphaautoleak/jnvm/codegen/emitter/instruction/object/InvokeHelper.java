@@ -12,16 +12,18 @@ public class InvokeHelper {
         w.println("                  const char* name = vm_strings[meta->nameIdx].data;");
         w.println("                  const char* desc = vm_strings[meta->descIdx].data;");
         w.println("                  jclass cls = (*env)->FindClass(env, owner);");
+        w.println("                  if (!cls) { frame.pc++; break; }");
         if (isStatic) {
             w.println("                  jmethodID mid = (*env)->GetStaticMethodID(env, cls, name, desc);");
         } else {
             w.println("                  jmethodID mid = (*env)->GetMethodID(env, cls, name, desc);");
         }
+        w.println("                  if (!mid) { (*env)->ExceptionClear(env); frame.pc++; break; }");
         w.println("                  int argCount = 0; char returnType = 'V';");
         w.println("                  parse_method_desc(desc, &argCount, &returnType);");
         w.println("                  jvalue args[16];");
         w.println("                  for (int i = argCount - 1; i >= 0; i--) {");
-        w.println("                      char t = desc[1 + i];");
+        w.println("                      char t = get_arg_type(desc, i);");
         w.println("                      switch (t) {");
         w.println("                          case 'I': case 'B': case 'C': case 'S': case 'Z':");
         w.println("                              args[i].i = frame.stack[--frame.sp].i; break;");
@@ -34,6 +36,7 @@ public class InvokeHelper {
         
         if (!isStatic) {
             w.println("                  jobject receiver = frame.stack[--frame.sp].l;");
+            w.println("                  if (!receiver) { frame.pc++; break; }");
         }
         
         w.println("                  switch (returnType) {");

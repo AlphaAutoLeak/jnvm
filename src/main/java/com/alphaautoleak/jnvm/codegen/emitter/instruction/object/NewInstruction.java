@@ -8,6 +8,7 @@ import java.io.PrintWriter;
  * NEW instruction - allocate object memory without calling constructor
  */
 public class NewInstruction extends Instruction {
+
     public NewInstruction() {
         super(0xbb, "NEW");
     }

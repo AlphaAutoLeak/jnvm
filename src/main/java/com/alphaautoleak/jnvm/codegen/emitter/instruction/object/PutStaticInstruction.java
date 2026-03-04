@@ -18,7 +18,9 @@ public class PutStaticInstruction extends Instruction {
         w.println("                  const char* name = vm_strings[meta->nameIdx].data;");
         w.println("                  const char* desc = vm_strings[meta->descIdx].data;");
         w.println("                  jclass cls = (*env)->FindClass(env, owner);");
+        w.println("                  if (!cls) { frame.pc++; break; }");
         w.println("                  jfieldID fid = (*env)->GetStaticFieldID(env, cls, name, desc);");
+        w.println("                  if (!fid) { (*env)->ExceptionClear(env); frame.pc++; break; }");
         w.println("                  char t = desc[0];");
         w.println("                  if (t == 'I' || t == 'B' || t == 'C' || t == 'S' || t == 'Z')");
         w.println("                      (*env)->SetStaticIntField(env, cls, fid, frame.stack[--frame.sp].i);");

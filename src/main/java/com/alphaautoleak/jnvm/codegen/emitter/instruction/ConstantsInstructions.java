@@ -41,6 +41,7 @@ public class ConstantsInstructions {
             w.println("                }");
             w.println("                frame.pc++;");
             w.println("            }");
+            w.println("            break;");
         }
         
         @Override

@@ -9,14 +9,14 @@ public class ControlInstructions {
     
     public static void registerAll(InstructionRegistry registry) {
         // RETURN
-        registry.register(new ReturnInstruction(0xb1, "RETURN", false));
+        registry.register(new ReturnInstruction(0xb1, "RETURN", "void"));
         
         // IRETURN, LRETURN, FRETURN, DRETURN, ARETURN
-        registry.register(new ReturnInstruction(0xac, "IRETURN", true));
-        registry.register(new ReturnInstruction(0xad, "LRETURN", true));
-        registry.register(new ReturnInstruction(0xae, "FRETURN", true));
-        registry.register(new ReturnInstruction(0xaf, "DRETURN", true));
-        registry.register(new ReturnInstruction(0xb0, "ARETURN", true));
+        registry.register(new ReturnInstruction(0xac, "IRETURN", "int"));
+        registry.register(new ReturnInstruction(0xad, "LRETURN", "long"));
+        registry.register(new ReturnInstruction(0xae, "FRETURN", "float"));
+        registry.register(new ReturnInstruction(0xaf, "DRETURN", "double"));
+        registry.register(new ReturnInstruction(0xb0, "ARETURN", "object"));
         
         // GOTO
         registry.register(new GotoInstruction());

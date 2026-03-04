@@ -50,8 +50,10 @@ public class VmInterpreterGenerator {
             
             if (debug) {
                 w.println("#define VM_LOG(fmt, ...) printf(\"[VM] \" fmt, ##__VA_ARGS__)");
+                w.println("#define VM_DEBUG_LOG(fmt, ...) printf(\"[VM-DEBUG] \" fmt, ##__VA_ARGS__)"); 
             } else {
                 w.println("#define VM_LOG(fmt, ...)");
+                w.println("#define VM_DEBUG_LOG(fmt, ...)");
             }
             w.println();
             
@@ -83,12 +85,30 @@ public class VmInterpreterGenerator {
             w.println("    const char* p = desc + 1; // skip '('");
             w.println("    while (*p && *p != ')') {");
             w.println("        if (*p == 'L') { while (*p && *p != ';') p++; if (*p) p++; }"); // 对象类型
-            w.println("        else if (*p == '[') { while (*p == '[') p++; if (*p == 'L') { while (*p && *p != ';') p++; } p++; }"); // 数组类型
+            w.println("        else if (*p == '[') { while (*p == '[') p++; if (*p == 'L') { while (*p && *p != ';') p++; } if (*p) p++; }"); // 数组类型
             w.println("        else { p++; }"); // 基本类型
             w.println("        (*argCount)++;");
             w.println("    }");
             w.println("    if (*p == ')') p++;");
             w.println("    *returnType = *p ? *p : 'V';");
+            w.println("}");
+            w.println();
+            
+            // 从方法描述符中获取第 n 个参数的类型
+            w.println("static char get_arg_type(const char* desc, int argIndex) {");
+            w.println("    const char* p = desc + 1; // skip '('");
+            w.println("    int current = 0;");
+            w.println("    while (*p && *p != ')') {");
+            w.println("        if (current == argIndex) {");
+            w.println("            if (*p == 'L' || *p == '[') return 'L';");
+            w.println("            return *p;");
+            w.println("        }");
+            w.println("        if (*p == 'L') { while (*p && *p != ';') p++; if (*p) p++; }");
+            w.println("        else if (*p == '[') { while (*p == '[') p++; if (*p == 'L') { while (*p && *p != ';') p++; } if (*p) p++; }");
+            w.println("        else { p++; }");
+            w.println("        current++;");
+            w.println("    }");
+            w.println("    return 'L';");
             w.println("}");
             w.println();
             

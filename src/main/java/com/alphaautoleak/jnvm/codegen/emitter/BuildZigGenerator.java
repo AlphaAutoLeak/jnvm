@@ -21,6 +21,9 @@ public class BuildZigGenerator {
     }
     
     public void generate() throws IOException {
+        // Windows 路径需要转义反斜杠
+        String escapedJavaHome = javaHome.replace("\\", "\\\\");
+        
         try (PrintWriter w = new PrintWriter(new java.io.FileWriter(new File(dir, "build.zig")))) {
             w.println("const std = @import(\"std\");");
             w.println();
@@ -28,7 +31,7 @@ public class BuildZigGenerator {
             w.println("    const target = b.standardTargetOptions(.{});");
             w.println("    const optimize = b.standardOptimizeOption(.{});");
             w.println();
-            w.println("    const java_home = \"" + javaHome + "\";");
+            w.println("    const java_home = \"" + escapedJavaHome + "\";");
             w.println();
             w.println("    const lib = b.addSharedLibrary(.{");
             w.println("        .name = \"customvm\",");
@@ -39,13 +42,14 @@ public class BuildZigGenerator {
             w.println("        }),");
             w.println("    });");
             w.println();
-            w.println("    lib.addIncludePath(.{ .cwd_relative = java_home ++ \"/include\" });");
-            w.println("    lib.addIncludePath(.{ .cwd_relative = java_home ++ \"/include/linux\" });");
-            w.println("    lib.addIncludePath(.{ .cwd_relative = java_home ++ \"/include/win32\" });");
+            w.println("    lib.addIncludePath(.{ .cwd_relative = java_home ++ \"\\\\include\" });");
+            w.println("    lib.addIncludePath(.{ .cwd_relative = java_home ++ \"\\\\include\\\\linux\" });");
+            w.println("    lib.addIncludePath(.{ .cwd_relative = java_home ++ \"\\\\include\\\\win32\" });");
             w.println();
             w.println("    lib.addCSourceFiles(.{");
             w.println("        .files = &.{ \"vm_data.c\", \"vm_interpreter.c\", \"vm_bridge.c\", \"chacha20.c\" },");
-            w.println("        .flags = &.{ \"-O2\", \"-std=c11\" },");
+            // 添加调试标志
+            w.println("        .flags = &.{ \"-O0\", \"-g\", \"-std=c11\", \"-DVM_DEBUG\" },");
             w.println("    });");
             w.println();
             w.println("    b.installArtifact(lib);");

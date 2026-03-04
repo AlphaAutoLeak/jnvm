@@ -53,6 +53,9 @@ public class VmDataGenerator {
         }
     }
     
+    /** 全局字符串池：字符串 -> 全局索引 */
+    private Map<String, Integer> globalStringIndexMap;
+    
     private void generateSource() throws IOException {
         try (PrintWriter w = new PrintWriter(new java.io.FileWriter(new File(dir, "vm_data.c")))) {
             w.println("#include \"vm_data.h\"");
@@ -74,6 +77,13 @@ public class VmDataGenerator {
                 if (pool != null) {
                     allStrings.addAll(pool);
                 }
+            }
+            
+            // 建立全局字符串索引映射
+            globalStringIndexMap = new HashMap<>();
+            int globalIdx = 0;
+            for (String s : allStrings) {
+                globalStringIndexMap.put(s, globalIdx++);
             }
             
             emitStringPool(w, allStrings);
@@ -119,10 +129,8 @@ public class VmDataGenerator {
     private void emitStringPool(PrintWriter w, Set<String> strings) {
         int idx = 0;
         for (String s : strings) {
-            byte[] enc = StringEncryptor.encrypt(s, stringKey);
-            w.printf("static const char vm_str_%d[] = {", idx);
-            emitBytes(w, enc);
-            w.println("};");
+            // 直接存储明文字符串，不加密
+            w.printf("static const char vm_str_%d[] = \"%s\";\n", idx, escapeCString(s));
             idx++;
         }
         w.println();
@@ -137,8 +145,57 @@ public class VmDataGenerator {
         w.println();
     }
     
+    private String escapeCString(String s) {
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < s.length(); i++) {
+            char c = s.charAt(i);
+            switch (c) {
+                case '\\': sb.append("\\\\"); break;
+                case '"': sb.append("\\\""); break;
+                case '\n': sb.append("\\n"); break;
+                case '\r': sb.append("\\r"); break;
+                case '\t': sb.append("\\t"); break;
+                default:
+                    if (c >= 32 && c < 127) {
+                        sb.append(c);
+                    } else {
+                        sb.append(String.format("\\x%02x", (int) c));
+                    }
+            }
+        }
+        return sb.toString();
+    }
+    
+    /**
+     * 将方法局部字符串索引映射到全局字符串索引
+     */
+    private int mapStringIndex(List<String> localPool, int localIdx) {
+        if (localPool == null || localIdx < 0 || localIdx >= localPool.size()) {
+            return localIdx; // 保持原值（可能是错误的）
+        }
+        String str = localPool.get(localIdx);
+        Integer globalIdx = globalStringIndexMap.get(str);
+        if (globalIdx == null) {
+            return localIdx; // 不应该发生
+        }
+        return globalIdx;
+    }
+    
     private void emitMethodData(PrintWriter w, EncryptedMethodData method) {
         int id = method.getMethodId();
+        List<String> localPool = method.getStringPool();
+        
+        // 调试：打印局部字符串池
+        if (id == 34) {
+            System.out.println("[DEBUG] Method 34 local string pool:");
+            if (localPool != null) {
+                for (int i = 0; i < localPool.size(); i++) {
+                    String s = localPool.get(i);
+                    Integer globalIdx = globalStringIndexMap.get(s);
+                    System.out.println("  [" + i + "] \"" + s + "\" -> global " + globalIdx);
+                }
+            }
+        }
         
         // 字节码
         w.printf("static const uint8_t m%d_bc[] = {", id);
@@ -177,26 +234,28 @@ public class VmDataGenerator {
                         w.printf(".doubleVal=%f", m.doubleVal);
                         break;
                     case META_STRING:
-                        w.printf(".strIdx=%d, .strLen=%d", m.strIdx, m.strLen);
+                        w.printf(".strIdx=%d, .strLen=%d", 
+                            mapStringIndex(localPool, m.strIdx), m.strLen);
                         break;
                     case META_CLASS:
-                        w.printf(".classIdx=%d, .classLen=%d", m.classIdx, m.classLen);
+                        w.printf(".classIdx=%d, .classLen=%d", 
+                            mapStringIndex(localPool, m.classIdx), m.classLen);
                         break;
                     case META_FIELD:
                     case META_METHOD:
                         w.printf(".ownerIdx=%d, .ownerLen=%d, ",
-                            m.ownerIdx, m.ownerLen);
+                            mapStringIndex(localPool, m.ownerIdx), m.ownerLen);
                         w.printf(".nameIdx=%d, .nameLen=%d, ",
-                            m.nameIdx, m.nameLen);
+                            mapStringIndex(localPool, m.nameIdx), m.nameLen);
                         w.printf(".descIdx=%d, .descLen=%d",
-                            m.descIdx, m.descLen);
+                            mapStringIndex(localPool, m.descIdx), m.descLen);
                         break;
                     case META_INVOKE_DYNAMIC:
                         w.printf(".bsmIdx=%d, ", m.bsmIdx);
                         w.printf(".nameIdx=%d, .nameLen=%d, ",
-                            m.nameIdx, m.nameLen);
+                            mapStringIndex(localPool, m.nameIdx), m.nameLen);
                         w.printf(".descIdx=%d, .descLen=%d",
-                            m.descIdx, m.descLen);
+                            mapStringIndex(localPool, m.descIdx), m.descLen);
                         break;
                     case META_JUMP:
                         w.printf(".jumpOffset=%d", m.jumpOffset);
@@ -211,7 +270,7 @@ public class VmDataGenerator {
                         break;
                     case META_TYPE:
                         w.printf(".classIdx=%d, .classLen=%d, .dims=%d",
-                            m.classIdx, m.classLen, m.dims);
+                            mapStringIndex(localPool, m.classIdx), m.classLen, m.dims);
                         break;
                     default:
                         break;
