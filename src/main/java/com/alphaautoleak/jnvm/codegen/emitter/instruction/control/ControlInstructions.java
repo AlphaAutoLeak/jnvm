@@ -47,5 +47,8 @@ public class ControlInstructions {
         
         // IINC
         registry.register(new IincInstruction());
+        
+        // ATHROW
+        registry.register(new AThrowInstruction());
     }
 }

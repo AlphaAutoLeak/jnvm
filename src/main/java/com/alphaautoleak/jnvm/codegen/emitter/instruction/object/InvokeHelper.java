@@ -48,10 +48,12 @@ public class InvokeHelper {
         }
         w.println("                      case 'I': case 'B': case 'C': case 'S': case 'Z':");
         if (isStatic) {
-            w.println("                          frame.stack[frame.sp++].i = (*env)->CallStaticIntMethodA(env, cls, mid, args); break;");
+            w.println("                          { jint res = (*env)->CallStaticIntMethodA(env, cls, mid, args);");
         } else {
-            w.println("                          frame.stack[frame.sp++].i = (*env)->CallIntMethodA(env, receiver, mid, args); break;");
+            w.println("                          { jint res = (*env)->CallIntMethodA(env, receiver, mid, args);");
         }
+        w.println("                            if (strcmp(name, \"isPresent\") == 0) { VM_LOG(\"isPresent() returned %d\\n\", res); }");
+        w.println("                            frame.stack[frame.sp++].i = res; break; }");
         w.println("                      case 'J':");
         if (isStatic) {
             w.println("                          frame.stack[frame.sp++].j = (*env)->CallStaticLongMethodA(env, cls, mid, args); break;");

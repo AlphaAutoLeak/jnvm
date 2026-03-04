@@ -19,12 +19,20 @@ import java.util.*;
  * - 字符串池：所有字符串统一存储
  * - 元数据数组：每条指令的操作数
  * - pcToMetaIdx：PC -> 元数据索引映射
+ * - Bootstrap 方法表：全局共享
  */
 public class VmDataGenerator {
     
     private final List<EncryptedMethodData> methods;
     private final byte[] stringKey;
     private final File dir;
+    
+    /** 全局字符串池：字符串 -> 全局索引 */
+    private Map<String, Integer> globalStringIndexMap;
+    
+    /** 全局 Bootstrap 方法表 */
+    private List<BootstrapEntry> globalBootstrapMethods = new ArrayList<>();
+    private Map<String, Integer> bootstrapIndexMap = new HashMap<>();
     
     public VmDataGenerator(File dir, List<EncryptedMethodData> methods, byte[] stringKey) {
         this.dir = dir;
@@ -33,8 +41,43 @@ public class VmDataGenerator {
     }
     
     public void generate() throws IOException {
+        // 第一遍：收集所有 bootstrap 方法
+        collectBootstrapMethods();
+        
         generateHeader();
         generateSource();
+    }
+    
+    /**
+     * 收集所有方法的 bootstrap 方法到全局表
+     */
+    private void collectBootstrapMethods() {
+        for (EncryptedMethodData method : methods) {
+            List<BootstrapEntry> bsmList = method.getBootstrapMethods();
+            if (bsmList == null) continue;
+            
+            for (BootstrapEntry bsm : bsmList) {
+                // 包含 args 信息在 key 中，确保不同的 BSM 不会被合并
+                StringBuilder keyBuilder = new StringBuilder();
+                keyBuilder.append(bsm.getHandleOwner()).append(".");
+                keyBuilder.append(bsm.getHandleName()).append(bsm.getHandleDescriptor());
+                // 添加 args 信息
+                if (bsm.getArguments() != null) {
+                    for (Object arg : bsm.getArguments()) {
+                        keyBuilder.append("|").append(arg != null ? arg.toString() : "null");
+                    }
+                }
+                String key = keyBuilder.toString();
+                
+                if (!bootstrapIndexMap.containsKey(key)) {
+                    bootstrapIndexMap.put(key, globalBootstrapMethods.size());
+                    globalBootstrapMethods.add(bsm);
+                }
+            }
+        }
+        
+        // 更新每个方法的 bsmIdx 到全局索引
+        // 这需要在生成元数据时处理
     }
     
     private void generateHeader() throws IOException {
@@ -48,13 +91,12 @@ public class VmDataGenerator {
             w.println("extern VMMethod vm_methods[];");
             w.println("extern VMString vm_strings[];");
             w.println("extern const int vm_string_count;");
+            w.println("extern VMBootstrapMethod vm_bootstrap_methods[];");
+            w.println("extern const int vm_bootstrap_count;");
             w.println();
             w.println("#endif");
         }
     }
-    
-    /** 全局字符串池：字符串 -> 全局索引 */
-    private Map<String, Integer> globalStringIndexMap;
     
     private void generateSource() throws IOException {
         try (PrintWriter w = new PrintWriter(new java.io.FileWriter(new File(dir, "vm_data.c")))) {
@@ -79,6 +121,38 @@ public class VmDataGenerator {
                 }
             }
             
+            // 添加 BSM 相关的字符串到全局池
+            for (BootstrapEntry bsm : globalBootstrapMethods) {
+                // 添加 bootstrap 方法自身的信息
+                allStrings.add(bsm.getHandleOwner());
+                allStrings.add(bsm.getHandleName());
+                allStrings.add(bsm.getHandleDescriptor());
+                
+                // 添加 BSM 参数中的字符串
+                List<Object> args = bsm.getArguments();
+                List<BootstrapEntry.ArgType> argTypes = bsm.getArgumentTypes();
+                if (args != null && argTypes != null) {
+                    for (int j = 0; j < args.size(); j++) {
+                        Object arg = args.get(j);
+                        BootstrapEntry.ArgType argType = argTypes.get(j);
+                        switch (argType) {
+                            case STRING:
+                            case METHOD_TYPE:
+                                allStrings.add(arg.toString());
+                                break;
+                            case METHOD_HANDLE:
+                                // 格式: "tag:owner:name:desc"
+                                String[] parts = arg.toString().split(":");
+                                if (parts.length >= 4) {
+                                    // 存储完整的方法引用字符串 (owner.name + desc)
+                                    allStrings.add(parts[1] + "." + parts[2] + parts[3]);
+                                }
+                                break;
+                        }
+                    }
+                }
+            }
+            
             // 建立全局字符串索引映射
             globalStringIndexMap = new HashMap<>();
             int globalIdx = 0;
@@ -90,7 +164,11 @@ public class VmDataGenerator {
             
             w.println("const int vm_method_count = " + methods.size() + ";");
             w.println("const int vm_string_count = " + allStrings.size() + ";");
+            w.println("const int vm_bootstrap_count = " + globalBootstrapMethods.size() + ";");
             w.println();
+            
+            // 生成 Bootstrap 方法表
+            emitBootstrapMethods(w);
             
             // 为每个方法生成数据
             for (EncryptedMethodData method : methods) {
@@ -145,6 +223,109 @@ public class VmDataGenerator {
         w.println();
     }
     
+    /**
+     * 生成全局 Bootstrap 方法表
+     */
+    private void emitBootstrapMethods(PrintWriter w) {
+        if (globalBootstrapMethods.isEmpty()) {
+            w.println("VMBootstrapMethod vm_bootstrap_methods[] = {};");
+            w.println();
+            return;
+        }
+        
+        // 为每个 bootstrap 方法的参数生成数组
+        for (int i = 0; i < globalBootstrapMethods.size(); i++) {
+            BootstrapEntry bsm = globalBootstrapMethods.get(i);
+            List<Object> args = bsm.getArguments();
+            List<BootstrapEntry.ArgType> argTypes = bsm.getArgumentTypes();
+            
+            if (args != null && !args.isEmpty()) {
+                w.printf("static BsmArg bsm%d_args[] = {", i);
+                for (int j = 0; j < args.size(); j++) {
+                    Object arg = args.get(j);
+                    BootstrapEntry.ArgType argType = argTypes.get(j);
+                    
+                    w.printf("\n    { .type=%s, ", bsmArgTypeToString(argType));
+                    
+                    switch (argType) {
+                        case STRING:
+                            w.printf(".strIdx=%d", getOrAddStringIndex(arg.toString()));
+                            break;
+                        case INTEGER:
+                            w.printf(".intVal=%d", (Integer) arg);
+                            break;
+                        case LONG:
+                            w.printf(".longVal=%dL", (Long) arg);
+                            break;
+                        case FLOAT:
+                            w.printf(".floatVal=%ff", (Float) arg);
+                            break;
+                        case DOUBLE:
+                            w.printf(".doubleVal=%f", (Double) arg);
+                            break;
+                        case METHOD_TYPE:
+                            w.printf(".strIdx=%d", getOrAddStringIndex(arg.toString()));
+                            break;
+                        case METHOD_HANDLE:
+                            // 格式: "tag:owner:name:desc"
+                            String[] parts = arg.toString().split(":");
+                            if (parts.length >= 4) {
+                                w.printf(".handleTag=%s, .strIdx=%d", parts[0], 
+                                    getOrAddStringIndex(parts[1] + "." + parts[2] + parts[3]));
+                            }
+                            break;
+                    }
+                    w.printf(" },");
+                }
+                w.println("\n};");
+            }
+        }
+        
+        // 生成 bootstrap 方法数组
+        w.println("VMBootstrapMethod vm_bootstrap_methods[] = {");
+        for (int i = 0; i < globalBootstrapMethods.size(); i++) {
+            BootstrapEntry bsm = globalBootstrapMethods.get(i);
+            w.printf("    { .handleTag=%d, ", bsm.getHandleTag());
+            w.printf(".ownerIdx=%d, ", getOrAddStringIndex(bsm.getHandleOwner()));
+            w.printf(".nameIdx=%d, ", getOrAddStringIndex(bsm.getHandleName()));
+            w.printf(".descIdx=%d, ", getOrAddStringIndex(bsm.getHandleDescriptor()));
+            
+            List<Object> args = bsm.getArguments();
+            if (args != null && !args.isEmpty()) {
+                w.printf(".args=bsm%d_args, .argCount=%d", i, args.size());
+            } else {
+                w.printf(".args=NULL, .argCount=0");
+            }
+            w.printf(" },\n");
+        }
+        w.println("};");
+        w.println();
+    }
+    
+    /**
+     * 获取字符串索引
+     */
+    private int getOrAddStringIndex(String s) {
+        Integer idx = globalStringIndexMap.get(s);
+        if (idx != null) return idx;
+        // 字符串应该已经在全局池中
+        System.err.println("[WARN] String not found in global pool: " + s);
+        return 0;
+    }
+    
+    private String bsmArgTypeToString(BootstrapEntry.ArgType type) {
+        switch (type) {
+            case STRING: return "BSM_ARG_STRING";
+            case INTEGER: return "BSM_ARG_INTEGER";
+            case LONG: return "BSM_ARG_LONG";
+            case FLOAT: return "BSM_ARG_FLOAT";
+            case DOUBLE: return "BSM_ARG_DOUBLE";
+            case METHOD_TYPE: return "BSM_ARG_METHOD_TYPE";
+            case METHOD_HANDLE: return "BSM_ARG_METHOD_HANDLE";
+            default: return "BSM_ARG_STRING";
+        }
+    }
+    
     private String escapeCString(String s) {
         StringBuilder sb = new StringBuilder();
         for (int i = 0; i < s.length(); i++) {
@@ -181,19 +362,61 @@ public class VmDataGenerator {
         return globalIdx;
     }
     
+    /**
+     * 将方法局部的 bootstrap 方法索引映射到全局索引
+     */
+    private int mapBsmIndex(List<BootstrapEntry> localBsmList, int localIdx) {
+        if (localBsmList == null || localIdx < 0 || localIdx >= localBsmList.size()) {
+            System.out.println("[DEBUG] mapBsmIndex: invalid input, localBsmList=" + localBsmList + ", localIdx=" + localIdx);
+            return localIdx;
+        }
+        BootstrapEntry bsm = localBsmList.get(localIdx);
+        // 使用与 collectBootstrapMethods 相同的 key 生成逻辑
+        StringBuilder keyBuilder = new StringBuilder();
+        keyBuilder.append(bsm.getHandleOwner()).append(".");
+        keyBuilder.append(bsm.getHandleName()).append(bsm.getHandleDescriptor());
+        if (bsm.getArguments() != null) {
+            for (Object arg : bsm.getArguments()) {
+                keyBuilder.append("|").append(arg != null ? arg.toString() : "null");
+            }
+        }
+        String key = keyBuilder.toString();
+        
+        Integer globalIdx = bootstrapIndexMap.get(key);
+        if (globalIdx == null) {
+            System.out.println("[DEBUG] mapBsmIndex: key not found: " + key);
+            System.out.println("[DEBUG] Available keys: " + bootstrapIndexMap.keySet());
+            return localIdx;
+        }
+        return globalIdx;
+    }
+    
     private void emitMethodData(PrintWriter w, EncryptedMethodData method) {
         int id = method.getMethodId();
         List<String> localPool = method.getStringPool();
         
-        // 调试：打印局部字符串池
-        if (id == 34) {
-            System.out.println("[DEBUG] Method 34 local string pool:");
-            if (localPool != null) {
-                for (int i = 0; i < localPool.size(); i++) {
-                    String s = localPool.get(i);
-                    Integer globalIdx = globalStringIndexMap.get(s);
-                    System.out.println("  [" + i + "] \"" + s + "\" -> global " + globalIdx);
+        // 调试：打印 BSM 信息
+        if (id == 111) {
+            System.out.println("[DEBUG] Method 111 (Calculations.run) BSM info:");
+            List<BootstrapEntry> bsmList = method.getBootstrapMethods();
+            if (bsmList != null) {
+                System.out.println("  BSM count: " + bsmList.size());
+                for (int i = 0; i < bsmList.size(); i++) {
+                    BootstrapEntry bsm = bsmList.get(i);
+                    System.out.println("  Local BSM[" + i + "]: " + bsm.getHandleOwner() + "." + bsm.getHandleName());
+                    List<Object> args = bsm.getArguments();
+                    List<BootstrapEntry.ArgType> argTypes = bsm.getArgumentTypes();
+                    if (args != null) {
+                        System.out.println("    args count: " + args.size());
+                        for (int j = 0; j < args.size(); j++) {
+                            Object arg = args.get(j);
+                            BootstrapEntry.ArgType argType = argTypes != null && j < argTypes.size() ? argTypes.get(j) : null;
+                            System.out.println("    arg[" + j + "] type=" + argType + " value=" + arg);
+                        }
+                    }
                 }
+            } else {
+                System.out.println("  BSM list is null!");
             }
         }
         
@@ -251,7 +474,12 @@ public class VmDataGenerator {
                             mapStringIndex(localPool, m.descIdx), m.descLen);
                         break;
                     case META_INVOKE_DYNAMIC:
-                        w.printf(".bsmIdx=%d, ", m.bsmIdx);
+                        // 映射局部 bsmIdx 到全局索引
+                        int globalBsmIdx = mapBsmIndex(method.getBootstrapMethods(), m.bsmIdx);
+                        if (id == 111) {
+                            System.out.println("[DEBUG] Method 111 INVOKEDYNAMIC: localIdx=" + m.bsmIdx + " -> globalIdx=" + globalBsmIdx);
+                        }
+                        w.printf(".bsmIdx=%d, ", globalBsmIdx);
                         w.printf(".nameIdx=%d, .nameLen=%d, ",
                             mapStringIndex(localPool, m.nameIdx), m.nameLen);
                         w.printf(".descIdx=%d, .descLen=%d",

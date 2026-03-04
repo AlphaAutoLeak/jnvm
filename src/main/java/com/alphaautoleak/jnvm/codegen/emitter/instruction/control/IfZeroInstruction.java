@@ -17,8 +17,10 @@ public class IfZeroInstruction extends Instruction {
 
     @Override
     protected void generateBody(PrintWriter w) {
-        w.println("                if (frame.stack[--frame.sp].i " + condition + ") frame.pc += meta->jumpOffset;");
-        w.println("                else frame.pc++;");
+        w.println("                { jint val = frame.stack[--frame.sp].i;");
+        w.println("                  VM_LOG(\"IF cond: sp=%d, val=%d, cond=%s, jumpOffset=%d\\n\", frame.sp, val, \"" + condition + "\", meta->jumpOffset);");
+        w.println("                  if (val " + condition + ") frame.pc += meta->jumpOffset;");
+        w.println("                  else frame.pc++; }");
         w.println("                break;");
     }
 

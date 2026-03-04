@@ -9,7 +9,7 @@ public class TestMain {
                 "--target", "x86_64-windows-gnu",
                 "--anti-debug", "true",
                 "--native-dir", "native",
-                "--debug", "false"
+                "--debug", "true"
         });
     }
 

@@ -395,13 +395,18 @@ public class BytecodeExtractor {
     // ===== Bootstrap Methods =====
 
     private int findOrCreateBootstrapMethod(Handle bsm, Object[] bsmArgs) {
+        // 查找时需要比较 args，不同的 args 应该创建不同的 BSM
         for (int i = 0; i < bootstrapMethods.size(); i++) {
             BootstrapEntry e = bootstrapMethods.get(i);
             if (e.getHandleTag() == bsm.getTag() &&
                 e.getHandleOwner().equals(bsm.getOwner()) &&
                 e.getHandleName().equals(bsm.getName()) &&
                 e.getHandleDescriptor().equals(bsm.getDesc())) {
-                return i;
+                // 还需要比较 args
+                List<Object> existingArgs = e.getArguments();
+                if (argsEqual(existingArgs, bsmArgs)) {
+                    return i;
+                }
             }
         }
         
@@ -454,6 +459,32 @@ public class BytecodeExtractor {
         int idx = bootstrapMethods.size();
         bootstrapMethods.add(entry);
         return idx;
+    }
+    
+    private boolean argsEqual(List<Object> args1, Object[] args2) {
+        if (args1 == null && args2 == null) return true;
+        if (args1 == null || args2 == null) return false;
+        if (args1.size() != args2.length) return false;
+        
+        for (int i = 0; i < args1.size(); i++) {
+            Object a1 = args1.get(i);
+            Object a2 = args2[i];
+            if (a1 == null && a2 == null) continue;
+            if (a1 == null || a2 == null) return false;
+            
+            // 处理 Handle 序列化的情况
+            if (a2 instanceof Handle) {
+                Handle h = (Handle) a2;
+                String serialized = h.getTag() + ":" + h.getOwner() + ":" +
+                        h.getName() + ":" + h.getDesc();
+                if (!a1.toString().equals(serialized)) return false;
+            } else if (a2 instanceof Type) {
+                if (!a1.toString().equals(((Type) a2).getDescriptor())) return false;
+            } else {
+                if (!a1.toString().equals(a2.toString())) return false;
+            }
+        }
+        return true;
     }
 
     // ===== 字符串池管理 =====
