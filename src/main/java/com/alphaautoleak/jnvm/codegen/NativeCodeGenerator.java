@@ -56,7 +56,7 @@ public class NativeCodeGenerator {
         System.out.println("  [+] vm_interpreter.h / vm_interpreter.c");
 
         // 5. vm_bridge.c
-        new VmBridgeGenerator(dir, methods.size(), bridgeClass).generate();
+        new VmBridgeGenerator(dir, bridgeClass).generate();
         System.out.println("  [+] vm_bridge.c");
 
         // 6. build.zig

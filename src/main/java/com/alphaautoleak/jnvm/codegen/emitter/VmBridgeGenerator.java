@@ -10,12 +10,10 @@ import java.io.PrintWriter;
 public class VmBridgeGenerator {
     
     private final File dir;
-    private final int methodCount;
     private final String bridgeClass;
     
-    public VmBridgeGenerator(File dir, int methodCount, String bridgeClass) {
+    public VmBridgeGenerator(File dir, String bridgeClass) {
         this.dir = dir;
-        this.methodCount = methodCount;
         this.bridgeClass = bridgeClass;
     }
     
@@ -33,7 +31,6 @@ public class VmBridgeGenerator {
     
     private void emitJNIOnLoad(PrintWriter w) {
         w.println("JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM* vm, void* reserved) {");
-//        w.println("    printf(\"[JNVM] Native VM loaded. " + methodCount + " methods protected.\\n\");");
         w.println("    return JNI_VERSION_1_8;");
         w.println("}");
         w.println();
