@@ -370,7 +370,11 @@ public class VmDataGenerator {
                     if (c >= 32 && c < 127) {
                         sb.append(c);
                     } else {
-                        sb.append(String.format("\\x%02x", (int) c));
+                        // 使用 \xhh 格式，但如果下一个字符是十六进制字符，需要用字符串结束
+                        // 更安全的做法：使用 "\" "\xhh" 拼接，这样 \xhh 后面是引号结束
+                        sb.append("\" \"\\x");
+                        sb.append(String.format("%02x", (int) c));
+                        sb.append("\" \"");
                     }
             }
         }

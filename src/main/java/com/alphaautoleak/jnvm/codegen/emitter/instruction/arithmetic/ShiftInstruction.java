@@ -11,12 +11,24 @@ public class ShiftInstruction extends Instruction {
     private final String type;
     private final String op;
     private final boolean unsigned;
+    private final String vmType;
 
     public ShiftInstruction(int opcode, String name, String type, String op, boolean unsigned) {
         super(opcode, name);
         this.type = type;
         this.op = op;
         this.unsigned = unsigned;
+        this.vmType = getVmType(type);
+    }
+
+    private static String getVmType(String type) {
+        switch (type) {
+            case "i": return "TYPE_INT";
+            case "j": return "TYPE_LONG";
+            case "f": return "TYPE_FLOAT";
+            case "d": return "TYPE_DOUBLE";
+            default: return "TYPE_UNKNOWN";
+        }
     }
 
     @Override
@@ -27,6 +39,7 @@ public class ShiftInstruction extends Instruction {
         } else {
             w.println("                frame.stack[frame.sp-2]." + type + " " + op + "= frame.stack[frame.sp-1].i;");
         }
+        w.println("                frame.stackTypes[frame.sp-2] = " + vmType + ";");
         w.println("                frame.sp--;");
         pcIncBreak(w);
     }

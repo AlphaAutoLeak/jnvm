@@ -98,28 +98,22 @@ public class BytecodeExtractor {
     
     /**
      * 第一遍：遍历指令，生成字节码和元数据
-     * 对于 Label，使用 ASM 提供的原始字节码偏移量
+     * Label 映射到当前的 PC（bytecodes.size()）
      */
     private void firstPass() {
         InsnList insns = methodNode.instructions;
         
         // 遍历所有指令，生成字节码和元数据
-        // 同时收集 Label 的偏移量
+        // 同时收集 Label 的 PC
         for (int i = 0; i < insns.size(); i++) {
             AbstractInsnNode node = insns.get(i);
             
-            // 处理 Label
+            // 处理 Label - 映射到当前 PC
             if (node instanceof LabelNode) {
                 LabelNode labelNode = (LabelNode) node;
-                int offset;
-                try {
-                    // ASM 的 Label.getOffset() 返回原始字节码偏移量
-                    offset = labelNode.getLabel().getOffset();
-                } catch (IllegalStateException e) {
-                    // 如果 Label 还没有被解析，使用当前字节码位置作为备选
-                    offset = bytecodes.size();
-                }
-                labelToPc.put(labelNode, offset);
+                // Label 的 PC 是当前 bytecodes 的位置
+                int pc = bytecodes.size();
+                labelToPc.put(labelNode, pc);
                 continue;
             }
             

@@ -79,6 +79,15 @@ public class VmInterpreterGenerator {
                 helper.generateSource(w);
             }
             
+            // 字符串解密函数
+            w.println("static void vm_decrypt_string(const unsigned char* enc, int len, char* out, const unsigned char* key) {");
+            w.println("    for (int i = 0; i < len; i++) {");
+            w.println("        out[i] = (char)((enc[i] - (i & 0xFF)) ^ key[i % 8]);");
+            w.println("    }");
+            w.println("    out[len] = '\\0';");
+            w.println("}");
+            w.println();
+            
             // 主解释器函数
             emitExecuteMethod(w);
         }
@@ -102,6 +111,7 @@ public class VmInterpreterGenerator {
         w.println("    VMFrame frame = { .pc = 0, .sp = 0 };");
         w.println("    frame.stack = (VMValue*)calloc(m->maxStack, sizeof(VMValue));");
         w.println("    frame.locals = (VMValue*)calloc(m->maxLocals, sizeof(VMValue));");
+        w.println("    frame.stackTypes = (VMType*)calloc(m->maxStack, sizeof(VMType));");
         w.println();
         
         // 设置 this 和参数
@@ -161,6 +171,7 @@ public class VmInterpreterGenerator {
         w.println("    jobject resultObj = vm_box_result(env, result, methodReturnType);");
         w.println("    free(frame.locals);");
         w.println("    free(frame.stack);");
+        w.println("    free(frame.stackTypes);");
         w.println("    free(bytecode);");
         w.println("    return resultObj;");
         w.println("}");

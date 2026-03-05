@@ -17,7 +17,8 @@ public class FALoadInstruction extends Instruction {
         w.println("                { jint idx = frame.stack[--frame.sp].i;");
         w.println("                  jfloatArray arr = (jfloatArray)frame.stack[--frame.sp].l;");
         w.println("                  jfloat* elems = (*env)->GetFloatArrayElements(env, arr, NULL);");
-        w.println("                  frame.stack[frame.sp++].f = elems[idx];");
+        w.println("                  frame.stack[frame.sp].f = elems[idx];");
+        w.println("                  frame.stackTypes[frame.sp++] = TYPE_FLOAT;");
         w.println("                  (*env)->ReleaseFloatArrayElements(env, arr, elems, 0); }");
         pcIncBreak(w);
     }

@@ -29,7 +29,8 @@ public class CmpInstruction extends Instruction {
     protected void generateBody(PrintWriter w) {
         w.println("                { " + jniType + " b = frame.stack[--frame.sp]." + type + ";");
         w.println("                  " + jniType + " a = frame.stack[--frame.sp]." + type + ";");
-        w.println("                  frame.stack[frame.sp++].i = (a < b) ? -1 : ((a > b) ? 1 : 0); }");
+        w.println("                  frame.stack[frame.sp].i = (a < b) ? -1 : ((a > b) ? 1 : 0);");
+        w.println("                  frame.stackTypes[frame.sp++] = TYPE_INT; }");
         pcIncBreak(w);
     }
 }

@@ -17,7 +17,8 @@ public class SALoadInstruction extends Instruction {
         w.println("                { jint idx = frame.stack[--frame.sp].i;");
         w.println("                  jshortArray arr = (jshortArray)frame.stack[--frame.sp].l;");
         w.println("                  jshort* elems = (*env)->GetShortArrayElements(env, arr, NULL);");
-        w.println("                  frame.stack[frame.sp++].i = elems[idx];");
+        w.println("                  frame.stack[frame.sp].i = elems[idx];");
+        w.println("                  frame.stackTypes[frame.sp++] = TYPE_INT;");
         w.println("                  (*env)->ReleaseShortArrayElements(env, arr, elems, 0); }");
         pcIncBreak(w);
     }

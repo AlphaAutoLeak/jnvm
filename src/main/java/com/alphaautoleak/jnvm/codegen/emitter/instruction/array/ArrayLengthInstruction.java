@@ -15,6 +15,7 @@ public class ArrayLengthInstruction extends Instruction {
     @Override
     protected void generateBody(PrintWriter w) {
         w.println("                frame.stack[frame.sp-1].i = (*env)->GetArrayLength(env, frame.stack[frame.sp-1].l);");
+        w.println("                frame.stackTypes[frame.sp-1] = TYPE_INT;");
         pcIncBreak(w);
     }
 }

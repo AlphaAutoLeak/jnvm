@@ -26,7 +26,8 @@ public class NewArrayInstruction extends Instruction {
         w.println("                      case 10: arr = (*env)->NewIntArray(env, size); break;");
         w.println("                      case 11: arr = (*env)->NewLongArray(env, size); break;");
         w.println("                  }");
-        w.println("                  frame.stack[frame.sp++].l = arr; }");
+        w.println("                  frame.stack[frame.sp].l = arr;");
+        w.println("                  frame.stackTypes[frame.sp++] = TYPE_REF; }");
         pcIncBreak(w);
     }
 }

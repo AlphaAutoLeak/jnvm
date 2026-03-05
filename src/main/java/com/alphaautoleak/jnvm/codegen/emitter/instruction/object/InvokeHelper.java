@@ -57,31 +57,36 @@ public class InvokeHelper {
         } else {
             w.println("                          { jint res = (*env)->CallIntMethodA(env, receiver, mid, args);");
         }
-        w.println("                            frame.stack[frame.sp++].i = res; break; }");
+        w.println("                            frame.stack[frame.sp].i = res;");
+        w.println("                            frame.stackTypes[frame.sp++] = TYPE_INT; break; }");
         w.println("                      case 'J':");
         if (isStatic) {
-            w.println("                          frame.stack[frame.sp++].j = (*env)->CallStaticLongMethodA(env, cls, mid, args); break;");
+            w.println("                          frame.stack[frame.sp].j = (*env)->CallStaticLongMethodA(env, cls, mid, args);");
         } else {
-            w.println("                          frame.stack[frame.sp++].j = (*env)->CallLongMethodA(env, receiver, mid, args); break;");
+            w.println("                          frame.stack[frame.sp].j = (*env)->CallLongMethodA(env, receiver, mid, args);");
         }
+        w.println("                          frame.stackTypes[frame.sp++] = TYPE_LONG; break;");
         w.println("                      case 'F':");
         if (isStatic) {
-            w.println("                          frame.stack[frame.sp++].f = (*env)->CallStaticFloatMethodA(env, cls, mid, args); break;");
+            w.println("                          frame.stack[frame.sp].f = (*env)->CallStaticFloatMethodA(env, cls, mid, args);");
         } else {
-            w.println("                          frame.stack[frame.sp++].f = (*env)->CallFloatMethodA(env, receiver, mid, args); break;");
+            w.println("                          frame.stack[frame.sp].f = (*env)->CallFloatMethodA(env, receiver, mid, args);");
         }
+        w.println("                          frame.stackTypes[frame.sp++] = TYPE_FLOAT; break;");
         w.println("                      case 'D':");
         if (isStatic) {
-            w.println("                          frame.stack[frame.sp++].d = (*env)->CallStaticDoubleMethodA(env, cls, mid, args); break;");
+            w.println("                          frame.stack[frame.sp].d = (*env)->CallStaticDoubleMethodA(env, cls, mid, args);");
         } else {
-            w.println("                          frame.stack[frame.sp++].d = (*env)->CallDoubleMethodA(env, receiver, mid, args); break;");
+            w.println("                          frame.stack[frame.sp].d = (*env)->CallDoubleMethodA(env, receiver, mid, args);");
         }
+        w.println("                          frame.stackTypes[frame.sp++] = TYPE_DOUBLE; break;");
         w.println("                      default:");
         if (isStatic) {
-            w.println("                          frame.stack[frame.sp++].l = (*env)->CallStaticObjectMethodA(env, cls, mid, args); break;");
+            w.println("                          frame.stack[frame.sp].l = (*env)->CallStaticObjectMethodA(env, cls, mid, args);");
         } else {
-            w.println("                          frame.stack[frame.sp++].l = (*env)->CallObjectMethodA(env, receiver, mid, args); break;");
+            w.println("                          frame.stack[frame.sp].l = (*env)->CallObjectMethodA(env, receiver, mid, args);");
         }
+        w.println("                          frame.stackTypes[frame.sp++] = TYPE_REF; break;");
         w.println("                  }");
         w.println("                }");
         w.println("                frame.pc++;");

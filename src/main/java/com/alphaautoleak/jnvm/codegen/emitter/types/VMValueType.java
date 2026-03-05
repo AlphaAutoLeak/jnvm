@@ -26,12 +26,23 @@ public class VMValueType {
     }
     
     private static void emitVMFrame(PrintWriter w) {
+        w.println("/* 类型标记 - 用于跟踪栈上的值类型 */");
+        w.println("typedef enum {");
+        w.println("    TYPE_UNKNOWN = 0,");
+        w.println("    TYPE_INT,       // int, short, byte, char, boolean");
+        w.println("    TYPE_LONG,      // long (category 2)");
+        w.println("    TYPE_FLOAT,     // float");
+        w.println("    TYPE_DOUBLE,    // double (category 2)");
+        w.println("    TYPE_REF        // object reference");
+        w.println("} VMType;");
+        w.println();
         w.println("/* 执行帧 */");
         w.println("typedef struct {");
         w.println("    int pc;           // 程序计数器");
         w.println("    int sp;           // 栈指针");
         w.println("    VMValue* stack;   // 操作栈");
         w.println("    VMValue* locals;  // 局部变量表");
+        w.println("    VMType* stackTypes;  // 栈类型跟踪");
         w.println("} VMFrame;");
         w.println();
     }

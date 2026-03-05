@@ -16,7 +16,8 @@ public class AALoadInstruction extends Instruction {
     protected void generateBody(PrintWriter w) {
         w.println("                { jint idx = frame.stack[--frame.sp].i;");
         w.println("                  jobjectArray arr = (jobjectArray)frame.stack[--frame.sp].l;");
-        w.println("                  frame.stack[frame.sp++].l = (*env)->GetObjectArrayElement(env, arr, idx); }");
+        w.println("                  frame.stack[frame.sp].l = (*env)->GetObjectArrayElement(env, arr, idx);");
+        w.println("                  frame.stackTypes[frame.sp++] = TYPE_REF; }");
         pcIncBreak(w);
     }
 }

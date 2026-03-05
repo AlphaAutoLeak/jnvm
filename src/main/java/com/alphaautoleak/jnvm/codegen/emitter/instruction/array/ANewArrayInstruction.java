@@ -17,7 +17,8 @@ public class ANewArrayInstruction extends Instruction {
         w.println("                { jint size = frame.stack[--frame.sp].i;");
         w.println("                  const char* elemCls = vm_strings[meta->classIdx].data;");
         w.println("                  jclass cls = (*env)->FindClass(env, elemCls);");
-        w.println("                  frame.stack[frame.sp++].l = (*env)->NewObjectArray(env, size, cls, NULL); }");
+        w.println("                  frame.stack[frame.sp].l = (*env)->NewObjectArray(env, size, cls, NULL);");
+        w.println("                  frame.stackTypes[frame.sp++] = TYPE_REF; }");
         pcIncBreak(w);
     }
 }

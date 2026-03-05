@@ -17,7 +17,8 @@ public class DALoadInstruction extends Instruction {
         w.println("                { jint idx = frame.stack[--frame.sp].i;");
         w.println("                  jdoubleArray arr = (jdoubleArray)frame.stack[--frame.sp].l;");
         w.println("                  jdouble* elems = (*env)->GetDoubleArrayElements(env, arr, NULL);");
-        w.println("                  frame.stack[frame.sp++].d = elems[idx];");
+        w.println("                  frame.stack[frame.sp].d = elems[idx];");
+        w.println("                  frame.stackTypes[frame.sp++] = TYPE_DOUBLE;");
         w.println("                  (*env)->ReleaseDoubleArrayElements(env, arr, elems, 0); }");
         pcIncBreak(w);
     }
