@@ -21,8 +21,9 @@ public class ControlInstructions {
         registry.register(new ReturnInstruction(0xaf, "DRETURN", "double"));
         registry.register(new ReturnInstruction(0xb0, "ARETURN", "object"));
         
-        // GOTO
+        // GOTO, GOTO_W
         registry.register(new GotoInstruction());
+        registry.register(new GotoWInstruction());
         
         // IFEQ, IFNE, IFLT, IFGE, IFGT, IFLE
         registry.register(new IfZeroInstruction(0x99, "IFEQ", "== 0"));

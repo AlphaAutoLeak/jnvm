@@ -32,10 +32,12 @@ public class ArithmeticInstructions {
         registry.register(new BinaryOpInstruction(0x6e, "FDIV", "f", "/"));
         registry.register(new BinaryOpInstruction(0x6f, "DDIV", "d", "/"));
         
-        // IREM, LREM
+        // IREM, LREM, FREM, DREM
         registry.register(new DivInstruction(0x70, "IREM", "i", true));
         registry.register(new DivInstruction(0x71, "LREM", "j", true));
-        
+        registry.register(new DivInstruction(0x72, "FREM", "f", true));
+        registry.register(new DivInstruction(0x73, "DREM", "d", true));
+
         // INEG, LNEG, FNEG, DNEG
         registry.register(new NegInstruction(0x74, "INEG", "i"));
         registry.register(new NegInstruction(0x75, "LNEG", "j"));

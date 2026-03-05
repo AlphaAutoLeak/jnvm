@@ -11,7 +11,8 @@ public class ArrayInstructions {
         registry.register(new NewArrayInstruction());
         registry.register(new ANewArrayInstruction());
         registry.register(new ArrayLengthInstruction());
-        
+        registry.register(new MultiANewArrayInstruction());
+
         // Array load instructions
         registry.register(new IALoadInstruction());
         registry.register(new LALoadInstruction());

@@ -41,6 +41,7 @@ public class VmTypesGenerator {
         w.println("#include <stdint.h>");
         w.println("#include <string.h>");
         w.println("#include <stdlib.h>");
+        w.println("#include <math.h>");
         w.println();
     }
     
