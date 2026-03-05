@@ -15,9 +15,14 @@ public class InstanceOfInstruction extends Instruction {
     @Override
     protected void generateBody(PrintWriter w) {
         w.println("                { jobject obj = frame.stack[frame.sp - 1].l;");
-        w.println("                  const char* clsName = vm_strings[meta->classIdx].data;");
-        w.println("                  jclass cls = (*env)->FindClass(env, clsName);");
-        w.println("                  frame.stack[frame.sp - 1].i = (*env)->IsInstanceOf(env, obj, cls); }");
+        w.println("                  if (!obj) {");
+        w.println("                      frame.stack[frame.sp - 1].i = 0;"); // null instanceof X = false
+        w.println("                  } else {");
+        w.println("                      const char* clsName = vm_strings[meta->classIdx].data;");
+        w.println("                      jclass cls = (*env)->FindClass(env, clsName);");
+        w.println("                      frame.stack[frame.sp - 1].i = (*env)->IsInstanceOf(env, obj, cls);");
+        w.println("                  }");
+        w.println("                }");
         pcIncBreak(w);
     }
 }

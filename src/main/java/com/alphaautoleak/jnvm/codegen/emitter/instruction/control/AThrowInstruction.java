@@ -17,6 +17,8 @@ public class AThrowInstruction extends Instruction {
 
     @Override
     protected void generateBody(PrintWriter w) {
+        // 添加空语句，避免 C23 警告 (label 后不能直接跟声明)
+        w.println("                ;");
         // Pop exception object from stack
         w.println("                jobject exception = frame.stack[--frame.sp].l;");
         w.println("                if (exception == NULL) {");

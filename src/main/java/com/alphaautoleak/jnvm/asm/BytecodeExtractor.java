@@ -95,7 +95,7 @@ public class BytecodeExtractor {
         // 提取异常表
         extractExceptionTable();
     }
-
+    
     /**
      * 第一遍：遍历指令，生成字节码和元数据
      * 对于 Label，使用 ASM 提供的原始字节码偏移量
@@ -115,12 +115,9 @@ public class BytecodeExtractor {
                 try {
                     // ASM 的 Label.getOffset() 返回原始字节码偏移量
                     offset = labelNode.getLabel().getOffset();
-                    // 调试：打印 Label 偏移量
-                    // System.out.println("Label offset: " + offset);
                 } catch (IllegalStateException e) {
                     // 如果 Label 还没有被解析，使用当前字节码位置作为备选
                     offset = bytecodes.size();
-                    System.out.println("Warning: Label not resolved, using fallback offset: " + offset);
                 }
                 labelToPc.put(labelNode, offset);
                 continue;

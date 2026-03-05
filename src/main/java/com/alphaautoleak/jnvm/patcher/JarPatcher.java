@@ -42,8 +42,8 @@ public class JarPatcher {
         int depth = 3 + rand.nextInt(3);
         StringBuilder sb = new StringBuilder();
         
-        // 常见的合法包名前缀，看起来更自然
-        String[] prefixes = {"sun", "java", "javax", "org", "com", "io", "net", "app", "core", "util", "internal", "runtime", "system", "base", "native", "lang"};
+        // 常见的合法包名前缀，避免 java/javax/sun 以防止类加载器冲突
+        String[] prefixes = {"org", "com", "io", "net", "app", "core", "internal", "runtime", "system", "base", "native", "dev", "lib", "pkg", "module"};
         String[] middles = {"reflect", "io", "nio", "util", "lang", "math", "net", "security", "crypto", "awt", "swing", "beans", "text", "time", "concurrent", "function", "stream", "atomic", "locks", "abstract", "annotation", "management", "rmi", "sql", "xml", "json", "logger", "handler", "proxy", "factory", "builder", "helper", "support", "wrapper", "access", "impl", "spi"};
         String[] suffixes = {"Bridge", "Helper", "Handler", "Proxy", "Factory", "Loader", "Manager", "Wrapper", "Support", "Accessor", "Invoker", "Executor", "Runner", "Worker", "Processor", "Provider", "Service", "Context", "Environment", "Config", "Registry", "Container", "Controller", "Dispatcher", "Resolver", "Mapper", "Adapter", "Connector", "Driver", "Agent"};
         

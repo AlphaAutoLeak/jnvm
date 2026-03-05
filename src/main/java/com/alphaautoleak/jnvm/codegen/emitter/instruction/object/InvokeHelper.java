@@ -21,10 +21,10 @@ public class InvokeHelper {
         }
         w.println("                  if (!mid) { VM_LOG(\"INVOKE: Method not found: %s.%s%s\\n\", owner, name, desc); (*env)->ExceptionClear(env); frame.pc++; break; }");
         w.println("                  int argCount = 0; char returnType = 'V';");
-        w.println("                  parse_method_desc(desc, &argCount, &returnType);");
+        w.println("                  vm_parse_method_desc(desc, &argCount, &returnType);");
         w.println("                  jvalue args[16];");
         w.println("                  for (int i = argCount - 1; i >= 0; i--) {");
-        w.println("                      char t = get_arg_type(desc, i);");
+        w.println("                      char t = vm_get_arg_type(desc, i);");
         w.println("                      switch (t) {");
         w.println("                          case 'I': case 'B': case 'C': case 'S': case 'Z':");
         w.println("                              args[i].i = frame.stack[--frame.sp].i; break;");
