@@ -14,11 +14,13 @@ public class VmInterpreterGenerator {
     private final File dir;
     private final boolean debug;
     private final Instructions instructions;
+    private final int methodIdXorKey;
     
-    public VmInterpreterGenerator(File dir, boolean debug) {
+    public VmInterpreterGenerator(File dir, boolean debug, int methodIdXorKey) {
         this.dir = dir;
         this.debug = debug;
         this.instructions = new Instructions();
+        this.methodIdXorKey = methodIdXorKey;
     }
     
     public void generate() throws IOException {
@@ -46,6 +48,10 @@ public class VmInterpreterGenerator {
             w.println("#include <stdio.h>");
             w.println("#include <stdlib.h>");
             w.println("#include <string.h>");
+            w.println();
+            
+            // XOR key constant
+            w.println("#define METHOD_ID_XOR_KEY 0x" + Integer.toHexString(methodIdXorKey) + "");
             w.println();
             
             if (debug) {
@@ -314,6 +320,8 @@ public class VmInterpreterGenerator {
     
     private void emitExecuteMethod(PrintWriter w) {
         w.println("jobject vm_execute_method(JNIEnv* env, int methodId, jobject instance, jobjectArray args) {");
+        w.println("    // Restore real methodId from obfuscated value");
+        w.println("    methodId ^= METHOD_ID_XOR_KEY;");
         w.println("    if (methodId < 0 || methodId >= vm_method_count) return NULL;");
         w.println("    VMMethod* m = &vm_methods[methodId];");
         w.println();

@@ -32,6 +32,9 @@ public class JarPatcher {
     /** VMBridge 类的内部名 - 动态生成随机包名 */
     private final String bridgeClass;
 
+    /** MethodId XOR key - 每次编译随机生成 */
+    private final int methodIdXorKey;
+
     /** 生成 VMBridge 的随机包名 */
     public static String generateRandomBridgePackage() {
         Random rand = new Random();
@@ -63,6 +66,11 @@ public class JarPatcher {
         return bridgeClass;
     }
 
+    /** 获取 MethodId XOR key */
+    public int getMethodIdXorKey() {
+        return methodIdXorKey;
+    }
+
     /** execute 方法描述符 */
     private static final String EXECUTE_DESC =
             "(ILjava/lang/Object;[Ljava/lang/Object;)Ljava/lang/Object;";
@@ -76,10 +84,18 @@ public class JarPatcher {
         
         // 生成随机包名
         this.bridgeClass = generateRandomBridgePackage();
+        
+        // 生成随机 XOR key (非零)
+        Random rand = new Random();
+        int key;
+        do {
+            key = rand.nextInt();
+        } while (key == 0);
+        this.methodIdXorKey = key;
 
         for (MethodInfo m : protectedMethods) {
-            String key = m.getOwner() + "." + m.getName() + "." + m.getDescriptor();
-            methodIdMap.put(key, m.getMethodId());
+            String key2 = m.getOwner() + "." + m.getName() + "." + m.getDescriptor();
+            methodIdMap.put(key2, m.getMethodId());
         }
     }
 
@@ -194,8 +210,9 @@ public class JarPatcher {
 
         InsnList insns = new InsnList();
 
-        // 1. 压入 methodId
-        insns.add(new LdcInsnNode(methodId));
+        // 1. 压入 methodId (XOR 混淆)
+        int obfuscatedMethodId = methodId ^ methodIdXorKey;
+        insns.add(new LdcInsnNode(obfuscatedMethodId));
 
         // 2. 压入 this 或 null
         if (isStatic) {

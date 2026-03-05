@@ -59,13 +59,14 @@ public class Converter {
         encryptedMethods = encryptor.encryptAll(protectedMethods);
         System.out.println();
 
-        // ===== STEP 3: 创建 JarPatcher 获取随机 bridge 包名 =====
+        // ===== STEP 3: 创建 JarPatcher 获取随机 bridge 包名和 XOR key =====
         JarPatcher patcher = new JarPatcher(protectedMethods, affectedClasses);
         String bridgeClass = patcher.getBridgeClass();
+        int methodIdXorKey = patcher.getMethodIdXorKey();
 
         // ===== STEP 4: 生成 C 源码 =====
         System.out.println("[STEP 3/7] Generating native C sources...");
-        NativeCodeGenerator codegen = new NativeCodeGenerator(config, encryptedMethods, bridgeClass);
+        NativeCodeGenerator codegen = new NativeCodeGenerator(config, encryptedMethods, bridgeClass, methodIdXorKey);
         codegen.generate();
         System.out.println();
 

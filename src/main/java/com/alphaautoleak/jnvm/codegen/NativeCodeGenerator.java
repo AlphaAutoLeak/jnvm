@@ -20,12 +20,14 @@ public class NativeCodeGenerator {
     private final List<EncryptedMethodData> methods;
     private final byte[] stringKey;
     private final String bridgeClass;
+    private final int methodIdXorKey;
 
-    public NativeCodeGenerator(ProtectConfig config, List<EncryptedMethodData> methods, String bridgeClass) {
+    public NativeCodeGenerator(ProtectConfig config, List<EncryptedMethodData> methods, String bridgeClass, int methodIdXorKey) {
         this.config = config;
         this.methods = methods;
         this.stringKey = StringEncryptor.generateStringKey();
         this.bridgeClass = bridgeClass;
+        this.methodIdXorKey = methodIdXorKey;
     }
 
     /**
@@ -50,7 +52,7 @@ public class NativeCodeGenerator {
         System.out.println("  [+] vm_data.h / vm_data.c");
 
         // 4. vm_interpreter.h / vm_interpreter.c
-        new VmInterpreterGenerator(dir, config.isDebug()).generate();
+        new VmInterpreterGenerator(dir, config.isDebug(), methodIdXorKey).generate();
         System.out.println("  [+] vm_interpreter.h / vm_interpreter.c");
 
         // 5. vm_bridge.c
