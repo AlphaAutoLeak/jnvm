@@ -6,11 +6,13 @@ A powerful Java bytecode protection tool that converts Java methods into native 
 
 - **Native VM Execution**: Converts Java bytecode to native C code executed by a custom VM interpreter
 - **ChaCha20 Encryption**: All bytecode is encrypted using ChaCha20 stream cipher
+- **RegisterNatives Registration**: Uses `RegisterNatives` for native method binding (no predictable `Java_xxx` naming)
 - **Random Bridge Class**: Generates random, natural-looking package names for the bridge class on each build
 - **Cross-Platform**: Supports multiple targets via Zig compiler (Windows, Linux, macOS, Android)
 - **Anti-Debug**: Built-in anti-debugging protections
 - **Exception Handling**: Full support for Java exception handling in native code
 - **Synchronized Blocks**: Support for `MONITORENTER`/`MONITOREXIT` instructions
+- **ZKM Compatible**: Tested with Zelix KlassMaster (ZKM) obfuscated JARs
 
 ## Requirements
 
@@ -69,44 +71,41 @@ java -jar jnvm.jar --jar app.jar --debug true
    - `vm_types.h` - VM type definitions
    - `vm_data.c` - Encrypted method data and string pool
    - `vm_interpreter.c` - Custom bytecode interpreter
-   - `vm_bridge.c` - JNI bridge with random class name
+   - `vm_bridge.c` - JNI bridge with RegisterNatives
 4. **Compilation**: Compiles native code using Zig for specified targets
 5. **Patching**: Rewrites protected methods to call the native VM
 6. **Packaging**: Embeds native libraries into the output JAR
 
-## Random Bridge Class
+## Compatibility
 
-Each build generates a unique, natural-looking bridge class name:
+JNVM has been tested with JARs obfuscated by:
+- **Zelix KlassMaster (ZKM)** - Full support including encrypted string decryption
+- **ProGuard** - Standard obfuscation
+- **Allatori** - String encryption and flow obfuscation
+- **Vanilla Java** - No obfuscation
 
-```
-# Build 1
-[PATCH] Bridge class: org.access.json.json.Manager
+## Supported Bytecode Instructions (198/202 opcodes)
 
-# Build 2  
-[PATCH] Bridge class: internal.proxy.beans.sql.Driver
+- **Constants**: `NOP`, `ACONST_NULL`, `ICONST_*`, `LCONST_*`, `FCONST_*`, `DCONST_*`, `BIPUSH`, `SIPUSH`, `LDC`, `LDC_W`, `LDC2_W`
+- **Load/Store**: `ILOAD`, `LLOAD`, `FLOAD`, `DLOAD`, `ALOAD` (+ `_*` variants), `ISTORE`, `LSTORE`, `FSTORE`, `DSTORE`, `ASTORE` (+ `_*` variants)
+- **Arithmetic**: `IADD`, `LADD`, `FADD`, `DADD`, `ISUB`, `LSUB`, `FSUB`, `DSUB`, `IMUL`, `LMUL`, `FMUL`, `DMUL`, `IDIV`, `LDIV`, `FDIV`, `DDIV`, `IREM`, `LREM`, `FREM`, `DREM`, `INEG`, `LNEG`, `FNEG`, `DNEG`
+- **Bitwise/Shift**: `ISHL`, `LSHL`, `ISHR`, `LSHR`, `IUSHR`, `LUSHR`, `IAND`, `LAND`, `IOR`, `LOR`, `IXOR`, `LXOR`
+- **Type Conversion**: `I2L`, `I2F`, `I2D`, `L2I`, `L2F`, `L2D`, `F2I`, `F2L`, `F2D`, `D2I`, `D2L`, `D2F`, `I2B`, `I2C`, `I2S`
+- **Comparisons**: `LCMP`, `FCMPL`, `FCMPG`, `DCMPL`, `DCMPG`
+- **Control Flow**: `IFEQ`, `IFNE`, `IFLT`, `IFGE`, `IFGT`, `IFLE`, `IF_ICMPEQ`, `IF_ICMPNE`, `IF_ICMPLT`, `IF_ICMPGE`, `IF_ICMPGT`, `IF_ICMPLE`, `IF_ACMPEQ`, `IF_ACMPNE`, `GOTO`, `GOTO_W`, `TABLESWITCH`, `LOOKUPSWITCH`
+- **References**: `IFNULL`, `IFNONNULL`
+- **Object Operations**: `NEW`, `CHECKCAST`, `INSTANCEOF`, `GETFIELD`, `PUTFIELD`, `GETSTATIC`, `PUTSTATIC`
+- **Method Invocation**: `INVOKEVIRTUAL`, `INVOKESPECIAL`, `INVOKESTATIC`, `INVOKEINTERFACE`, `INVOKEDYNAMIC`
+- **Array Operations**: `NEWARRAY`, `ANEWARRAY`, `MULTIANEWARRAY`, `ARRAYLENGTH`, `IALOAD`, `LALOAD`, `FALOAD`, `DALOAD`, `AALOAD`, `BALOAD`, `CALOAD`, `SALOAD`, `IASTORE`, `LASTORE`, `FASTORE`, `DASTORE`, `AASTORE`, `BASTORE`, `CASTORE`, `SASTORE`
+- **Stack Operations**: `POP`, `POP2`, `DUP`, `DUP_X1`, `DUP_X2`, `DUP2`, `DUP2_X1`, `DUP2_X2`, `SWAP`
+- **Exceptions**: `ATHROW`
+- **Monitor**: `MONITORENTER`, `MONITOREXIT`
+- **Returns**: `RETURN`, `IRETURN`, `LRETURN`, `FRETURN`, `DRETURN`, `ARETURN`
+- **Local Variable**: `IINC`
 
-# Build 3
-[PATCH] Bridge class: com.util.concurrent.spi.Factory
-```
-
-This makes reverse engineering significantly harder as the entry point varies between builds.
-
-## Supported Bytecode Instructions
-
-- Constants: `ICONST`, `LCONST`, `FCONST`, `DCONST`, `BIPUSH`, `SIPUSH`, `LDC`
-- Load/Store: `ILOAD`, `LLOAD`, `FLOAD`, `DLOAD`, `ALOAD`, `ISTORE`, etc.
-- Arithmetic: `IADD`, `ISUB`, `IMUL`, `IDIV`, `IREM`, `INEG`, etc.
-- Type Conversion: `I2L`, `I2F`, `I2D`, `L2I`, etc.
-- Comparisons: `LCMP`, `FCMPL`, `FCMPG`, `DCMPL`, `DCMPG`
-- Control Flow: `IFEQ`, `IFNE`, `IFLT`, `IFGE`, `IFGT`, `IFLE`, `GOTO`, `TABLESWITCH`, `LOOKUPSWITCH`
-- References: `IFNULL`, `IFNONNULL`, `IF_ACMPEQ`, `IF_ACMPNE`
-- Object Operations: `NEW`, `GETFIELD`, `PUTFIELD`, `GETSTATIC`, `PUTSTATIC`
-- Method Invocation: `INVOKEVIRTUAL`, `INVOKESPECIAL`, `INVOKESTATIC`, `INVOKEINTERFACE`, `INVOKEDYNAMIC`
-- Array Operations: `NEWARRAY`, `ANEWARRAY`, `ARRAYLENGTH`, `IALOAD`, `IASTORE`, etc.
-- Stack Operations: `POP`, `POP2`, `DUP`, `DUP2`, `SWAP`
-- Exceptions: `ATHROW`
-- Monitor: `MONITORENTER`, `MONITOREXIT`
-- Returns: `RETURN`, `IRETURN`, `LRETURN`, `FRETURN`, `DRETURN`, `ARETURN`
+### Not Implemented (Legacy/Rarely Used)
+- `JSR`, `RET`, `JSR_W` - Deprecated since Java 6
+- `WIDE` - Extended local variable indexing (rarely needed)
 
 ## Building from Source
 
