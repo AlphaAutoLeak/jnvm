@@ -34,6 +34,8 @@ class BridgeClassGenerator {
                 null);
 
         // static native Object execute(int, Object, Object[])
+        // 注意: 虽然声明为 native，但实际由 RegisterNatives 注册
+        // JVM 会查找通过 RegisterNatives 注册的方法实现
         cw.visitMethod(
                 Opcodes.ACC_PUBLIC | Opcodes.ACC_STATIC | Opcodes.ACC_NATIVE,
                 "execute",
