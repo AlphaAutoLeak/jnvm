@@ -29,8 +29,39 @@ public class JarPatcher {
     /** 受影响的类 */
     private final Set<String> affectedClasses;
 
-    /** VMBridge 类的内部名 */
-    private static final String BRIDGE_CLASS = "com/alphaautoleak/jnvm/runtime/VMBridge";
+    /** VMBridge 类的内部名 - 动态生成随机包名 */
+    private final String bridgeClass;
+
+    /** 生成 VMBridge 的随机包名 */
+    public static String generateRandomBridgePackage() {
+        Random rand = new Random();
+        // 包名层级: 3-5 层
+        int depth = 3 + rand.nextInt(3);
+        StringBuilder sb = new StringBuilder();
+        
+        // 常见的合法包名前缀，看起来更自然
+        String[] prefixes = {"sun", "java", "javax", "org", "com", "io", "net", "app", "core", "util", "internal", "runtime", "system", "base", "native", "lang"};
+        String[] middles = {"reflect", "io", "nio", "util", "lang", "math", "net", "security", "crypto", "awt", "swing", "beans", "text", "time", "concurrent", "function", "stream", "atomic", "locks", "abstract", "annotation", "management", "rmi", "sql", "xml", "json", "logger", "handler", "proxy", "factory", "builder", "helper", "support", "wrapper", "access", "impl", "spi"};
+        String[] suffixes = {"Bridge", "Helper", "Handler", "Proxy", "Factory", "Loader", "Manager", "Wrapper", "Support", "Accessor", "Invoker", "Executor", "Runner", "Worker", "Processor", "Provider", "Service", "Context", "Environment", "Config", "Registry", "Container", "Controller", "Dispatcher", "Resolver", "Mapper", "Adapter", "Connector", "Driver", "Agent"};
+        
+        // 第一层使用常见前缀
+        sb.append(prefixes[rand.nextInt(prefixes.length)]);
+        
+        // 中间层
+        for (int i = 1; i < depth; i++) {
+            sb.append("/").append(middles[rand.nextInt(middles.length)]);
+        }
+        
+        // 最后一层：类名
+        sb.append("/").append(suffixes[rand.nextInt(suffixes.length)]);
+        
+        return sb.toString();
+    }
+
+    /** 获取当前使用的 bridge 类名 */
+    public String getBridgeClass() {
+        return bridgeClass;
+    }
 
     /** execute 方法描述符 */
     private static final String EXECUTE_DESC =
@@ -42,6 +73,9 @@ public class JarPatcher {
     public JarPatcher(List<MethodInfo> protectedMethods, Set<String> affectedClasses) {
         this.protectedMethods = protectedMethods;
         this.affectedClasses = affectedClasses;
+        
+        // 生成随机包名
+        this.bridgeClass = generateRandomBridgePackage();
 
         for (MethodInfo m : protectedMethods) {
             String key = m.getOwner() + "." + m.getName() + "." + m.getDescriptor();
@@ -55,6 +89,7 @@ public class JarPatcher {
     public void patch(File inputJar, File outputJar) throws IOException {
         System.out.println("[PATCH] Input:  " + inputJar);
         System.out.println("[PATCH] Output: " + outputJar);
+        System.out.println("[PATCH] Bridge class: " + bridgeClass.replace('/', '.'));
 
         int patchedCount = 0;
 
@@ -102,14 +137,14 @@ public class JarPatcher {
             }
 
             // 注入 VMBridge.class
-            String bridgePath = BRIDGE_CLASS + ".class";
+            String bridgePath = bridgeClass + ".class";
             if (!written.contains(bridgePath)) {
                 byte[] bridgeBytes = generateVMBridgeClass();
                 JarEntry bridgeEntry = new JarEntry(bridgePath);
                 jos.putNextEntry(bridgeEntry);
                 jos.write(bridgeBytes);
                 jos.closeEntry();
-                System.out.println("[PATCH] Injected VMBridge.class");
+                System.out.println("[PATCH] Injected " + bridgeClass.replace('/', '.') + ".class");
             }
         }
 
@@ -189,7 +224,7 @@ public class JarPatcher {
         // 4. 调用 VMBridge.execute(methodId, instance, args)
         insns.add(new MethodInsnNode(
                 Opcodes.INVOKESTATIC,
-                BRIDGE_CLASS,
+                bridgeClass,
                 "execute",
                 EXECUTE_DESC,
                 false));
@@ -341,7 +376,7 @@ public class JarPatcher {
 
         cw.visit(Opcodes.V1_8,
                 Opcodes.ACC_PUBLIC | Opcodes.ACC_FINAL | Opcodes.ACC_SUPER,
-                BRIDGE_CLASS,
+                bridgeClass,
                 null,
                 "java/lang/Object",
                 null);
@@ -411,7 +446,7 @@ public class JarPatcher {
 
         // 调用 extractAndLoad 静态方法
         mv.visitMethodInsn(Opcodes.INVOKESTATIC,
-                BRIDGE_CLASS, "extractAndLoad", "()V", false);
+                bridgeClass, "extractAndLoad", "()V", false);
 
         mv.visitLabel(end);
         mv.visitInsn(Opcodes.RETURN);
@@ -471,12 +506,12 @@ public class JarPatcher {
          */
 
         // String target = detectTarget();
-        mv.visitMethodInsn(Opcodes.INVOKESTATIC, BRIDGE_CLASS,
+        mv.visitMethodInsn(Opcodes.INVOKESTATIC, bridgeClass,
                 "detectTarget", "()Ljava/lang/String;", false);
         mv.visitVarInsn(Opcodes.ASTORE, 0); // target
 
         // String libName = detectLibName();
-        mv.visitMethodInsn(Opcodes.INVOKESTATIC, BRIDGE_CLASS,
+        mv.visitMethodInsn(Opcodes.INVOKESTATIC, bridgeClass,
                 "detectLibName", "()Ljava/lang/String;", false);
         mv.visitVarInsn(Opcodes.ASTORE, 1); // libName
 
@@ -500,7 +535,7 @@ public class JarPatcher {
         mv.visitVarInsn(Opcodes.ASTORE, 2); // resPath
 
         // InputStream is = VMBridge.class.getClassLoader().getResourceAsStream(resPath);
-        mv.visitLdcInsn(org.objectweb.asm.Type.getObjectType(BRIDGE_CLASS));
+        mv.visitLdcInsn(org.objectweb.asm.Type.getObjectType(bridgeClass));
         mv.visitMethodInsn(Opcodes.INVOKEVIRTUAL, "java/lang/Class",
                 "getClassLoader", "()Ljava/lang/ClassLoader;", false);
         mv.visitVarInsn(Opcodes.ALOAD, 2);

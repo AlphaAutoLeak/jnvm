@@ -59,25 +59,28 @@ public class Converter {
         encryptedMethods = encryptor.encryptAll(protectedMethods);
         System.out.println();
 
-        // ===== STEP 3: 生成 C 源码 =====
+        // ===== STEP 3: 创建 JarPatcher 获取随机 bridge 包名 =====
+        JarPatcher patcher = new JarPatcher(protectedMethods, affectedClasses);
+        String bridgeClass = patcher.getBridgeClass();
+
+        // ===== STEP 4: 生成 C 源码 =====
         System.out.println("[STEP 3/7] Generating native C sources...");
-        NativeCodeGenerator codegen = new NativeCodeGenerator(config, encryptedMethods);
+        NativeCodeGenerator codegen = new NativeCodeGenerator(config, encryptedMethods, bridgeClass);
         codegen.generate();
         System.out.println();
 
-        // ===== STEP 4: Zig 编译 =====
+        // ===== STEP 5: Zig 编译 =====
         System.out.println("[STEP 4/7] Compiling with Zig...");
         ZigCompiler compiler = new ZigCompiler(config);
         compiler.compileAll();
         System.out.println();
 
-        // ===== STEP 5: Patch JAR =====
+        // ===== STEP 6: Patch JAR =====
         System.out.println("[STEP 5/7] Patching JAR classes...");
-        JarPatcher patcher = new JarPatcher(protectedMethods, affectedClasses);
         patcher.patch(config.getInputJar(), config.getOutputJar());
         System.out.println();
 
-        // ===== STEP 6: 嵌入 native 库 =====
+        // ===== STEP 7: 嵌入 native 库 =====
         System.out.println("[STEP 6/7] Embedding native libraries...");
         OutputPackager packager = new OutputPackager();
         packager.embedNativeLibraries(config.getOutputJar(), compiler.getOutputLibraries());

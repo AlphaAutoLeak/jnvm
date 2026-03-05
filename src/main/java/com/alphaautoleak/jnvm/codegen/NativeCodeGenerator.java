@@ -19,11 +19,13 @@ public class NativeCodeGenerator {
     private final ProtectConfig config;
     private final List<EncryptedMethodData> methods;
     private final byte[] stringKey;
+    private final String bridgeClass;
 
-    public NativeCodeGenerator(ProtectConfig config, List<EncryptedMethodData> methods) {
+    public NativeCodeGenerator(ProtectConfig config, List<EncryptedMethodData> methods, String bridgeClass) {
         this.config = config;
         this.methods = methods;
         this.stringKey = StringEncryptor.generateStringKey();
+        this.bridgeClass = bridgeClass;
     }
 
     /**
@@ -52,7 +54,7 @@ public class NativeCodeGenerator {
         System.out.println("  [+] vm_interpreter.h / vm_interpreter.c");
 
         // 5. vm_bridge.c
-        new VmBridgeGenerator(dir, methods.size()).generate();
+        new VmBridgeGenerator(dir, methods.size(), bridgeClass).generate();
         System.out.println("  [+] vm_bridge.c");
 
         // 6. build.zig

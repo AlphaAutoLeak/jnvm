@@ -11,10 +11,12 @@ public class VmBridgeGenerator {
     
     private final File dir;
     private final int methodCount;
+    private final String bridgeClass;
     
-    public VmBridgeGenerator(File dir, int methodCount) {
+    public VmBridgeGenerator(File dir, int methodCount, String bridgeClass) {
         this.dir = dir;
         this.methodCount = methodCount;
+        this.bridgeClass = bridgeClass;
     }
     
     public void generate() throws IOException {
@@ -31,15 +33,18 @@ public class VmBridgeGenerator {
     
     private void emitJNIOnLoad(PrintWriter w) {
         w.println("JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM* vm, void* reserved) {");
-        w.println("    printf(\"[JNVM] Native VM loaded. " + methodCount + " methods protected.\\n\");");
+//        w.println("    printf(\"[JNVM] Native VM loaded. " + methodCount + " methods protected.\\n\");");
         w.println("    return JNI_VERSION_1_8;");
         w.println("}");
         w.println();
     }
     
     private void emitExecute(PrintWriter w) {
+        // 将包名路径转换为 JNI 函数名格式: com/example/Foo -> Java_com_example_Foo
+        String jniName = "Java_" + bridgeClass.replace('/', '_');
+        
         w.println("JNIEXPORT jobject JNICALL");
-        w.println("Java_com_alphaautoleak_jnvm_runtime_VMBridge_execute(JNIEnv* env, jclass cls,");
+        w.println(jniName + "_execute(JNIEnv* env, jclass cls,");
         w.println("                                                    jint methodId, jobject instance,");
         w.println("                                                    jobjectArray args) {");
         w.println("    return vm_execute_method(env, methodId, instance, args);");
