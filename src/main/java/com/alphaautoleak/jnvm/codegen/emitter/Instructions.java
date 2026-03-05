@@ -7,6 +7,7 @@ import com.alphaautoleak.jnvm.codegen.emitter.instruction.control.ControlInstruc
 import com.alphaautoleak.jnvm.codegen.emitter.instruction.object.ObjectInstructions;
 import com.alphaautoleak.jnvm.codegen.emitter.instruction.array.ArrayInstructions;
 
+import java.io.PrintWriter;
 import java.util.List;
 
 /**
@@ -45,6 +46,33 @@ public class Instructions {
         
         // NOP
         registry.register(new BaseInstructions.SimpleInstruction(0x00, "NOP", ""));
+        
+        // Monitor instructions (MONITORENTER=0xc2, MONITOREXIT=0xc3)
+        registry.register(new Instruction(0xc2, "MONITORENTER") {
+            @Override
+            protected void generateBody(PrintWriter w) {
+                w.println("                {");
+                w.println("                    jobject obj = frame.stack[--frame.sp].l;");
+                w.println("                    if (obj) {");
+                w.println("                        (*env)->MonitorEnter(env, obj);");
+                w.println("                    }");
+                w.println("                }");
+                pcIncBreak(w);
+            }
+        });
+        
+        registry.register(new Instruction(0xc3, "MONITOREXIT") {
+            @Override
+            protected void generateBody(PrintWriter w) {
+                w.println("                {");
+                w.println("                    jobject obj = frame.stack[--frame.sp].l;");
+                w.println("                    if (obj) {");
+                w.println("                        (*env)->MonitorExit(env, obj);");
+                w.println("                    }");
+                w.println("                }");
+                pcIncBreak(w);
+            }
+        });
     }
     
     public List<Instruction> getAllInstructions() {

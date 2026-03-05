@@ -8,17 +8,18 @@ import java.io.PrintWriter;
 public class InvokeHelper {
     
     public static void generate(PrintWriter w, boolean isStatic) {
-        w.println("                { const char* owner = vm_strings[meta->ownerIdx].data;");
+        w.println("                { if (!meta) { VM_LOG(\"INVOKE: meta is NULL at pc=%d\\n\", frame.pc); frame.pc++; break; }");
+        w.println("                  const char* owner = vm_strings[meta->ownerIdx].data;");
         w.println("                  const char* name = vm_strings[meta->nameIdx].data;");
         w.println("                  const char* desc = vm_strings[meta->descIdx].data;");
         w.println("                  jclass cls = (*env)->FindClass(env, owner);");
-        w.println("                  if (!cls) { frame.pc++; break; }");
+        w.println("                  if (!cls) { VM_LOG(\"INVOKE: Class not found: %s\\n\", owner); frame.pc++; break; }");
         if (isStatic) {
             w.println("                  jmethodID mid = (*env)->GetStaticMethodID(env, cls, name, desc);");
         } else {
             w.println("                  jmethodID mid = (*env)->GetMethodID(env, cls, name, desc);");
         }
-        w.println("                  if (!mid) { (*env)->ExceptionClear(env); frame.pc++; break; }");
+        w.println("                  if (!mid) { VM_LOG(\"INVOKE: Method not found: %s.%s%s\\n\", owner, name, desc); (*env)->ExceptionClear(env); frame.pc++; break; }");
         w.println("                  int argCount = 0; char returnType = 'V';");
         w.println("                  parse_method_desc(desc, &argCount, &returnType);");
         w.println("                  jvalue args[16];");
@@ -36,7 +37,11 @@ public class InvokeHelper {
         
         if (!isStatic) {
             w.println("                  jobject receiver = frame.stack[--frame.sp].l;");
-            w.println("                  if (!receiver) { frame.pc++; break; }");
+            w.println("                  if (!receiver) {");
+            w.println("                      jclass npeClass = (*env)->FindClass(env, \"java/lang/NullPointerException\");");
+            w.println("                      if (npeClass) (*env)->ThrowNew(env, npeClass, \"\");");
+            w.println("                      goto method_exit;");
+            w.println("                  }");
         }
         
         w.println("                  switch (returnType) {");
@@ -52,7 +57,6 @@ public class InvokeHelper {
         } else {
             w.println("                          { jint res = (*env)->CallIntMethodA(env, receiver, mid, args);");
         }
-        w.println("                            if (strcmp(name, \"isPresent\") == 0) { VM_LOG(\"isPresent() returned %d\\n\", res); }");
         w.println("                            frame.stack[frame.sp++].i = res; break; }");
         w.println("                      case 'J':");
         if (isStatic) {

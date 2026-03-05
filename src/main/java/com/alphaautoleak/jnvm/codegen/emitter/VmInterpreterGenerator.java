@@ -115,6 +115,10 @@ public class VmInterpreterGenerator {
             // invokedynamic 实现 - 纯 C 实现，使用反射
             w.println("// invokedynamic 辅助函数 - 纯 C 实现");
             w.println("jobject vm_invoke_dynamic(JNIEnv* env, VMFrame* frame, MetaEntry* meta) {");
+            w.println("    if (!meta) {");
+            w.println("        VM_LOG(\"INVOKEDYNAMIC: meta is NULL\\n\");");
+            w.println("        return NULL;");
+            w.println("    }");
             w.println("    const char* methodName = vm_strings[meta->nameIdx].data;");
             w.println("    const char* methodDesc = vm_strings[meta->descIdx].data;");
             w.println("    VM_LOG(\"INVOKEDYNAMIC: name=%s, desc=%s, bsmIdx=%d\\n\", methodName, methodDesc, meta->bsmIdx);");

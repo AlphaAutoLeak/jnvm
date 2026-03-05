@@ -12,8 +12,8 @@ public class GetStaticInstruction extends Instruction {
         super(0xb2, "GETSTATIC");
     }
 
-    @Override
-    protected void generateBody(PrintWriter w) {
+        @Override
+        protected void generateBody(PrintWriter w) {
         w.println("                { const char* owner = vm_strings[meta->ownerIdx].data;");
         w.println("                  const char* name = vm_strings[meta->nameIdx].data;");
         w.println("                  const char* desc = vm_strings[meta->descIdx].data;");
@@ -31,7 +31,8 @@ public class GetStaticInstruction extends Instruction {
         w.println("                  else if (t == 'D')");
         w.println("                      frame.stack[frame.sp++].d = (*env)->GetStaticDoubleField(env, cls, fid);");
         w.println("                  else");
-        w.println("                      frame.stack[frame.sp++].l = (*env)->GetStaticObjectField(env, cls, fid); }");
-        pcIncBreak(w);
+        w.println("                      frame.stack[frame.sp++].l = (*env)->GetStaticObjectField(env, cls, fid);");
+        w.println("                }");
+        w.println("                frame.pc++;");
     }
 }
