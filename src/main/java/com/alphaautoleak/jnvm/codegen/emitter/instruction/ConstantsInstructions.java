@@ -15,61 +15,66 @@ public class ConstantsInstructions {
             super(0x12, "LDC");
         }
         
+        private void generateLdcBody(PrintWriter w, String indent) {
+            w.println(indent + "switch (meta->type) {");
+            w.println(indent + "    case META_INT:");
+            w.println(indent + "        frame.stack[frame.sp].i = meta->intVal;");
+            w.println(indent + "        frame.stackTypes[frame.sp++] = TYPE_INT; break;");
+            w.println(indent + "    case META_LONG:");
+            w.println(indent + "        frame.stack[frame.sp].j = meta->longVal;");
+            w.println(indent + "        frame.stackTypes[frame.sp++] = TYPE_LONG; break;");
+            w.println(indent + "    case META_FLOAT:");
+            w.println(indent + "        frame.stack[frame.sp].f = meta->floatVal;");
+            w.println(indent + "        frame.stackTypes[frame.sp++] = TYPE_FLOAT; break;");
+            w.println(indent + "    case META_DOUBLE:");
+            w.println(indent + "        frame.stack[frame.sp].d = meta->doubleVal;");
+            w.println(indent + "        frame.stackTypes[frame.sp++] = TYPE_DOUBLE; break;");
+            w.println(indent + "    case META_STRING: {");
+            w.println(indent + "        // 使用 ISO-8859-1 编码方式创建字符串");
+            w.println(indent + "        // 这样每个字节都会被映射到一个 char，保持长度一致");
+            w.println(indent + "        const char* str = vm_get_string(meta->strIdx);");
+            w.println(indent + "        frame.stack[frame.sp].l = (*env)->NewStringUTF(env, str);");
+            w.println(indent + "        frame.stackTypes[frame.sp++] = TYPE_REF; break;");
+            w.println(indent + "    }");
+            w.println(indent + "    case META_CLASS: {");
+            w.println(indent + "        // 使用调用者类的类加载器来加载类，确保类加载器一致性");
+            w.println(indent + "        const char* cls = vm_get_string(meta->classIdx);");
+            w.println(indent + "        jclass resultClass = NULL;");
+            w.println(indent + "        if (frame.callerClass != NULL) {");
+            w.println(indent + "            // 获取调用者类的类加载器");
+            w.println(indent + "            jclass classClass = (*env)->FindClass(env, \"java/lang/Class\");");
+            w.println(indent + "            jmethodID getClassLoader = (*env)->GetMethodID(env, classClass, \"getClassLoader\", \"()Ljava/lang/ClassLoader;\");");
+            w.println(indent + "            jobject classLoader = (*env)->CallObjectMethod(env, frame.callerClass, getClassLoader);");
+            w.println(indent + "            if (classLoader != NULL) {");
+            w.println(indent + "                // 使用 Class.forName(name, false, classLoader) 加载类");
+            w.println(indent + "                jmethodID forName = (*env)->GetStaticMethodID(env, classClass, \"forName\", \"(Ljava/lang/String;ZLjava/lang/ClassLoader;)Ljava/lang/Class;\");");
+            w.println(indent + "                jstring className = (*env)->NewStringUTF(env, cls);");
+            w.println(indent + "                // 将内部名称转换为二进制名称（用 . 替换 /）");
+            w.println(indent + "                char* binName = strdup(cls);");
+            w.println(indent + "                for (char* p = binName; *p; p++) { if (*p == '/') *p = '.'; }");
+            w.println(indent + "                jstring binNameStr = (*env)->NewStringUTF(env, binName);");
+            w.println(indent + "                resultClass = (*env)->CallStaticObjectMethod(env, classClass, forName, binNameStr, JNI_FALSE, classLoader);");
+            w.println(indent + "                free(binName);");
+            w.println(indent + "            }");
+            w.println(indent + "        }");
+            w.println(indent + "        if (resultClass == NULL) {");
+            w.println(indent + "            // 回退到 FindClass");
+            w.println(indent + "            resultClass = (*env)->FindClass(env, cls);");
+            w.println(indent + "        }");
+            w.println(indent + "        frame.stack[frame.sp].l = resultClass;");
+            w.println(indent + "        frame.stackTypes[frame.sp++] = TYPE_REF; break;");
+            w.println(indent + "    }");
+            w.println(indent + "    default: break;");
+            w.println(indent + "}");
+        }
+        
         @Override
         protected void generateBody(PrintWriter w) {
+            // switch-case 模式下，LDC/LDC_W/LDC2_W 共享同一个代码块
             w.println("            case 0x12: /* LDC */");
             w.println("            case 0x13: /* LDC_W */");
             w.println("            case 0x14: /* LDC2_W */ {");
-            w.println("                switch (meta->type) {");
-            w.println("                    case META_INT:");
-            w.println("                        frame.stack[frame.sp].i = meta->intVal;");
-            w.println("                        frame.stackTypes[frame.sp++] = TYPE_INT; break;");
-            w.println("                    case META_LONG:");
-            w.println("                        frame.stack[frame.sp].j = meta->longVal;");
-            w.println("                        frame.stackTypes[frame.sp++] = TYPE_LONG; break;");
-            w.println("                    case META_FLOAT:");
-            w.println("                        frame.stack[frame.sp].f = meta->floatVal;");
-            w.println("                        frame.stackTypes[frame.sp++] = TYPE_FLOAT; break;");
-            w.println("                    case META_DOUBLE:");
-            w.println("                        frame.stack[frame.sp].d = meta->doubleVal;");
-            w.println("                        frame.stackTypes[frame.sp++] = TYPE_DOUBLE; break;");
-            w.println("                    case META_STRING: {");
-            w.println("                        // 使用 ISO-8859-1 编码方式创建字符串");
-            w.println("                        // 这样每个字节都会被映射到一个 char，保持长度一致");
-            w.println("                        const char* str = vm_get_string(meta->strIdx);");
-            w.println("                        frame.stack[frame.sp].l = (*env)->NewStringUTF(env, str);");
-            w.println("                        frame.stackTypes[frame.sp++] = TYPE_REF; break;");
-            w.println("                    }");
-            w.println("                    case META_CLASS: {");
-            w.println("                        // 使用调用者类的类加载器来加载类，确保类加载器一致性");
-            w.println("                        const char* cls = vm_get_string(meta->classIdx);");
-            w.println("                        jclass resultClass = NULL;");
-            w.println("                        if (frame.callerClass != NULL) {");
-            w.println("                            // 获取调用者类的类加载器");
-            w.println("                            jclass classClass = (*env)->FindClass(env, \"java/lang/Class\");");
-            w.println("                            jmethodID getClassLoader = (*env)->GetMethodID(env, classClass, \"getClassLoader\", \"()Ljava/lang/ClassLoader;\");");
-            w.println("                            jobject classLoader = (*env)->CallObjectMethod(env, frame.callerClass, getClassLoader);");
-            w.println("                            if (classLoader != NULL) {");
-            w.println("                                // 使用 Class.forName(name, false, classLoader) 加载类");
-            w.println("                                jmethodID forName = (*env)->GetStaticMethodID(env, classClass, \"forName\", \"(Ljava/lang/String;ZLjava/lang/ClassLoader;)Ljava/lang/Class;\");");
-            w.println("                                jstring className = (*env)->NewStringUTF(env, cls);");
-            w.println("                                // 将内部名称转换为二进制名称（用 . 替换 /）");
-            w.println("                                char* binName = strdup(cls);");
-            w.println("                                for (char* p = binName; *p; p++) { if (*p == '/') *p = '.'; }");
-            w.println("                                jstring binNameStr = (*env)->NewStringUTF(env, binName);");
-            w.println("                                resultClass = (*env)->CallStaticObjectMethod(env, classClass, forName, binNameStr, JNI_FALSE, classLoader);");
-            w.println("                                free(binName);");
-            w.println("                            }");
-            w.println("                        }");
-            w.println("                        if (resultClass == NULL) {");
-            w.println("                            // 回退到 FindClass");
-            w.println("                            resultClass = (*env)->FindClass(env, cls);");
-            w.println("                        }");
-            w.println("                        frame.stack[frame.sp].l = resultClass;");
-            w.println("                        frame.stackTypes[frame.sp++] = TYPE_REF; break;");
-            w.println("                    }");
-            w.println("                    default: break;");
-            w.println("                }");
+            generateLdcBody(w, "                ");
             w.println("                frame.pc++;");
             w.println("            }");
             w.println("            break;");
@@ -78,6 +83,27 @@ public class ConstantsInstructions {
         @Override
         public void generate(PrintWriter w) {
             generateBody(w);
+        }
+        
+        @Override
+        public void generateComputedGoto(PrintWriter w) {
+            // computed goto 模式下，每个 opcode 有自己的标签
+            w.println("        OP_12:  /* LDC */");
+            generateLdcBody(w, "            ");
+            w.println("            frame.pc++;");
+            w.println("            DISPATCH_NEXT;");
+            w.println();
+            
+            w.println("        OP_13:  /* LDC_W */");
+            generateLdcBody(w, "            ");
+            w.println("            frame.pc++;");
+            w.println("            DISPATCH_NEXT;");
+            w.println();
+            
+            w.println("        OP_14:  /* LDC2_W */");
+            generateLdcBody(w, "            ");
+            w.println("            frame.pc++;");
+            w.println("            DISPATCH_NEXT;");
         }
     }
     

@@ -20,8 +20,20 @@ public class GotoInstruction extends Instruction {
     }
 
     @Override
+    protected boolean needsPcIncrement() {
+        return false;  // GOTO 自己设置 pc
+    }
+
+    @Override
     public void generate(PrintWriter w) {
         w.printf("            case 0x%02x: /* %s */\n", opcode, comment);
         generateBody(w);
+    }
+
+    @Override
+    public void generateComputedGoto(PrintWriter w) {
+        w.printf("        OP_%02x:  /* %s */\n", opcode, comment);
+        w.println("            frame.pc = meta->jumpOffset;");
+        w.println("            DISPATCH_NEXT;");
     }
 }

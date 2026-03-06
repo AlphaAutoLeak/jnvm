@@ -119,4 +119,58 @@ public class MultiANewArrayInstruction extends Instruction {
         w.printf("            case 0x%02x: /* %s */\n", opcode, comment);
         generateBody(w);
     }
+
+    @Override
+    public void generateComputedGoto(PrintWriter w) {
+        w.printf("        OP_%02x:  /* %s */\n", opcode, comment);
+        w.println("            {");
+        w.println("                const char* className = vm_get_string(meta->classIdx);");
+        w.println("                int dims = meta->dims;");
+        w.println("                VM_LOG(\"MULTIANEWARRAY: class=%s, dims=%d\\n\", className, dims);");
+        w.println("                jint* sizes = (jint*)malloc(dims * sizeof(jint));");
+        w.println("                for (int i = dims - 1; i >= 0; i--) {");
+        w.println("                    sizes[i] = frame.stack[--frame.sp].i;");
+        w.println("                }");
+        w.println("                jclass arrayClass = vm_find_class(env, className);");
+        w.println("                if (arrayClass == NULL) {");
+        w.println("                    frame.stack[frame.sp].l = NULL;");
+        w.println("                } else {");
+        w.println("                    jarray result = NULL;");
+        w.println("                    if (dims >= 1) {");
+        w.println("                        int depth = 0;");
+        w.println("                        while (className[depth] == '[') depth++;");
+        w.println("                        char elemType = className[depth];");
+        w.println("                        switch (elemType) {");
+        w.println("                            case 'I': result = (*env)->NewIntArray(env, sizes[0]); break;");
+        w.println("                            case 'J': result = (*env)->NewLongArray(env, sizes[0]); break;");
+        w.println("                            case 'F': result = (*env)->NewFloatArray(env, sizes[0]); break;");
+        w.println("                            case 'D': result = (*env)->NewDoubleArray(env, sizes[0]); break;");
+        w.println("                            case 'Z': result = (*env)->NewBooleanArray(env, sizes[0]); break;");
+        w.println("                            case 'B': result = (*env)->NewByteArray(env, sizes[0]); break;");
+        w.println("                            case 'C': result = (*env)->NewCharArray(env, sizes[0]); break;");
+        w.println("                            case 'S': result = (*env)->NewShortArray(env, sizes[0]); break;");
+        w.println("                            default:");
+        w.println("                                if (elemType == 'L' || depth < dims) {");
+        w.println("                                    char elemClassName[256];");
+        w.println("                                    if (depth < dims) {");
+        w.println("                                        strcpy(elemClassName, className + 1);");
+        w.println("                                    } else {");
+        w.println("                                        int len = strlen(className + depth + 1);");
+        w.println("                                        strncpy(elemClassName, className + depth + 1, len - 1);");
+        w.println("                                        elemClassName[len - 1] = '\\0';");
+        w.println("                                    }");
+        w.println("                                    jclass elemClass = vm_find_class(env, elemClassName);");
+        w.println("                                    result = (*env)->NewObjectArray(env, sizes[0], elemClass, NULL);");
+        w.println("                                }");
+        w.println("                                break;");
+        w.println("                        }");
+        w.println("                    }");
+        w.println("                    frame.stack[frame.sp].l = result;");
+        w.println("                    frame.stackTypes[frame.sp++] = TYPE_REF;");
+        w.println("                }");
+        w.println("                free(sizes);");
+        w.println("            }");
+        w.println("            frame.pc++;");
+        w.println("            DISPATCH_NEXT;");
+    }
 }

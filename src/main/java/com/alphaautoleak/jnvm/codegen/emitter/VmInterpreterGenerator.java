@@ -237,47 +237,59 @@ public class VmInterpreterGenerator {
         w.println("    vm_unbox_args(env, &frame, args, methodDesc, instance ? 1 : 0);");
         w.println();
         
-        // 主循环
+        // 主循环 - Computed Goto 版本
         w.println("    VM_LOG(\"Executing method %d, bytecodeLen=%d\\n\", methodId, m->bytecodeLen);");
         w.println("    fflush(stdout);");
-        w.println("    while (frame.pc < m->bytecodeLen) {");
-        w.println("        uint8_t opcode = bytecode[frame.pc];");
-        w.println("        MetaEntry* meta = vm_get_meta(m, frame.pc);");
-        w.println("        VM_LOG(\"m%d: pc=%d op=0x%02x sp=%d\\n\", methodId, frame.pc, opcode, frame.sp);");
         w.println();
-        w.println("        switch (opcode) {");
         
+        // === Computed Goto 跳转表（必须在函数内部）===
+        w.println("    // === Computed Goto 分派表 ===");
+        w.println("    static const void* dispatch_table[256] = {");
+        // 生成跳转表，未使用的 opcode 跳转到 default
+        for (int i = 0; i < 256; i++) {
+            final int op = i;
+            Instruction inst = instructions.getAllInstructions().stream()
+                .filter(ins -> ins.getOpcode() == op)
+                .findFirst().orElse(null);
+            if (inst != null) {
+                w.printf("        &&OP_%02x,  // 0x%02x %s%n", i, i, inst.getName());
+            } else {
+                w.printf("        &&OP_DEFAULT,  // 0x%02x%n", i);
+            }
+        }
+        w.println("    };");
+        w.println();
+        
+        // DISPATCH_NEXT 宏 - 跳转到下一个指令
+        w.println("    #define DISPATCH_NEXT \\");
+        w.println("        do { \\");
+        w.println("            if (frame.pc >= m->bytecodeLen) goto method_exit; \\");
+        w.println("            uint8_t _op = bytecode[frame.pc]; \\");
+        w.println("            meta = vm_get_meta(m, frame.pc); \\");
+        w.println("            VM_LOG(\"m%d: pc=%d op=0x%02x sp=%d\\n\", methodId, frame.pc, _op, frame.sp); \\");
+        w.println("            goto *dispatch_table[_op]; \\");
+        w.println("        } while(0)");
+        w.println();
+        
+        w.println("    MetaEntry* meta = NULL;");
+        w.println("    DISPATCH_NEXT;");
+        w.println();
+        
+        // 生成所有指令处理代码
         for (Instruction inst : instructions.getAllInstructions()) {
-            inst.generate(w);
+            inst.generateComputedGoto(w);
+            w.println();
         }
         
-        w.println("            default:");
-        w.println("                VM_LOG(\"Unknown opcode: 0x%02x at pc=%d\\n\", opcode, frame.pc);");
-        w.println("                frame.pc++; break;");
-        w.println("        }");
-        w.println();
-        
-        // 异常处理
-        w.println("        if ((*env)->ExceptionCheck(env)) {");
-        w.println("            VM_LOG(\"Exception thrown at pc=%d\\n\", frame.pc);");
-        w.println("            jthrowable exception = (*env)->ExceptionOccurred(env);");
-        w.println("            (*env)->ExceptionClear(env);");
-        w.println("            int handlerPc = vm_find_exception_handler(env, m, frame.pc, exception);");
-        w.println("            if (handlerPc >= 0) {");
-        w.println("                frame.sp = 0;");
-        w.println("                frame.stack[frame.sp++].l = exception;");
-        w.println("                frame.pc = handlerPc;");
-        w.println("                continue;");
-        w.println("            }");
-        w.println("            VM_LOG(\"No handler found, rethrowing\\n\");");
-        w.println("            (*env)->Throw(env, exception);");
-        w.println("            break;");
-        w.println("        }");
-        w.println("    }");
+        // Default handler
+        w.println("        OP_DEFAULT:");
+        w.println("            VM_LOG(\"Unknown opcode: 0x%02x at pc=%d\\n\", bytecode[frame.pc], frame.pc);");
+        w.println("            frame.pc++;");
+        w.println("            DISPATCH_NEXT;");
         w.println();
         
         // 返回结果
-        w.println("method_exit:");
+        w.println("    method_exit:");
         w.println("    ;");
         w.println("    char methodReturnType = 'V';");
         w.println("    if (methodDesc) {");

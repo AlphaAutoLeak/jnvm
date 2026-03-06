@@ -25,7 +25,7 @@ public abstract class Instruction {
     }
     
     /**
-     * 生成 case 分支代码（子类可覆盖）
+     * 生成 case 分支代码（传统 switch-case 方式）
      */
     public void generate(PrintWriter w) {
         w.printf("            case 0x%02x: /* %s */\n", opcode, comment);
@@ -34,9 +34,38 @@ public abstract class Instruction {
     }
     
     /**
+     * 生成 computed goto 标签和代码
+     * 默认实现：调用 generateBodyWithoutPcInc()，然后根据 needsPcIncrement() 决定是否 pc++
+     */
+    public void generateComputedGoto(PrintWriter w) {
+        w.printf("        OP_%02x:  /* %s */\n", opcode, comment);
+        generateBodyWithoutPcInc(w);
+        if (needsPcIncrement()) {
+            w.println("            frame.pc++;");
+        }
+        w.println("            DISPATCH_NEXT;");
+    }
+    
+    /**
+     * 是否需要 pc++（默认 false，因为 generateBody 通常已经调用了 pcIncBreak）
+     */
+    protected boolean needsPcIncrement() {
+        return false;
+    }
+    
+    /**
      * 生成指令体（子类实现）
      */
     protected abstract void generateBody(PrintWriter w);
+    
+    /**
+     * 生成指令体（不含 pc++）
+     * 默认实现直接调用 generateBody，假设子类在 generateBody 中已经处理了 pc++
+     * 如果子类的 generateBody 调用了 pcIncBreak，应该覆盖此方法避免重复
+     */
+    protected void generateBodyWithoutPcInc(PrintWriter w) {
+        generateBody(w);
+    }
     
     /**
      * 生成 pc++ （break 由 generate() 自动添加）

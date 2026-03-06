@@ -63,8 +63,20 @@ public class ReturnInstruction extends Instruction {
     }
 
     @Override
+    protected boolean needsPcIncrement() {
+        return false;  // 返回指令不增加 pc，直接跳转到 method_exit
+    }
+
+    @Override
     public void generate(PrintWriter w) {
         w.printf("            case 0x%02x: /* %s */\n", opcode, comment);
         generateBody(w);
+    }
+
+    @Override
+    public void generateComputedGoto(PrintWriter w) {
+        w.printf("        OP_%02x:  /* %s */\n", opcode, comment);
+        // 在 computed goto 模式下，返回指令直接跳转到 method_exit
+        generateBody(w);  // 复用相同的逻辑，都用 goto method_exit
     }
 }

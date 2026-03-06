@@ -24,8 +24,20 @@ public class IfNullInstruction extends Instruction {
     }
 
     @Override
+    protected boolean needsPcIncrement() {
+        return false;
+    }
+
+    @Override
     public void generate(PrintWriter w) {
         w.printf("            case 0x%02x: /* %s */\n", opcode, comment);
         generateBody(w);
+    }
+
+    @Override
+    public void generateComputedGoto(PrintWriter w) {
+        w.printf("        OP_%02x:  /* %s */\n", opcode, comment);
+        w.println("            if (frame.stack[--frame.sp].l " + condition + ") { frame.pc = meta->jumpOffset; DISPATCH_NEXT; }");
+        w.println("            else { frame.pc++; DISPATCH_NEXT; }");
     }
 }

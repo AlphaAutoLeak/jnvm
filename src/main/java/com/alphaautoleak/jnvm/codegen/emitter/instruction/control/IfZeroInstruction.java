@@ -26,8 +26,22 @@ public class IfZeroInstruction extends Instruction {
     }
 
     @Override
+    protected boolean needsPcIncrement() {
+        return false;  // 自己处理 pc
+    }
+
+    @Override
     public void generate(PrintWriter w) {
         w.printf("            case 0x%02x: /* %s */\n", opcode, comment);
         generateBody(w);
+    }
+
+    @Override
+    public void generateComputedGoto(PrintWriter w) {
+        w.printf("        OP_%02x:  /* %s */\n", opcode, comment);
+        w.println("            { jint val = frame.stack[--frame.sp].i;");
+        w.println("              VM_LOG(\"IF cond: sp=%d, val=%d, cond=%s, targetPc=%d\\n\", frame.sp, val, \"" + condition + "\", meta->jumpOffset);");
+        w.println("              if (val " + condition + ") { frame.pc = meta->jumpOffset; DISPATCH_NEXT; }");
+        w.println("              else { frame.pc++; DISPATCH_NEXT; } }");
     }
 }

@@ -42,4 +42,37 @@ public class PutFieldInstruction extends Instruction {
         w.println("                      (*env)->SetObjectField(env, obj, fid, val.l); }");
         pcIncBreak(w);
     }
+
+    @Override
+    public void generateComputedGoto(PrintWriter w) {
+        w.printf("        OP_%02x:  /* %s */\n", opcode, comment);
+        w.println("            { if (!meta) { VM_LOG(\"PUTFIELD: meta is NULL at pc=%d\\n\", frame.pc); frame.pc++; DISPATCH_NEXT; }");
+        w.println("              VMValue val = frame.stack[--frame.sp];");
+        w.println("              jobject obj = frame.stack[--frame.sp].l;");
+        w.println("              if (!obj) {");
+        w.println("                  jclass npeClass = vm_find_class(env, \"java/lang/NullPointerException\");");
+        w.println("                  if (npeClass) (*env)->ThrowNew(env, npeClass, \"\");");
+        w.println("                  goto method_exit;");
+        w.println("              }");
+        w.println("              const char* owner = vm_get_string(meta->ownerIdx);");
+        w.println("              const char* name = vm_get_string(meta->nameIdx);");
+        w.println("              const char* desc = vm_get_string(meta->descIdx);");
+        w.println("              jclass cls = vm_find_class(env, owner);");
+        w.println("              if (!cls) { VM_LOG(\"PUTFIELD: Class not found: %s\\n\", owner); frame.pc++; DISPATCH_NEXT; }");
+        w.println("              jfieldID fid = (*env)->GetFieldID(env, cls, name, desc);");
+        w.println("              if (!fid) { VM_LOG(\"PUTFIELD: Field not found: %s.%s\\n\", owner, name); (*env)->ExceptionClear(env); frame.pc++; DISPATCH_NEXT; }");
+        w.println("              char t = desc[0];");
+        w.println("              if (t == 'I' || t == 'B' || t == 'C' || t == 'S' || t == 'Z')");
+        w.println("                  (*env)->SetIntField(env, obj, fid, val.i);");
+        w.println("              else if (t == 'J')");
+        w.println("                  (*env)->SetLongField(env, obj, fid, val.j);");
+        w.println("              else if (t == 'F')");
+        w.println("                  (*env)->SetFloatField(env, obj, fid, val.f);");
+        w.println("              else if (t == 'D')");
+        w.println("                  (*env)->SetDoubleField(env, obj, fid, val.d);");
+        w.println("              else");
+        w.println("                  (*env)->SetObjectField(env, obj, fid, val.l); }");
+        w.println("            frame.pc++;");
+        w.println("            DISPATCH_NEXT;");
+    }
 }
