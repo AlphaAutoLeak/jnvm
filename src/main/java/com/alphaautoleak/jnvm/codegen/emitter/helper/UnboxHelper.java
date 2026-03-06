@@ -3,7 +3,7 @@ package com.alphaautoleak.jnvm.codegen.emitter.helper;
 import java.io.PrintWriter;
 
 /**
- * 参数拆箱辅助函数
+ * 参数拆箱辅助函数 - 使用全局缓存的包装类
  */
 public class UnboxHelper extends VMHelper {
     
@@ -19,28 +19,44 @@ public class UnboxHelper extends VMHelper {
     
     @Override
     public void generateSource(PrintWriter w) {
+        // 使用 vm_find_class 缓存包装类
         w.println("void vm_unbox_args(JNIEnv* env, VMFrame* frame, jobjectArray args, const char* methodDesc, int hasThis) {");
         w.println("    if (!args) return;");
         w.println("    jsize len = (*env)->GetArrayLength(env, args);");
         w.println("    (*env)->EnsureLocalCapacity(env, len + 32);");
         w.println();
-        w.println("    // Pre-cache boxed classes and method IDs");
-        w.println("    jclass integerClass = (*env)->FindClass(env, \"java/lang/Integer\");");
-        w.println("    jmethodID intValueMid = integerClass ? (*env)->GetMethodID(env, integerClass, \"intValue\", \"()I\") : NULL;");
-        w.println("    jclass longClass = (*env)->FindClass(env, \"java/lang/Long\");");
-        w.println("    jmethodID longValueMid = longClass ? (*env)->GetMethodID(env, longClass, \"longValue\", \"()J\") : NULL;");
-        w.println("    jclass floatClass = (*env)->FindClass(env, \"java/lang/Float\");");
-        w.println("    jmethodID floatValueMid = floatClass ? (*env)->GetMethodID(env, floatClass, \"floatValue\", \"()F\") : NULL;");
-        w.println("    jclass doubleClass = (*env)->FindClass(env, \"java/lang/Double\");");
-        w.println("    jmethodID doubleValueMid = doubleClass ? (*env)->GetMethodID(env, doubleClass, \"doubleValue\", \"()D\") : NULL;");
-        w.println("    jclass booleanClass = (*env)->FindClass(env, \"java/lang/Boolean\");");
-        w.println("    jmethodID booleanValueMid = booleanClass ? (*env)->GetMethodID(env, booleanClass, \"booleanValue\", \"()Z\") : NULL;");
-        w.println("    jclass byteClass = (*env)->FindClass(env, \"java/lang/Byte\");");
-        w.println("    jmethodID byteValueMid = byteClass ? (*env)->GetMethodID(env, byteClass, \"byteValue\", \"()B\") : NULL;");
-        w.println("    jclass shortClass = (*env)->FindClass(env, \"java/lang/Short\");");
-        w.println("    jmethodID shortValueMid = shortClass ? (*env)->GetMethodID(env, shortClass, \"shortValue\", \"()S\") : NULL;");
-        w.println("    jclass charClass = (*env)->FindClass(env, \"java/lang/Character\");");
-        w.println("    jmethodID charValueMid = charClass ? (*env)->GetMethodID(env, charClass, \"charValue\", \"()C\") : NULL;");
+        w.println("    // 使用 vm_find_class 缓存包装类（复用全局缓存）");
+        w.println("    jclass integerClass = vm_find_class(env, \"java/lang/Integer\");");
+        w.println("    static jmethodID intValueMid = NULL;");
+        w.println("    if (integerClass && !intValueMid) intValueMid = (*env)->GetMethodID(env, integerClass, \"intValue\", \"()I\");");
+        w.println();
+        w.println("    jclass longClass = vm_find_class(env, \"java/lang/Long\");");
+        w.println("    static jmethodID longValueMid = NULL;");
+        w.println("    if (longClass && !longValueMid) longValueMid = (*env)->GetMethodID(env, longClass, \"longValue\", \"()J\");");
+        w.println();
+        w.println("    jclass floatClass = vm_find_class(env, \"java/lang/Float\");");
+        w.println("    static jmethodID floatValueMid = NULL;");
+        w.println("    if (floatClass && !floatValueMid) floatValueMid = (*env)->GetMethodID(env, floatClass, \"floatValue\", \"()F\");");
+        w.println();
+        w.println("    jclass doubleClass = vm_find_class(env, \"java/lang/Double\");");
+        w.println("    static jmethodID doubleValueMid = NULL;");
+        w.println("    if (doubleClass && !doubleValueMid) doubleValueMid = (*env)->GetMethodID(env, doubleClass, \"doubleValue\", \"()D\");");
+        w.println();
+        w.println("    jclass booleanClass = vm_find_class(env, \"java/lang/Boolean\");");
+        w.println("    static jmethodID booleanValueMid = NULL;");
+        w.println("    if (booleanClass && !booleanValueMid) booleanValueMid = (*env)->GetMethodID(env, booleanClass, \"booleanValue\", \"()Z\");");
+        w.println();
+        w.println("    jclass byteClass = vm_find_class(env, \"java/lang/Byte\");");
+        w.println("    static jmethodID byteValueMid = NULL;");
+        w.println("    if (byteClass && !byteValueMid) byteValueMid = (*env)->GetMethodID(env, byteClass, \"byteValue\", \"()B\");");
+        w.println();
+        w.println("    jclass shortClass = vm_find_class(env, \"java/lang/Short\");");
+        w.println("    static jmethodID shortValueMid = NULL;");
+        w.println("    if (shortClass && !shortValueMid) shortValueMid = (*env)->GetMethodID(env, shortClass, \"shortValue\", \"()S\");");
+        w.println();
+        w.println("    jclass charClass = vm_find_class(env, \"java/lang/Character\");");
+        w.println("    static jmethodID charValueMid = NULL;");
+        w.println("    if (charClass && !charValueMid) charValueMid = (*env)->GetMethodID(env, charClass, \"charValue\", \"()C\");");
         w.println();
         w.println("    int localIdx = hasThis ? 1 : 0;");
         w.println("    for (jsize i = 0; i < len; i++) {");
