@@ -23,7 +23,7 @@ public class AThrowInstruction extends Instruction {
         w.println("                jobject exception = frame.stack[--frame.sp].l;");
         w.println("                if (exception == NULL) {");
         w.println("                    // Throw NullPointerException for null exception");
-        w.println("                    jclass npeClass = (*env)->FindClass(env, \"java/lang/NullPointerException\");");
+        w.println("                    jclass npeClass = vm_find_class(env, \"java/lang/NullPointerException\");");
         w.println("                    if (npeClass) (*env)->ThrowNew(env, npeClass, \"Cannot throw null exception\");");
         w.println("                    goto method_exit;");
         w.println("                }");
@@ -43,7 +43,7 @@ public class AThrowInstruction extends Instruction {
         w.println("                            }");
         w.println("                            // 检查异常类型是否匹配");
         w.println("                            const char* catchType = vm_get_string(entry->catchTypeIdx);");
-        w.println("                            jclass catchClass = (*env)->FindClass(env, catchType);");
+        w.println("                            jclass catchClass = vm_find_class(env, catchType);");
         w.println("                            if (catchClass && (*env)->IsInstanceOf(env, exception, catchClass)) {");
         w.println("                                athrowHandlerPc = entry->handlerPc;");
         w.println("                                VM_LOG(\"ATHROW: Found handler for %s at pc=%d\\n\", catchType, athrowHandlerPc);");

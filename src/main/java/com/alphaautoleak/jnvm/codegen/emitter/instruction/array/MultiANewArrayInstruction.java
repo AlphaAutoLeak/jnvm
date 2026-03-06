@@ -32,7 +32,7 @@ public class MultiANewArrayInstruction extends Instruction {
         w.println("                    }");
         w.println();
         w.println("                    // 使用 JNI 创建多维数组");
-        w.println("                    jclass arrayClass = (*env)->FindClass(env, className);");
+        w.println("                    jclass arrayClass = vm_find_class(env, className);");  // 使用缓存版本
         w.println("                    if (arrayClass == NULL) {");
         w.println("                        VM_LOG(\"MULTIANEWARRAY: Failed to find class %s\\n\", className);");
         w.println("                        frame.stack[frame.sp].l = NULL;");
@@ -90,7 +90,7 @@ public class MultiANewArrayInstruction extends Instruction {
         w.println("                                            strncpy(elemClassName, className + depth + 1, len - 1);");
         w.println("                                            elemClassName[len - 1] = '\\0';");
         w.println("                                        }");
-        w.println("                                        jclass elemClass = (*env)->FindClass(env, elemClassName);");
+        w.println("                                        jclass elemClass = vm_find_class(env, elemClassName);");  // 使用缓存版本
         w.println("                                        result = (*env)->NewObjectArray(env, sizes[0], elemClass, NULL);");
         w.println("                                    }");
         w.println("                                    break;");

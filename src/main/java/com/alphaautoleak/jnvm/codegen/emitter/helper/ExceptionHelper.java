@@ -26,7 +26,7 @@ public class ExceptionHelper extends VMHelper {
         w.println("        if (pc >= entry->startPc && pc < entry->endPc) {");
         w.println("            if (entry->catchTypeIdx < 0) return entry->handlerPc; // catch-all");
         w.println("            const char* catchType = vm_get_string(entry->catchTypeIdx);");
-        w.println("            jclass catchClass = (*env)->FindClass(env, catchType);");
+        w.println("            jclass catchClass = vm_find_class(env, catchType);");
         w.println("            if (catchClass && (*env)->IsInstanceOf(env, exception, catchClass)) {");
         w.println("                return entry->handlerPc;");
         w.println("            }");

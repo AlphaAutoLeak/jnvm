@@ -76,23 +76,120 @@ public class VmInterpreterGenerator {
             }
             w.println();
             
+            // === 类和方法缓存系统（必须在辅助函数之前定义）===
+            w.println("// === 类和方法ID缓存 ===");
+            w.println("#define CLASS_CACHE_SIZE 256");
+            w.println("#define METHOD_CACHE_SIZE 1024");
+            w.println();
+            
+            // 类缓存结构
+            w.println("typedef struct {");
+            w.println("    const char* className;  // 类名指针（指向 vm_strings）");
+            w.println("    jclass cls;             // 缓存的 jclass");
+            w.println("} ClassCacheEntry;");
+            w.println();
+            
+            // 方法缓存结构
+            w.println("typedef struct {");
+            w.println("    const char* owner;      // 类名");
+            w.println("    const char* name;       // 方法名");
+            w.println("    const char* desc;       // 方法描述符");
+            w.println("    jmethodID mid;          // 缓存的 jmethodID");
+            w.println("    jclass cls;             // 关联的 jclass（避免重复查找）");
+            w.println("} MethodCacheEntry;");
+            w.println();
+            
+            // 缓存数组
+            w.println("static ClassCacheEntry classCache[CLASS_CACHE_SIZE];");
+            w.println("static int classCacheCount = 0;");
+            w.println("static MethodCacheEntry methodCache[METHOD_CACHE_SIZE];");
+            w.println("static int methodCacheCount = 0;");
+            w.println();
+            
+            // 缓存的 FindClass
+            w.println("static jclass vm_find_class(JNIEnv* env, const char* className) {");
+            w.println("    // 先查缓存");
+            w.println("    for (int i = 0; i < classCacheCount; i++) {");
+            w.println("        if (classCache[i].className == className && classCache[i].cls != NULL) {");
+            w.println("            return classCache[i].cls;");
+            w.println("        }");
+            w.println("    }");
+            w.println("    // 缓存未命中，调用 JNI");
+            w.println("    jclass localCls = (*env)->FindClass(env, className);");
+            w.println("    if (localCls && classCacheCount < CLASS_CACHE_SIZE) {");
+            w.println("        jclass globalCls = (*env)->NewGlobalRef(env, localCls);");  // 创建全局引用防止GC回收
+            w.println("        if (globalCls) {");
+            w.println("            classCache[classCacheCount].className = className;");
+            w.println("            classCache[classCacheCount].cls = globalCls;");
+            w.println("            classCacheCount++;");
+            w.println("        }");
+            w.println("    }");
+            w.println("    return localCls;");  // 返回局部引用（调用者可以继续使用）
+            w.println("}");
+            w.println();
+            
+            // 缓存的 GetMethodID
+            w.println("static jmethodID vm_get_method_id(JNIEnv* env, jclass cls, const char* owner, const char* name, const char* desc) {");
+            w.println("    // 先查缓存");
+            w.println("    for (int i = 0; i < methodCacheCount; i++) {");
+            w.println("        if (methodCache[i].owner == owner && methodCache[i].name == name && ");
+            w.println("            methodCache[i].desc == desc && methodCache[i].mid != NULL) {");
+            w.println("            return methodCache[i].mid;");
+            w.println("        }");
+            w.println("    }");
+            w.println("    // 缓存未命中，调用 JNI");
+            w.println("    jmethodID mid = (*env)->GetMethodID(env, cls, name, desc);");
+            w.println("    if (mid && methodCacheCount < METHOD_CACHE_SIZE) {");
+            w.println("        methodCache[methodCacheCount].owner = owner;");
+            w.println("        methodCache[methodCacheCount].name = name;");
+            w.println("        methodCache[methodCacheCount].desc = desc;");
+            w.println("        methodCache[methodCacheCount].mid = mid;");
+            w.println("        methodCache[methodCacheCount].cls = cls;");
+            w.println("        methodCacheCount++;");
+            w.println("    }");
+            w.println("    return mid;");
+            w.println("}");
+            w.println();
+            
+            // 缓存的 GetStaticMethodID
+            w.println("static jmethodID vm_get_static_method_id(JNIEnv* env, jclass cls, const char* owner, const char* name, const char* desc) {");
+            w.println("    // 先查缓存");
+            w.println("    for (int i = 0; i < methodCacheCount; i++) {");
+            w.println("        if (methodCache[i].owner == owner && methodCache[i].name == name && ");
+            w.println("            methodCache[i].desc == desc && methodCache[i].mid != NULL) {");
+            w.println("            return methodCache[i].mid;");
+            w.println("        }");
+            w.println("    }");
+            w.println("    // 缓存未命中，调用 JNI");
+            w.println("    jmethodID mid = (*env)->GetStaticMethodID(env, cls, name, desc);");
+            w.println("    if (mid && methodCacheCount < METHOD_CACHE_SIZE) {");
+            w.println("        methodCache[methodCacheCount].owner = owner;");
+            w.println("        methodCache[methodCacheCount].name = name;");
+            w.println("        methodCache[methodCacheCount].desc = desc;");
+            w.println("        methodCache[methodCacheCount].mid = mid;");
+            w.println("        methodCache[methodCacheCount].cls = cls;");
+            w.println("        methodCacheCount++;");
+            w.println("    }");
+            w.println("    return mid;");
+            w.println("}");
+            w.println();
+            
             // 辅助函数实现
             for (VMHelper helper : helpers.getAllHelpers()) {
                 helper.generateSource(w);
             }
             
-            // 字符串解密函数
-            w.println("static void vm_decrypt_string(const unsigned char* enc, int len, char* out, const unsigned char* key) {");
-            w.println("    for (int i = 0; i < len; i++) {");
-            w.println("        out[i] = (char)((enc[i] - (i & 0xFF)) ^ key[i % 8]);");
-            w.println("    }");
-            w.println("    out[len] = '\\0';");
-            w.println("}");
-            w.println();
-            
-            // 主解释器函数
-            emitExecuteMethod(w);
-        }
+                        // 字符串解密函数
+                        w.println("static void vm_decrypt_string(const unsigned char* enc, int len, char* out, const unsigned char* key) {");
+                        w.println("    for (int i = 0; i < len; i++) {");
+                        w.println("        out[i] = (char)((enc[i] - (i & 0xFF)) ^ key[i % 8]);");
+                        w.println("    }");
+                        w.println("    out[len] = '\\0';");
+                        w.println("}");
+                        w.println();
+                        
+                        // 主解释器函数
+                        emitExecuteMethod(w);        }
     }
     
     private void emitExecuteMethod(PrintWriter w) {

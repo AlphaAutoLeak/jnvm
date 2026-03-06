@@ -18,15 +18,14 @@ public class PutFieldInstruction extends Instruction {
         w.println("                  VMValue val = frame.stack[--frame.sp];");
         w.println("                  jobject obj = frame.stack[--frame.sp].l;");
         w.println("                  if (!obj) {");
-        w.println("                      // Throw NullPointerException");
-        w.println("                      jclass npeClass = (*env)->FindClass(env, \"java/lang/NullPointerException\");");
+        w.println("                      jclass npeClass = vm_find_class(env, \"java/lang/NullPointerException\");");
         w.println("                      if (npeClass) (*env)->ThrowNew(env, npeClass, \"\");");
         w.println("                      goto method_exit;");
         w.println("                  }");
         w.println("                  const char* owner = vm_get_string(meta->ownerIdx);");
         w.println("                  const char* name = vm_get_string(meta->nameIdx);");
         w.println("                  const char* desc = vm_get_string(meta->descIdx);");
-        w.println("                  jclass cls = (*env)->FindClass(env, owner);");
+        w.println("                  jclass cls = vm_find_class(env, owner);");  // 使用缓存版本
         w.println("                  if (!cls) { VM_LOG(\"PUTFIELD: Class not found: %s\\n\", owner); frame.pc++; break; }");
         w.println("                  jfieldID fid = (*env)->GetFieldID(env, cls, name, desc);");
         w.println("                  if (!fid) { VM_LOG(\"PUTFIELD: Field not found: %s.%s\\n\", owner, name); (*env)->ExceptionClear(env); frame.pc++; break; }");

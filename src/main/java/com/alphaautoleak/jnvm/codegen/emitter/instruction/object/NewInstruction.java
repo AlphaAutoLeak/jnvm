@@ -16,7 +16,7 @@ public class NewInstruction extends Instruction {
     @Override
     protected void generateBody(PrintWriter w) {
         w.println("                { const char* clsName = vm_get_string(meta->classIdx);");
-        w.println("                  jclass cls = (*env)->FindClass(env, clsName);");
+        w.println("                  jclass cls = vm_find_class(env, clsName);");  // 使用缓存版本
         w.println("                  if (cls) {");
         w.println("                      frame.stack[frame.sp].l = (*env)->AllocObject(env, cls);");
         w.println("                      frame.stackTypes[frame.sp++] = TYPE_REF;");

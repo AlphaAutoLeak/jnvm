@@ -13,12 +13,12 @@ public class InvokeHelper {
         w.println("                  const char* owner = vm_get_string(meta->ownerIdx);");
         w.println("                  const char* name = vm_get_string(meta->nameIdx);");
         w.println("                  const char* desc = vm_get_string(meta->descIdx);");
-        w.println("                  jclass cls = (*env)->FindClass(env, owner);");
+        w.println("                  jclass cls = vm_find_class(env, owner);");  // 使用缓存版本
         w.println("                  if (!cls) { VM_LOG(\"INVOKE: Class not found: %s\\n\", owner); frame.pc++; break; }");
         if (isStatic) {
-            w.println("                  jmethodID mid = (*env)->GetStaticMethodID(env, cls, name, desc);");
+            w.println("                  jmethodID mid = vm_get_static_method_id(env, cls, owner, name, desc);");  // 使用缓存版本
         } else {
-            w.println("                  jmethodID mid = (*env)->GetMethodID(env, cls, name, desc);");
+            w.println("                  jmethodID mid = vm_get_method_id(env, cls, owner, name, desc);");  // 使用缓存版本
         }
         w.println("                  if (!mid) { VM_LOG(\"INVOKE: Method not found: %s.%s%s\\n\", owner, name, desc); (*env)->ExceptionClear(env); frame.pc++; break; }");
         w.println("                  int argCount = 0; char returnType = 'V';");
@@ -39,7 +39,7 @@ public class InvokeHelper {
         if (!isStatic) {
             w.println("                  jobject receiver = frame.stack[--frame.sp].l;");
             w.println("                  if (!receiver) {");
-            w.println("                      jclass npeClass = (*env)->FindClass(env, \"java/lang/NullPointerException\");");
+            w.println("                      jclass npeClass = vm_find_class(env, \"java/lang/NullPointerException\");");
             w.println("                      if (npeClass) (*env)->ThrowNew(env, npeClass, \"\");");
             w.println("                      goto method_exit;");
             w.println("                  }");
