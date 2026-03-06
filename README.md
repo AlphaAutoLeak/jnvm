@@ -6,13 +6,8 @@ A powerful Java bytecode protection tool that converts Java methods into native 
 
 - **Native VM Execution**: Converts Java bytecode to native C code executed by a custom VM interpreter
 - **ChaCha20 Encryption**: All bytecode is encrypted using ChaCha20 stream cipher
-- **RegisterNatives Registration**: Uses `RegisterNatives` for native method binding (no predictable `Java_xxx` naming)
-- **Random Bridge Class**: Generates random, natural-looking package names for the bridge class on each build
 - **Cross-Platform**: Supports multiple targets via Zig compiler (Windows, Linux, macOS, Android)
 - **Anti-Debug**: Built-in anti-debugging protections
-- **Exception Handling**: Full support for Java exception handling in native code
-- **Synchronized Blocks**: Support for `MONITORENTER`/`MONITOREXIT` instructions
-- **ZKM Compatible**: Tested with Zelix KlassMaster (ZKM) obfuscated JARs
 
 ## Requirements
 
