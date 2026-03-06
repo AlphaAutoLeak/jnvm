@@ -15,6 +15,11 @@ public class IfCmpInstruction extends Instruction {
         super(opcode, name);
         this.op = op;
     }
+    
+    @Override
+    public boolean needsMeta() {
+        return true;  // 需要跳转偏移量
+    }
 
     @Override
     protected void generateBody(PrintWriter w) {

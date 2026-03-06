@@ -11,6 +11,11 @@ public class MultiANewArrayInstruction extends Instruction {
     public MultiANewArrayInstruction() {
         super(0xc5, "MULTIANEWARRAY");
     }
+    
+    @Override
+    public boolean needsMeta() {
+        return true;  // 需要类信息和维度
+    }
 
     @Override
     protected void generateBody(PrintWriter w) {

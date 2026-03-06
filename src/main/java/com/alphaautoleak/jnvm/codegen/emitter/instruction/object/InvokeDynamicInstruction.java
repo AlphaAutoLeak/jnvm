@@ -11,6 +11,11 @@ public class InvokeDynamicInstruction extends Instruction {
     public InvokeDynamicInstruction() {
         super(0xba, "INVOKEDYNAMIC");
     }
+    
+    @Override
+    public boolean needsMeta() {
+        return true;  // 需要 bootstrap 方法信息
+    }
 
     @Override
     protected void generateBody(PrintWriter w) {

@@ -11,6 +11,11 @@ public class PutFieldInstruction extends Instruction {
     public PutFieldInstruction() {
         super(0xb5, "PUTFIELD");
     }
+    
+    @Override
+    public boolean needsMeta() {
+        return true;  // 需要字段信息
+    }
 
     @Override
     protected void generateBody(PrintWriter w) {

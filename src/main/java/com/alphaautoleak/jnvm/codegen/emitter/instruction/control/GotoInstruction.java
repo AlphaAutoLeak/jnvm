@@ -12,6 +12,11 @@ public class GotoInstruction extends Instruction {
     public GotoInstruction() {
         super(0xa7, "GOTO");
     }
+    
+    @Override
+    public boolean needsMeta() {
+        return true;  // GOTO 需要跳转偏移量
+    }
 
     @Override
     protected void generateBody(PrintWriter w) {

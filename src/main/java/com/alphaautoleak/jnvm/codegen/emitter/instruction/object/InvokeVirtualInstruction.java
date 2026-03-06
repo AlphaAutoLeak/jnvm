@@ -11,6 +11,11 @@ public class InvokeVirtualInstruction extends Instruction {
     public InvokeVirtualInstruction() {
         super(0xb6, "INVOKEVIRTUAL");
     }
+    
+    @Override
+    public boolean needsMeta() {
+        return true;  // 需要方法信息
+    }
 
     @Override
     protected void generateBody(PrintWriter w) {

@@ -87,4 +87,12 @@ public abstract class Instruction {
     public String getName() {
         return name;
     }
+    
+    /**
+     * 是否需要元数据（默认 false，只有带操作数的指令需要）
+     * 这是性能优化关键：避免对简单指令进行不必要的元数据查找
+     */
+    public boolean needsMeta() {
+        return false;
+    }
 }

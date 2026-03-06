@@ -11,6 +11,11 @@ public class GetFieldInstruction extends Instruction {
     public GetFieldInstruction() {
         super(0xb4, "GETFIELD");
     }
+    
+    @Override
+    public boolean needsMeta() {
+        return true;  // 需要字段信息
+    }
 
     @Override
     protected void generateBody(PrintWriter w) {

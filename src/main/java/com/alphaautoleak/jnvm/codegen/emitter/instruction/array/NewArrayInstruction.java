@@ -11,6 +11,11 @@ public class NewArrayInstruction extends Instruction {
     public NewArrayInstruction() {
         super(0xbc, "NEWARRAY");
     }
+    
+    @Override
+    public boolean needsMeta() {
+        return true;  // 需要数组类型
+    }
 
     @Override
     protected void generateBody(PrintWriter w) {

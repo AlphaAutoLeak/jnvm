@@ -11,6 +11,11 @@ public class InstanceOfInstruction extends Instruction {
     public InstanceOfInstruction() {
         super(0xc1, "INSTANCEOF");
     }
+    
+    @Override
+    public boolean needsMeta() {
+        return true;  // 需要类信息
+    }
 
     @Override
     protected void generateBody(PrintWriter w) {

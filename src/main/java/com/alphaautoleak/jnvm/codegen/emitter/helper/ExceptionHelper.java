@@ -4,6 +4,7 @@ import java.io.PrintWriter;
 
 /**
  * 异常处理辅助函数
+ * 注：异常表通常很小（0-3个条目），线性查找更快，无需二分优化
  */
 public class ExceptionHelper extends VMHelper {
     
@@ -24,7 +25,7 @@ public class ExceptionHelper extends VMHelper {
         w.println("    for (int i = 0; i < m->exceptionTableLength; i++) {");
         w.println("        VMExceptionEntry* entry = &m->exceptionTable[i];");
         w.println("        if (pc >= entry->startPc && pc < entry->endPc) {");
-        w.println("            if (entry->catchTypeIdx < 0) return entry->handlerPc; // catch-all");
+        w.println("            if (entry->catchTypeIdx < 0) return entry->handlerPc;");
         w.println("            const char* catchType = vm_get_string(entry->catchTypeIdx);");
         w.println("            jclass catchClass = vm_find_class(env, catchType);");
         w.println("            if (catchClass && (*env)->IsInstanceOf(env, exception, catchClass)) {");

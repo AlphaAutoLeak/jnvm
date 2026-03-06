@@ -13,6 +13,11 @@ public class GotoWInstruction extends Instruction {
     public GotoWInstruction() {
         super(0xc8, "GOTO_W");
     }
+    
+    @Override
+    public boolean needsMeta() {
+        return true;  // 需要跳转偏移量
+    }
 
     @Override
     protected void generateBody(PrintWriter w) {

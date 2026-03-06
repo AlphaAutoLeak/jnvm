@@ -11,6 +11,11 @@ public class CheckCastInstruction extends Instruction {
     public CheckCastInstruction() {
         super(0xc0, "CHECKCAST");
     }
+    
+    @Override
+    public boolean needsMeta() {
+        return true;  // 需要类信息
+    }
 
     @Override
     protected void generateBody(PrintWriter w) {

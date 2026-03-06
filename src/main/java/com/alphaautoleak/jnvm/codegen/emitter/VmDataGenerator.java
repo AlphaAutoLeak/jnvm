@@ -612,7 +612,7 @@ public class VmDataGenerator {
         w.println("\n};");
         w.println();
         
-        // 异常表
+        // 异常表（保持原始顺序）
         List<ExceptionEntry> excTable = method.getExceptionTable();
         if (excTable != null && !excTable.isEmpty()) {
             w.printf("static VMExceptionEntry m%d_exc[] = {", id);

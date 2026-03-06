@@ -340,6 +340,30 @@ public class VmInterpreterGenerator {
         w.println("    vm_unbox_args(env, &frame, args, methodDesc, instance ? 1 : 0);");
         w.println();
         
+        // 指令是否需要元数据的查找表（0=不需要，1=需要）
+        w.println("    // 元数据需求表：标记哪些指令需要查找元数据");
+        w.println("    static const uint8_t needs_meta[256] = {");
+        StringBuilder metaTable = new StringBuilder();
+        for (int i = 0; i < 256; i++) {
+            final int op = i;
+            Instruction inst = instructions.getAllInstructions().stream()
+                .filter(ins -> ins.getOpcode() == op)
+                .findFirst().orElse(null);
+            boolean needsMeta = inst != null && inst.needsMeta();
+            if (i % 32 == 0) metaTable.append("        ");
+            metaTable.append(needsMeta ? "1" : "0");
+            metaTable.append(i < 255 ? "," : "");
+            if ((i + 1) % 32 == 0) {
+                w.println(metaTable.toString());
+                metaTable = new StringBuilder();
+            }
+        }
+        if (metaTable.length() > 0) {
+            w.println(metaTable.toString());
+        }
+        w.println("    };");
+        w.println();
+        
         // Computed Goto 跳转表
         w.println("    static const void* dispatch_table[256] = {");
         for (int i = 0; i < 256; i++) {
@@ -356,12 +380,17 @@ public class VmInterpreterGenerator {
         w.println("    };");
         w.println();
         
+        // 优化的 DISPATCH_NEXT：只有需要元数据的指令才查找
         w.println("    #define DISPATCH_NEXT \\");
         w.println("        do { \\");
         w.println("            if (UNLIKELY(frame.pc >= m->bytecodeLen)) goto method_exit; \\");
         w.println("            uint8_t _op = bytecode[frame.pc]; \\");
-        w.println("            int _metaIdx = m->pcToMetaIdx[frame.pc]; \\");
-        w.println("            meta = (_metaIdx >= 0) ? &m->metadata[_metaIdx] : NULL; \\");
+        w.println("            if (needs_meta[_op]) { \\");
+        w.println("                int _metaIdx = m->pcToMetaIdx[frame.pc]; \\");
+        w.println("                meta = (_metaIdx >= 0) ? &m->metadata[_metaIdx] : NULL; \\");
+        w.println("            } else { \\");
+        w.println("                meta = NULL; \\");
+        w.println("            } \\");
         w.println("            goto *dispatch_table[_op]; \\");
         w.println("        } while(0)");
         w.println();

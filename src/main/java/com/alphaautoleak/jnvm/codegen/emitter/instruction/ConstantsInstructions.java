@@ -15,6 +15,11 @@ public class ConstantsInstructions {
             super(0x12, "LDC");
         }
         
+        @Override
+        public boolean needsMeta() {
+            return true;  // LDC 需要元数据
+        }
+        
         private void generateLdcBody(PrintWriter w, String indent) {
             w.println(indent + "switch (meta->type) {");
             w.println(indent + "    case META_INT:");

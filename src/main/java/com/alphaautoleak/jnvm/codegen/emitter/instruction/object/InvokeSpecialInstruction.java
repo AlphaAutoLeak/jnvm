@@ -11,6 +11,11 @@ public class InvokeSpecialInstruction extends Instruction {
     public InvokeSpecialInstruction() {
         super(0xb7, "INVOKESPECIAL");
     }
+    
+    @Override
+    public boolean needsMeta() {
+        return true;  // 需要方法信息
+    }
 
     @Override
     protected void generateBody(PrintWriter w) {

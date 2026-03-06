@@ -11,6 +11,11 @@ public class InvokeInterfaceInstruction extends Instruction {
     public InvokeInterfaceInstruction() {
         super(0xb9, "INVOKEINTERFACE");
     }
+    
+    @Override
+    public boolean needsMeta() {
+        return true;  // 需要方法信息
+    }
 
     @Override
     protected void generateBody(PrintWriter w) {

@@ -11,6 +11,11 @@ public class InvokeStaticInstruction extends Instruction {
     public InvokeStaticInstruction() {
         super(0xb8, "INVOKESTATIC");
     }
+    
+    @Override
+    public boolean needsMeta() {
+        return true;  // 需要方法信息
+    }
 
     @Override
     protected void generateBody(PrintWriter w) {

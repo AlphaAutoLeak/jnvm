@@ -11,6 +11,11 @@ public class PutStaticInstruction extends Instruction {
     public PutStaticInstruction() {
         super(0xb3, "PUTSTATIC");
     }
+    
+    @Override
+    public boolean needsMeta() {
+        return true;  // 需要字段信息
+    }
 
     @Override
     protected void generateBody(PrintWriter w) {

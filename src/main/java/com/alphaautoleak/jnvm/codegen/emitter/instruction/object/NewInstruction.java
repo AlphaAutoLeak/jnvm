@@ -12,6 +12,11 @@ public class NewInstruction extends Instruction {
     public NewInstruction() {
         super(0xbb, "NEW");
     }
+    
+    @Override
+    public boolean needsMeta() {
+        return true;  // 需要类名
+    }
 
     @Override
     protected void generateBody(PrintWriter w) {
