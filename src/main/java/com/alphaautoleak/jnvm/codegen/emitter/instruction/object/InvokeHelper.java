@@ -116,23 +116,23 @@ public class InvokeHelper {
     }
 
     /**
-     * Generate computed goto version
+     * Generate computed goto version with branch prediction hints
      */
     public static void generateComputedGoto(PrintWriter w, boolean isStatic, int opcode, String comment) {
         w.printf("        OP_%02x:  /* %s */\n", opcode, comment);
         w.println("            { int invokePc = frame.pc;");
-        w.println("              if (!meta) { VM_LOG(\"INVOKE: meta is NULL at pc=%d\\n\", frame.pc); frame.pc++; DISPATCH_NEXT; }");
+        w.println("              if (UNLIKELY(!meta)) { VM_LOG(\"INVOKE: meta is NULL at pc=%d\\n\", frame.pc); frame.pc++; DISPATCH_NEXT; }");
         w.println("              const char* owner = vm_get_string(meta->ownerIdx);");
         w.println("              const char* name = vm_get_string(meta->nameIdx);");
         w.println("              const char* desc = vm_get_string(meta->descIdx);");
         w.println("              jclass cls = vm_find_class(env, owner);");
-        w.println("              if (!cls) { VM_LOG(\"INVOKE: Class not found: %s\\n\", owner); frame.pc++; DISPATCH_NEXT; }");
+        w.println("              if (UNLIKELY(!cls)) { VM_LOG(\"INVOKE: Class not found: %s\\n\", owner); frame.pc++; DISPATCH_NEXT; }");
         if (isStatic) {
             w.println("              jmethodID mid = vm_get_static_method_id(env, cls, owner, name, desc);");
         } else {
             w.println("              jmethodID mid = vm_get_method_id(env, cls, owner, name, desc);");
         }
-        w.println("              if (!mid) { VM_LOG(\"INVOKE: Method not found: %s.%s%s\\n\", owner, name, desc); (*env)->ExceptionClear(env); frame.pc++; DISPATCH_NEXT; }");
+        w.println("              if (UNLIKELY(!mid)) { VM_LOG(\"INVOKE: Method not found: %s.%s%s\\n\", owner, name, desc); (*env)->ExceptionClear(env); frame.pc++; DISPATCH_NEXT; }");
         w.println("              int argCount = 0; char returnType = 'V';");
         w.println("              vm_parse_method_desc(desc, &argCount, &returnType);");
         w.println("              jvalue args[16];");
@@ -150,7 +150,7 @@ public class InvokeHelper {
         
         if (!isStatic) {
             w.println("              jobject receiver = frame.stack[--frame.sp].l;");
-            w.println("              if (!receiver) {");
+            w.println("              if (UNLIKELY(!receiver)) {");
             w.println("                  jclass npeClass = vm_find_class(env, \"java/lang/NullPointerException\");");
             w.println("                  if (npeClass) (*env)->ThrowNew(env, npeClass, \"\");");
             w.println("                  goto method_exit;");
@@ -208,7 +208,7 @@ public class InvokeHelper {
         w.println("                      frame.stackTypes[frame.sp++] = TYPE_REF; break;");
         w.println("              }");
         // Check exception
-        w.println("              if ((*env)->ExceptionCheck(env)) {");
+        w.println("              if (UNLIKELY((*env)->ExceptionCheck(env))) {");
         w.println("                  VM_LOG(\"Exception thrown at pc=%d\\n\", invokePc);");
         w.println("                  jthrowable exc = (*env)->ExceptionOccurred(env);");
         w.println("                  (*env)->ExceptionClear(env);");
@@ -217,7 +217,7 @@ public class InvokeHelper {
         w.println("                      frame.sp = 0;");
         w.println("                      frame.stack[frame.sp++].l = exc;");
         w.println("                      frame.pc = hPc;");
-        w.println("                      DISPATCH_NEXT;");  // 使用 DISPATCH_NEXT 而不是 continue
+        w.println("                      DISPATCH_NEXT;");
         w.println("                  }");
         w.println("                  VM_LOG(\"No handler found, rethrowing\\n\");");
         w.println("                  (*env)->Throw(env, exc);");

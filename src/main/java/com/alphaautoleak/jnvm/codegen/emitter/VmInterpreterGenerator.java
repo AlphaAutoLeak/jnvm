@@ -76,6 +76,12 @@ public class VmInterpreterGenerator {
             }
             w.println();
             
+            // === 分支预测提示宏 ===
+            w.println("// === 分支预测提示 ===");
+            w.println("#define LIKELY(x)   __builtin_expect(!!(x), 1)");
+            w.println("#define UNLIKELY(x) __builtin_expect(!!(x), 0)");
+            w.println();
+            
             // === 类和方法缓存系统（必须在辅助函数之前定义）===
             w.println("// === 类和方法ID缓存 ===");
             w.println("#define CLASS_CACHE_SIZE 256");
@@ -260,12 +266,14 @@ public class VmInterpreterGenerator {
         w.println("    };");
         w.println();
         
-        // DISPATCH_NEXT 宏 - 跳转到下一个指令
+        // DISPATCH_NEXT 宏 - 跳转到下一个指令（内联 meta 访问）
+        w.println("    // DISPATCH_NEXT: 内联 meta 访问，避免函数调用开销");
         w.println("    #define DISPATCH_NEXT \\");
         w.println("        do { \\");
-        w.println("            if (frame.pc >= m->bytecodeLen) goto method_exit; \\");
+        w.println("            if (UNLIKELY(frame.pc >= m->bytecodeLen)) goto method_exit; \\");
         w.println("            uint8_t _op = bytecode[frame.pc]; \\");
-        w.println("            meta = vm_get_meta(m, frame.pc); \\");
+        w.println("            int _metaIdx = m->pcToMetaIdx[frame.pc]; \\");
+        w.println("            meta = (_metaIdx >= 0) ? &m->metadata[_metaIdx] : NULL; \\");
         w.println("            VM_LOG(\"m%d: pc=%d op=0x%02x sp=%d\\n\", methodId, frame.pc, _op, frame.sp); \\");
         w.println("            goto *dispatch_table[_op]; \\");
         w.println("        } while(0)");
