@@ -115,9 +115,10 @@ public class VmInterpreterGenerator {
     }
     
     private void emitCachingSystem(PrintWriter w) {
-        w.println("// === 类和方法ID缓存 ===");
+        w.println("// === 类、方法ID、字段ID缓存 ===");
         w.println("#define CLASS_CACHE_SIZE 256");
         w.println("#define METHOD_CACHE_SIZE 1024");
+        w.println("#define FIELD_CACHE_SIZE 512");
         w.println();
         
         w.println("typedef struct {");
@@ -135,10 +136,22 @@ public class VmInterpreterGenerator {
         w.println("} MethodCacheEntry;");
         w.println();
         
+        w.println("typedef struct {");
+        w.println("    const char* owner;");
+        w.println("    const char* name;");
+        w.println("    const char* desc;");
+        w.println("    jfieldID fid;");
+        w.println("    jclass cls;");
+        w.println("    int isStatic;");
+        w.println("} FieldCacheEntry;");
+        w.println();
+        
         w.println("static ClassCacheEntry classCache[CLASS_CACHE_SIZE];");
         w.println("static int classCacheCount = 0;");
         w.println("static MethodCacheEntry methodCache[METHOD_CACHE_SIZE];");
         w.println("static int methodCacheCount = 0;");
+        w.println("static FieldCacheEntry fieldCache[FIELD_CACHE_SIZE];");
+        w.println("static int fieldCacheCount = 0;");
         w.println();
         
         w.println("static jclass vm_find_class(JNIEnv* env, const char* className) {");
@@ -197,6 +210,48 @@ public class VmInterpreterGenerator {
         w.println("        methodCacheCount++;");
         w.println("    }");
         w.println("    return mid;");
+        w.println("}");
+        w.println();
+        
+        w.println("static jfieldID vm_get_field_id(JNIEnv* env, jclass cls, const char* owner, const char* name, const char* desc) {");
+        w.println("    for (int i = 0; i < fieldCacheCount; i++) {");
+        w.println("        if (fieldCache[i].owner == owner && fieldCache[i].name == name && ");
+        w.println("            fieldCache[i].desc == desc && fieldCache[i].fid != NULL) {");
+        w.println("            return fieldCache[i].fid;");
+        w.println("        }");
+        w.println("    }");
+        w.println("    jfieldID fid = (*env)->GetFieldID(env, cls, name, desc);");
+        w.println("    if (fid && fieldCacheCount < FIELD_CACHE_SIZE) {");
+        w.println("        fieldCache[fieldCacheCount].owner = owner;");
+        w.println("        fieldCache[fieldCacheCount].name = name;");
+        w.println("        fieldCache[fieldCacheCount].desc = desc;");
+        w.println("        fieldCache[fieldCacheCount].fid = fid;");
+        w.println("        fieldCache[fieldCacheCount].cls = cls;");
+        w.println("        fieldCache[fieldCacheCount].isStatic = 0;");
+        w.println("        fieldCacheCount++;");
+        w.println("    }");
+        w.println("    return fid;");
+        w.println("}");
+        w.println();
+        
+        w.println("static jfieldID vm_get_static_field_id(JNIEnv* env, jclass cls, const char* owner, const char* name, const char* desc) {");
+        w.println("    for (int i = 0; i < fieldCacheCount; i++) {");
+        w.println("        if (fieldCache[i].owner == owner && fieldCache[i].name == name && ");
+        w.println("            fieldCache[i].desc == desc && fieldCache[i].fid != NULL) {");
+        w.println("            return fieldCache[i].fid;");
+        w.println("        }");
+        w.println("    }");
+        w.println("    jfieldID fid = (*env)->GetStaticFieldID(env, cls, name, desc);");
+        w.println("    if (fid && fieldCacheCount < FIELD_CACHE_SIZE) {");
+        w.println("        fieldCache[fieldCacheCount].owner = owner;");
+        w.println("        fieldCache[fieldCacheCount].name = name;");
+        w.println("        fieldCache[fieldCacheCount].desc = desc;");
+        w.println("        fieldCache[fieldCacheCount].fid = fid;");
+        w.println("        fieldCache[fieldCacheCount].cls = cls;");
+        w.println("        fieldCache[fieldCacheCount].isStatic = 1;");
+        w.println("        fieldCacheCount++;");
+        w.println("    }");
+        w.println("    return fid;");
         w.println("}");
         w.println();
     }

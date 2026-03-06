@@ -17,9 +17,9 @@ public class PutStaticInstruction extends Instruction {
         w.println("                { const char* owner = vm_get_string(meta->ownerIdx);");
         w.println("                  const char* name = vm_get_string(meta->nameIdx);");
         w.println("                  const char* desc = vm_get_string(meta->descIdx);");
-        w.println("                  jclass cls = vm_find_class(env, owner);");  // 使用缓存版本
+        w.println("                  jclass cls = vm_find_class(env, owner);");
         w.println("                  if (!cls) { frame.pc++; break; }");
-        w.println("                  jfieldID fid = (*env)->GetStaticFieldID(env, cls, name, desc);");
+        w.println("                  jfieldID fid = vm_get_static_field_id(env, cls, owner, name, desc);");  // 使用缓存版本
         w.println("                  if (!fid) { (*env)->ExceptionClear(env); frame.pc++; break; }");
         w.println("                  char t = desc[0];");
         w.println("                  if (t == 'I' || t == 'B' || t == 'C' || t == 'S' || t == 'Z')");
@@ -43,7 +43,7 @@ public class PutStaticInstruction extends Instruction {
         w.println("              const char* desc = vm_get_string(meta->descIdx);");
         w.println("              jclass cls = vm_find_class(env, owner);");
         w.println("              if (!cls) { frame.pc++; DISPATCH_NEXT; }");
-        w.println("              jfieldID fid = (*env)->GetStaticFieldID(env, cls, name, desc);");
+        w.println("              jfieldID fid = vm_get_static_field_id(env, cls, owner, name, desc);");  // 使用缓存版本
         w.println("              if (!fid) { (*env)->ExceptionClear(env); frame.pc++; DISPATCH_NEXT; }");
         w.println("              char t = desc[0];");
         w.println("              if (t == 'I' || t == 'B' || t == 'C' || t == 'S' || t == 'Z')");
