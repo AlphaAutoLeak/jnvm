@@ -1,6 +1,7 @@
 package com.alphaautoleak.jnvm.patcher;
 
 import com.alphaautoleak.jnvm.asm.MethodInfo;
+import com.alphaautoleak.jnvm.utils.BridgePackageNameGenerator;
 import org.objectweb.asm.ClassReader;
 import org.objectweb.asm.ClassWriter;
 import org.objectweb.asm.Opcodes;
@@ -8,6 +9,7 @@ import org.objectweb.asm.tree.ClassNode;
 import org.objectweb.asm.tree.MethodNode;
 
 import java.io.*;
+import java.nio.file.Files;
 import java.util.*;
 import java.util.jar.*;
 
@@ -58,10 +60,9 @@ public class JarPatcher {
         System.out.println("[PATCH] Bridge class: " + bridgeClass.replace('/', '.'));
 
         int patchedCount = 0;
-
         try (JarFile jar = new JarFile(inputJar);
              JarOutputStream jos = new JarOutputStream(
-                     new FileOutputStream(outputJar), jar.getManifest())) {
+                     Files.newOutputStream(outputJar.toPath()), jar.getManifest())) {
 
             Enumeration<JarEntry> entries = jar.entries();
             Set<String> written = new HashSet<>();

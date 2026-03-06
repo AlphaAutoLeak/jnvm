@@ -14,14 +14,12 @@ public class ConfigBuilder {
 
     public static ProtectConfig build(CommandLine cmd) {
         ProtectConfig config = new ProtectConfig();
-
         setInputJar(config, cmd);
         setOutputJar(config, cmd);
         setProtectRules(config, cmd);
         setTargets(config, cmd);
         setFlags(config, cmd);
         setPaths(config, cmd);
-
         return config;
     }
 
@@ -72,10 +70,6 @@ public class ConfigBuilder {
 
         config.setAntiDebug(
                 !cmd.hasOption("anti-debug") || Boolean.parseBoolean(cmd.getOptionValue("anti-debug"))
-        );
-
-        config.setGlobalBridge(
-                !cmd.hasOption("global-bridge") || Boolean.parseBoolean(cmd.getOptionValue("global-bridge"))
         );
     }
 

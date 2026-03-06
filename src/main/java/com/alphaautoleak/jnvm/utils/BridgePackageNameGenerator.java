@@ -1,11 +1,11 @@
-package com.alphaautoleak.jnvm.patcher;
+package com.alphaautoleak.jnvm.utils;
 
 import java.util.Random;
 
 /**
  * 生成随机的 Bridge 类包名
  */
-class BridgePackageNameGenerator {
+public class BridgePackageNameGenerator {
 
     private static final String[] PREFIXES = {
             "org", "com", "io", "net", "app", "core", "internal", "runtime",
@@ -29,7 +29,7 @@ class BridgePackageNameGenerator {
             "Dispatcher", "Resolver", "Mapper", "Adapter", "Connector", "Driver", "Agent"
     };
 
-    static String generate() {
+    public static String generate() {
         Random rand = new Random();
         int depth = 3 + rand.nextInt(3);
         StringBuilder sb = new StringBuilder();

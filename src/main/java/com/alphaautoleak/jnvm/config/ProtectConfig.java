@@ -15,7 +15,6 @@ public class ProtectConfig {
     private File configFile;       // protect.conf
     private List<String> targets = new ArrayList<>();
     private boolean antiDebug = true;
-    private boolean globalBridge = true;
     private File nativeDir;
 
     private boolean debug = false;
@@ -170,14 +169,6 @@ public class ProtectConfig {
 
     public void setAntiDebug(boolean antiDebug) {
         this.antiDebug = antiDebug;
-    }
-
-    public boolean isGlobalBridge() {
-        return globalBridge;
-    }
-
-    public void setGlobalBridge(boolean globalBridge) {
-        this.globalBridge = globalBridge;
     }
 
     public File getNativeDir() {

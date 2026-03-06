@@ -44,6 +44,8 @@ bin/
 /native/
 /.idea/
 demo-protected.jar
-demo.jar
+test/demo.jar
 calculations.txt
 /test_invokedynamic/
+/test/
+/test
