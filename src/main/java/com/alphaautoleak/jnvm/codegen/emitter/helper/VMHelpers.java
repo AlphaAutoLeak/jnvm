@@ -18,7 +18,7 @@ public class VMHelpers {
         helpers.add(new UnboxHelper());
         helpers.add(new InvokeDynamicHelper());
         helpers.add(new ExceptionHelper());
-        helpers.add(new BoxHelper());
+        // BoxHelper 已移除 - 使用类型特化的执行函数替代装箱
     }
     
     public List<VMHelper> getAllHelpers() {
