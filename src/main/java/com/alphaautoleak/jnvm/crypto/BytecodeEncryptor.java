@@ -11,6 +11,12 @@ import java.util.List;
  */
 public class BytecodeEncryptor {
 
+    private final boolean encryptBytecode;
+
+    public BytecodeEncryptor(boolean encryptBytecode) {
+        this.encryptBytecode = encryptBytecode;
+    }
+
     /**
      * 加密所有方法
      *
@@ -19,10 +25,14 @@ public class BytecodeEncryptor {
      */
     public List<EncryptedMethodData> encryptAll(List<MethodInfo> methods) {
         // 先做自检
-        if (!CryptoUtils.selfTest()) {
+        if (encryptBytecode && !CryptoUtils.selfTest()) {
             throw new RuntimeException("ChaCha20 self-test FAILED! Aborting.");
         }
-        System.out.println("[CRYPTO] ChaCha20 self-test passed.");
+        if (encryptBytecode) {
+            System.out.println("[CRYPTO] ChaCha20 self-test passed.");
+        } else {
+            System.out.println("[CRYPTO] Bytecode encryption disabled (plaintext mode).");
+        }
 
         List<EncryptedMethodData> result = new ArrayList<>();
 
@@ -33,7 +43,7 @@ public class BytecodeEncryptor {
             System.out.println("  [ENC] " + encrypted);
         }
 
-        System.out.println("[CRYPTO] Encrypted " + result.size() + " methods.");
+        System.out.println("[CRYPTO] Processed " + result.size() + " methods.");
         return result;
     }
 
@@ -43,24 +53,29 @@ public class BytecodeEncryptor {
     private EncryptedMethodData encryptMethod(MethodInfo method) {
         byte[] plaintext = method.getBytecode();
 
-        // 生成独立的密钥和 nonce
-        byte[] key = CryptoUtils.generateKey();
-        byte[] nonce = CryptoUtils.generateNonce();
+        if (encryptBytecode) {
+            // 生成独立的密钥和 nonce
+            byte[] key = CryptoUtils.generateKey();
+            byte[] nonce = CryptoUtils.generateNonce();
 
-        // 加密
-        byte[] ciphertext = CryptoUtils.chacha20(key, nonce, 0, plaintext);
+            // 加密
+            byte[] ciphertext = CryptoUtils.chacha20(key, nonce, 0, plaintext);
 
-        // 验证：解密回来确认正确
-        byte[] verify = CryptoUtils.chacha20(key, nonce, 0, ciphertext);
-        for (int i = 0; i < plaintext.length; i++) {
-            if (plaintext[i] != verify[i]) {
-                throw new RuntimeException(
-                        "Encryption verification failed for method: "
-                                + method.getOwner() + "." + method.getName()
-                );
+            // 验证：解密回来确认正确
+            byte[] verify = CryptoUtils.chacha20(key, nonce, 0, ciphertext);
+            for (int i = 0; i < plaintext.length; i++) {
+                if (plaintext[i] != verify[i]) {
+                    throw new RuntimeException(
+                            "Encryption verification failed for method: "
+                                    + method.getOwner() + "." + method.getName()
+                    );
+                }
             }
-        }
 
-        return new EncryptedMethodData(method, ciphertext, key, nonce);
+            return new EncryptedMethodData(method, ciphertext, key, nonce, true);
+        } else {
+            // 不加密：直接使用原始字节码
+            return new EncryptedMethodData(method, plaintext, null, null, false);
+        }
     }
 }

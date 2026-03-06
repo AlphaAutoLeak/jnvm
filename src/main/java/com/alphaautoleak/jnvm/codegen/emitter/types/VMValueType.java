@@ -43,6 +43,7 @@ public class VMValueType {
         w.println("    VMValue* stack;   // 操作栈");
         w.println("    VMValue* locals;  // 局部变量表");
         w.println("    VMType* stackTypes;  // 栈类型跟踪");
+        w.println("    jclass callerClass;  // 调用者类（用于类加载器一致性）");
         w.println("} VMFrame;");
         w.println();
     }

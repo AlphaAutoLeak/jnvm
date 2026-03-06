@@ -28,17 +28,20 @@ public class EncryptedMethodData {
     /** 访问标志 */
     private final int access;
 
-    /** 加密后的字节码 */
+    /** 加密后的字节码（或原始字节码，如果 encryptBytecode=false） */
     private final byte[] encryptedBytecode;
 
     /** 原始字节码长度（解密时需要） */
     private final int originalLength;
 
-    /** 加密密钥 (32 bytes) */
+    /** 加密密钥 (32 bytes)，如果 encryptBytecode=false 则为 null */
     private final byte[] key;
 
-    /** 加密 nonce (12 bytes) */
+    /** 加密 nonce (12 bytes)，如果 encryptBytecode=false 则为 null */
     private final byte[] nonce;
+
+    /** 是否加密 */
+    private final boolean encrypted;
 
     /** max_stack */
     private final int maxStack;
@@ -68,7 +71,7 @@ public class EncryptedMethodData {
     private final boolean isSynchronized;
 
     public EncryptedMethodData(MethodInfo info, byte[] encryptedBytecode,
-                               byte[] key, byte[] nonce) {
+                               byte[] key, byte[] nonce, boolean encrypted) {
         this.methodId = info.getMethodId();
         this.owner = info.getOwner();
         this.name = info.getName();
@@ -78,6 +81,7 @@ public class EncryptedMethodData {
         this.originalLength = info.getBytecode().length;
         this.key = key;
         this.nonce = nonce;
+        this.encrypted = encrypted;
         this.maxStack = info.getMaxStack();
         this.maxLocals = info.getMaxLocals();
         this.metadata = info.getMetadata();
@@ -100,6 +104,7 @@ public class EncryptedMethodData {
     public int getOriginalLength() { return originalLength; }
     public byte[] getKey() { return key; }
     public byte[] getNonce() { return nonce; }
+    public boolean isEncrypted() { return encrypted; }
     public int getMaxStack() { return maxStack; }
     public int getMaxLocals() { return maxLocals; }
     public List<MetaEntry> getMetadata() { return metadata; }
@@ -113,9 +118,9 @@ public class EncryptedMethodData {
     @Override
     public String toString() {
         return String.format(
-                "Encrypted{id=%d, %s.%s, bytecode=%d→%d bytes, meta=%d, strings=%d, exc=%d, bsm=%d}",
+                "Encrypted{id=%d, %s.%s, bytecode=%d bytes, encrypted=%b, meta=%d, strings=%d, exc=%d, bsm=%d}",
                 methodId, owner, name,
-                originalLength, encryptedBytecode.length,
+                originalLength, encrypted,
                 metadata.size(), stringPool.size(), exceptionTable.size(), bootstrapMethods.size()
         );
     }

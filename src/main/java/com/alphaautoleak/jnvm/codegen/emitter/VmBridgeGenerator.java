@@ -40,8 +40,8 @@ public class VmBridgeGenerator {
         w.println("/* 本地方法实现 */");
         w.println("static jobject JNICALL native_execute(JNIEnv* env, jclass cls,");
         w.println("                                     jint methodId, jobject instance,");
-        w.println("                                     jobjectArray args) {");
-        w.println("    return vm_execute_method(env, methodId, instance, args);");
+        w.println("                                     jobjectArray args, jclass callerClass) {");
+        w.println("    return vm_execute_method(env, methodId, instance, args, callerClass);");
         w.println("}");
         w.println();
     }
@@ -50,10 +50,10 @@ public class VmBridgeGenerator {
      * 生成 RegisterNatives 表和注册函数
      */
     private void emitRegisterNatives(PrintWriter w) {
-        // JNI 方法签名: (int, Object, Object[])Object
+        // JNI 方法签名: (int, Object, Object[], Class)Object
         w.println("/* JNI 方法注册表 */");
         w.println("static JNINativeMethod native_methods[] = {");
-        w.println("    { \"execute\", \"(ILjava/lang/Object;[Ljava/lang/Object;)Ljava/lang/Object;\", (void*)native_execute }");
+        w.println("    { \"execute\", \"(ILjava/lang/Object;[Ljava/lang/Object;Ljava/lang/Class;)Ljava/lang/Object;\", (void*)native_execute }");
         w.println("};");
         w.println();
 

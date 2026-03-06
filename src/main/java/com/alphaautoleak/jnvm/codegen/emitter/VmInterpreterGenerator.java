@@ -46,7 +46,7 @@ public class VmInterpreterGenerator {
             }
             
             w.println();
-            w.println("jobject vm_execute_method(JNIEnv* env, int methodId, jobject instance, jobjectArray args);");
+            w.println("jobject vm_execute_method(JNIEnv* env, int methodId, jobject instance, jobjectArray args, jclass callerClass);");
             w.println();
             w.println("#endif");
         }
@@ -96,21 +96,39 @@ public class VmInterpreterGenerator {
     }
     
     private void emitExecuteMethod(PrintWriter w) {
-        w.println("jobject vm_execute_method(JNIEnv* env, int methodId, jobject instance, jobjectArray args) {");
+        // 字节码缓存 - 避免每次调用都解密
+        w.println("// 字节码缓存（延迟初始化）");
+        w.println("static uint8_t* vm_bytecode_cache = NULL;");
+        w.println("static int vm_bytecode_cache_size = 0;");
+        w.println();
+        
+        w.println("jobject vm_execute_method(JNIEnv* env, int methodId, jobject instance, jobjectArray args, jclass callerClass) {");
         w.println("    methodId ^= METHOD_ID_XOR_KEY;");
         w.println("    if (methodId < 0 || methodId >= vm_method_count) return NULL;");
         w.println("    VMMethod* m = &vm_methods[methodId];");
         w.println();
         
-        // 解密字节码
-        w.println("    uint8_t* bytecode = (uint8_t*)malloc(m->bytecodeLen);");
-        w.println("    chacha20_encrypt(m->key, m->nonce, m->bytecode, bytecode, m->bytecodeLen);");
+        // 解密字节码（使用缓存）
+        w.println("    // 使用方法结构中的缓存指针");
+        w.println("    uint8_t* bytecode;");
+        w.println("    if (m->encrypted) {");
+        w.println("        if (m->cachedBytecode == NULL) {");
+        w.println("            bytecode = (uint8_t*)malloc(m->bytecodeLen);");
+        w.println("            chacha20_encrypt(m->key, m->nonce, m->bytecode, bytecode, m->bytecodeLen);");
+        w.println("            m->cachedBytecode = bytecode;");
+        w.println("        } else {");
+        w.println("            bytecode = m->cachedBytecode;");
+        w.println("        }");
+        w.println("    } else {");
+        w.println("        // 不加密时直接使用原始字节码");
+        w.println("        bytecode = m->bytecode;");
+        w.println("    }");
         w.println();
         
         // 初始化帧
         w.println("    VMValue result = {0};");
         w.println("    char resultType = 'V';  // 'V'=void, 'I'=int, 'J'=long, 'F'=float, 'D'=double, 'L'=object");
-        w.println("    VMFrame frame = { .pc = 0, .sp = 0 };");
+        w.println("    VMFrame frame = { .pc = 0, .sp = 0, .callerClass = callerClass };");
         w.println("    frame.stack = (VMValue*)calloc(m->maxStack, sizeof(VMValue));");
         w.println("    frame.locals = (VMValue*)calloc(m->maxLocals, sizeof(VMValue));");
         w.println("    frame.stackTypes = (VMType*)calloc(m->maxStack, sizeof(VMType));");
@@ -124,6 +142,7 @@ public class VmInterpreterGenerator {
         
         // 主循环
         w.println("    VM_LOG(\"Executing method %d, bytecodeLen=%d\\n\", methodId, m->bytecodeLen);");
+        w.println("    fflush(stdout);");
         w.println("    while (frame.pc < m->bytecodeLen) {");
         w.println("        uint8_t opcode = bytecode[frame.pc];");
         w.println("        MetaEntry* meta = vm_get_meta(m, frame.pc);");
@@ -170,11 +189,14 @@ public class VmInterpreterGenerator {
         w.println("        if (*p == ')') methodReturnType = *(p + 1);");
         w.println("    }");
         w.println("    VM_LOG(\"Method %d finished, returnType=%c\\n\", methodId, methodReturnType);");
+        w.println("    fflush(stdout);");
         w.println("    jobject resultObj = vm_box_result(env, result, methodReturnType);");
         w.println("    free(frame.locals);");
         w.println("    free(frame.stack);");
         w.println("    free(frame.stackTypes);");
-        w.println("    free(bytecode);");
+        w.println("    // 注意: bytecode 不应该在这里释放:");
+        w.println("    // - 加密方法: bytecode 是缓存在 m->cachedBytecode 中，后续调用会重用");
+        w.println("    // - 非加密方法: bytecode 指向 m->bytecode (静态数据)，不能释放");
         w.println("    return resultObj;");
         w.println("}");
     }

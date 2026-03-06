@@ -301,9 +301,10 @@ public class BytecodeExtractor {
         } else if (cst instanceof Type) {
             Type t = (Type) cst;
             meta.type = MetaType.META_CLASS;
-            String desc = t.getDescriptor();
-            meta.classIdx = getStringIndex(desc);
-            meta.classLen = desc.length();
+            // 使用内部名称（如 "java/lang/String"）而不是描述符（如 "Ljava/lang/String;"）
+            String internalName = t.getInternalName();
+            meta.classIdx = getStringIndex(internalName);
+            meta.classLen = internalName.length();
         } else if (cst instanceof Handle) {
             // MethodHandle - 暂时作为字符串存储
             Handle h = (Handle) cst;

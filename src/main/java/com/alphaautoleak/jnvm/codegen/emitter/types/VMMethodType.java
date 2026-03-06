@@ -29,10 +29,11 @@ public class VMMethodType {
         w.println("    int methodId;");
         w.println("    int maxStack;");
         w.println("    int maxLocals;");
-        w.println("    uint8_t* bytecode;       // 加密的指令序列");
+        w.println("    uint8_t* bytecode;       // 指令序列（加密或明文）");
         w.println("    int bytecodeLen;");
-        w.println("    uint8_t key[32];         // ChaCha20 密钥");
-        w.println("    uint8_t nonce[12];       // ChaCha20 nonce");
+        w.println("    uint8_t key[32];         // ChaCha20 密钥（仅当 encrypted=1 时有效）");
+        w.println("    uint8_t nonce[12];       // ChaCha20 nonce（仅当 encrypted=1 时有效）");
+        w.println("    int encrypted;           // 字节码是否加密");
         w.println("    MetaEntry* metadata;     // 元数据数组");
         w.println("    int metadataCount;");
         w.println("    int* pcToMetaIdx;        // PC -> 元数据索引映射");
@@ -41,6 +42,7 @@ public class VMMethodType {
         w.println("    int isStatic;            // 是否静态方法");
         w.println("    VMExceptionEntry* exceptionTable;  // 异常表");
         w.println("    int exceptionTableLength;         // 异常表长度");
+        w.println("    uint8_t* cachedBytecode; // 解密后的字节码缓存（延迟初始化，仅当 encrypted=1 时使用）");
         w.println("} VMMethod;");
         w.println();
     }

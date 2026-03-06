@@ -211,20 +211,28 @@ public class VmDataGenerator {
                     method.getMethodId(), method.getMaxStack(), method.getMaxLocals());
                 w.printf(".bytecode=(uint8_t*)m%d_bc, .bytecodeLen=%d, ",
                     method.getMethodId(), method.getEncryptedBytecode().length);
-                // 添加 key
-                w.printf(".key={");
-                byte[] key = method.getKey();
-                for (int i = 0; i < key.length; i++) {
-                    w.printf("0x%02x%s", key[i] & 0xFF, (i < key.length - 1 ? ", " : ""));
+                
+                // 只有加密时才生成 key 和 nonce
+                if (method.isEncrypted()) {
+                    // 添加 key
+                    w.printf(".key={");
+                    byte[] key = method.getKey();
+                    for (int i = 0; i < key.length; i++) {
+                        w.printf("0x%02x%s", key[i] & 0xFF, (i < key.length - 1 ? ", " : ""));
+                    }
+                    w.printf("}, ");
+                    // 添加 nonce
+                    w.printf(".nonce={");
+                    byte[] nonce = method.getNonce();
+                    for (int i = 0; i < nonce.length; i++) {
+                        w.printf("0x%02x%s", nonce[i] & 0xFF, (i < nonce.length - 1 ? ", " : ""));
+                    }
+                    w.printf("}, ");
+                    w.printf(".encrypted=1, ");
+                } else {
+                    w.printf(".encrypted=0, ");
                 }
-                w.printf("}, ");
-                // 添加 nonce
-                w.printf(".nonce={");
-                byte[] nonce = method.getNonce();
-                for (int i = 0; i < nonce.length; i++) {
-                    w.printf("0x%02x%s", nonce[i] & 0xFF, (i < nonce.length - 1 ? ", " : ""));
-                }
-                w.printf("}, ");
+                
                 w.printf(".metadata=m%d_meta, .metadataCount=%d, ",
                     method.getMethodId(), method.getMetadata().size());
                 w.printf(".pcToMetaIdx=m%d_pc2meta, ", method.getMethodId());
@@ -293,16 +301,17 @@ public class VmDataGenerator {
             w.println("};");
             w.println();
         } else {
-            // 非加密模式：直接存储明文字符串
+            // 非加密模式：直接存储明文字符串（添加 null 终止符）
             int idx = 0;
             for (String s : strings) {
                 byte[] bytes = s.getBytes(StandardCharsets.UTF_8);
                 w.printf("static const char vm_str_%d[] = {", idx);
                 for (int i = 0; i < bytes.length; i++) {
                     if (i % 16 == 0) w.printf("\n    ");
-                    w.printf("0x%02x%s", bytes[i] & 0xFF, (i < bytes.length - 1 ? ", " : ""));
+                    w.printf("0x%02x, ", bytes[i] & 0xFF);
                 }
-                w.println("\n};");
+                w.println("\n    0x00");  // null 终止符
+                w.println("};");
                 idx++;
             }
             w.println();
@@ -353,10 +362,10 @@ public class VmDataGenerator {
                             w.printf(".longVal=%dL", (Long) arg);
                             break;
                         case FLOAT:
-                            w.printf(".floatVal=%ff", (Float) arg);
+                            w.printf(".floatVal=%af", (Float) arg);
                             break;
                         case DOUBLE:
-                            w.printf(".doubleVal=%f", (Double) arg);
+                            w.printf(".doubleVal=%a", (Double) arg);
                             break;
                         case METHOD_TYPE:
                             w.printf(".strIdx=%d", getOrAddStringIndex(arg.toString()));
@@ -550,10 +559,10 @@ public class VmDataGenerator {
                         w.printf(".longVal=%dL", m.longVal);
                         break;
                     case META_FLOAT:
-                        w.printf(".floatVal=%ff", m.floatVal);
+                        w.printf(".floatVal=%af", m.floatVal);
                         break;
                     case META_DOUBLE:
-                        w.printf(".doubleVal=%f", m.doubleVal);
+                        w.printf(".doubleVal=%a", m.doubleVal);
                         break;
                     case META_STRING:
                         w.printf(".strIdx=%d, .strLen=%d", 

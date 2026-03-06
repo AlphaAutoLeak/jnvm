@@ -15,7 +15,7 @@ public class MethodBodyRewriter {
 
     /** execute 方法描述符 */
     private static final String EXECUTE_DESC =
-            "(ILjava/lang/Object;[Ljava/lang/Object;)Ljava/lang/Object;";
+            "(ILjava/lang/Object;[Ljava/lang/Object;Ljava/lang/Class;)Ljava/lang/Object;";
 
     MethodBodyRewriter(String bridgeClass, int methodIdXorKey) {
         this.bridgeClass = bridgeClass;
@@ -53,7 +53,10 @@ public class MethodBodyRewriter {
             localIdx += argTypes[i].getSize();
         }
 
-        // 4. 调用 VMBridge.execute(methodId, instance, args)
+        // 4. 压入调用者类的 Class 对象（用于类加载器一致性）
+        insns.add(new LdcInsnNode(org.objectweb.asm.Type.getType("L" + cn.name + ";")));
+
+        // 5. 调用 VMBridge.execute(methodId, instance, args, callerClass)
         insns.add(new MethodInsnNode(
                 Opcodes.INVOKESTATIC,
                 bridgeClass,

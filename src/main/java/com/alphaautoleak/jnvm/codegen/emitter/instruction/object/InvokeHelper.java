@@ -8,7 +8,8 @@ import java.io.PrintWriter;
 public class InvokeHelper {
     
     public static void generate(PrintWriter w, boolean isStatic) {
-        w.println("                { if (!meta) { VM_LOG(\"INVOKE: meta is NULL at pc=%d\\n\", frame.pc); frame.pc++; break; }");
+        w.println("                { int invokePc = frame.pc;  // Save PC before invocation");
+        w.println("                  if (!meta) { VM_LOG(\"INVOKE: meta is NULL at pc=%d\\n\", frame.pc); frame.pc++; break; }");
         w.println("                  const char* owner = vm_get_string(meta->ownerIdx);");
         w.println("                  const char* name = vm_get_string(meta->nameIdx);");
         w.println("                  const char* desc = vm_get_string(meta->descIdx);");
@@ -82,11 +83,33 @@ public class InvokeHelper {
         w.println("                          frame.stackTypes[frame.sp++] = TYPE_DOUBLE; break;");
         w.println("                      default:");
         if (isStatic) {
-            w.println("                          frame.stack[frame.sp].l = (*env)->CallStaticObjectMethodA(env, cls, mid, args);");
+            w.println("                          { jobject _res = (*env)->CallStaticObjectMethodA(env, cls, mid, args);");
+            w.println("                            VM_LOG(\"INVOKE: CallStaticObjectMethodA returned %p\\n\", _res);");
+            w.println("                            fflush(stdout);");
+            w.println("                            frame.stack[frame.sp].l = _res; }");
         } else {
-            w.println("                          frame.stack[frame.sp].l = (*env)->CallObjectMethodA(env, receiver, mid, args);");
+            w.println("                          { jobject _res = (*env)->CallObjectMethodA(env, receiver, mid, args);");
+            w.println("                            VM_LOG(\"INVOKE: CallObjectMethodA returned %p\\n\", _res);");
+            w.println("                            fflush(stdout);");
+            w.println("                            frame.stack[frame.sp].l = _res; }");
         }
         w.println("                          frame.stackTypes[frame.sp++] = TYPE_REF; break;");
+        w.println("                  }");
+        // Check exception immediately after method call with correct PC
+        w.println("                  if ((*env)->ExceptionCheck(env)) {");
+        w.println("                      VM_LOG(\"Exception thrown at pc=%d\\n\", invokePc);");
+        w.println("                      jthrowable exc = (*env)->ExceptionOccurred(env);");
+        w.println("                      (*env)->ExceptionClear(env);");
+        w.println("                      int hPc = vm_find_exception_handler(env, m, invokePc, exc);");
+        w.println("                      if (hPc >= 0) {");
+        w.println("                          frame.sp = 0;");
+        w.println("                          frame.stack[frame.sp++].l = exc;");
+        w.println("                          frame.pc = hPc;");
+        w.println("                          continue;");
+        w.println("                      }");
+        w.println("                      VM_LOG(\"No handler found, rethrowing\\n\");");
+        w.println("                      (*env)->Throw(env, exc);");
+        w.println("                      goto method_exit;");
         w.println("                  }");
         w.println("                }");
         w.println("                frame.pc++;");

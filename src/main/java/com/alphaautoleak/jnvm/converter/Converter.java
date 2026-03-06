@@ -55,7 +55,7 @@ public class Converter {
 
         // ===== STEP 2: 加密字节码 =====
         System.out.println("[STEP 2/7] Encrypting bytecode...");
-        BytecodeEncryptor encryptor = new BytecodeEncryptor();
+        BytecodeEncryptor encryptor = new BytecodeEncryptor(config.isEncryptBytecode());
         encryptedMethods = encryptor.encryptAll(protectedMethods);
         System.out.println();
 

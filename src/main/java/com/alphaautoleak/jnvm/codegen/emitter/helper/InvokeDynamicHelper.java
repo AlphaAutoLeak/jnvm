@@ -31,9 +31,6 @@ public class InvokeDynamicHelper extends VMHelper {
         w.println("    VMBootstrapMethod* bsm = &vm_bootstrap_methods[meta->bsmIdx];");
         w.println("    const char* bsmClass = vm_get_string(bsm->ownerIdx);");
         w.println();
-        w.println("    if (strstr(bsmClass, \"LambdaMetafactory\") == NULL) {");
-        w.println("        VM_LOG(\"INVOKEDYNAMIC: Unsupported bootstrap: %s\\n\", bsmClass); return NULL;");
-        w.println("    }");
         w.println();
         emitLambdaFactory(w);
         w.println("}");

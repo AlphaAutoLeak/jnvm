@@ -17,7 +17,7 @@ class BridgeClassGenerator {
 
     /** execute 方法描述符 */
     private static final String EXECUTE_DESC =
-            "(ILjava/lang/Object;[Ljava/lang/Object;)Ljava/lang/Object;";
+            "(ILjava/lang/Object;[Ljava/lang/Object;Ljava/lang/Class;)Ljava/lang/Object;";
 
     BridgeClassGenerator(String bridgeClass) {
         this.bridgeClass = bridgeClass;

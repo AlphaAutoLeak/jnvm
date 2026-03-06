@@ -70,6 +70,12 @@ public class CliOptions {
                 .build());
 
         options.addOption(Option.builder()
+                .longOpt("encrypt-bytecode")
+                .desc("Enable ChaCha20 bytecode encryption (default: true)")
+                .hasArg().argName("BOOL")
+                .build());
+
+        options.addOption(Option.builder()
                 .longOpt("global-bridge")
                 .desc("Use single global native entry point (default: true)")
                 .hasArg().argName("BOOL")
