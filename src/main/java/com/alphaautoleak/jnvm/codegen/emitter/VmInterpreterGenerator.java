@@ -41,6 +41,11 @@ public class VmInterpreterGenerator {
             w.println("#include \"vm_types.h\"");
             w.println();
             
+            // 帧内存池初始化
+            w.println("// 帧内存池初始化（在 JNI_OnLoad 中调用）");
+            w.println("void frame_pool_init(void);");
+            w.println();
+            
             // 辅助函数声明
             for (VMHelper helper : helpers.getAllHelpers()) {
                 helper.generateHeader(w);
@@ -115,6 +120,53 @@ public class VmInterpreterGenerator {
     }
     
     private void emitCachingSystem(PrintWriter w) {
+        // === 帧内存池 ===
+        w.println("// === 帧内存池 (避免每次 calloc/free) ===");
+        w.println("#define FRAME_POOL_SIZE (2 * 1024 * 1024)  // 2MB 池");
+        w.println("#define MAX_FRAME_DEPTH 64                  // 最大调用嵌套深度");
+        w.println();
+        w.println("typedef struct {");
+        w.println("    uint8_t* base;                         // 池基址");
+        w.println("    size_t offset;                         // 当前分配偏移");
+        w.println("    size_t frameOffsets[MAX_FRAME_DEPTH];  // 每帧起始偏移栈");
+        w.println("    int depth;                             // 当前帧深度");
+        w.println("} FramePool;");
+        w.println();
+        w.println("static FramePool framePool;");
+        w.println();
+        w.println("// 初始化帧池（在 JNI_OnLoad 中调用）");
+        w.println("void frame_pool_init(void) {");
+        w.println("    framePool.base = (uint8_t*)malloc(FRAME_POOL_SIZE);");
+        w.println("    framePool.offset = 0;");
+        w.println("    framePool.depth = 0;");
+        w.println("}");
+        w.println();
+        w.println("// 进入方法帧 - 保存当前位置并分配");
+        w.println("static VMValue* frame_pool_push(int count) {");
+        w.println("    size_t size = count * sizeof(VMValue);");
+        w.println("    size = (size + 15) & ~(size_t)15;  // 16字节对齐");
+        w.println("    if (framePool.offset + size > FRAME_POOL_SIZE || framePool.depth >= MAX_FRAME_DEPTH) {");
+        w.println("        return (VMValue*)calloc(count, sizeof(VMValue));  // 池满则回退");
+        w.println("    }");
+        w.println("    framePool.frameOffsets[framePool.depth++] = framePool.offset;");
+        w.println("    VMValue* ptr = (VMValue*)(framePool.base + framePool.offset);");
+        w.println("    framePool.offset += size;");
+        w.println("    memset(ptr, 0, size);  // 清零");
+        w.println("    return ptr;");
+        w.println("}");
+        w.println();
+        w.println("// 退出方法帧 - 恢复指针");
+        w.println("static void frame_pool_pop(VMValue* ptr) {");
+        w.println("    if (ptr >= (VMValue*)framePool.base && ptr < (VMValue*)(framePool.base + FRAME_POOL_SIZE)) {");
+        w.println("        framePool.depth--;");
+        w.println("        framePool.offset = framePool.frameOffsets[framePool.depth];");
+        w.println("    } else {");
+        w.println("        free(ptr);  // 池外分配，直接释放");
+        w.println("    }");
+        w.println("}");
+        w.println();
+        
+        // === 哈希缓存系统 ===
         w.println("// === 哈希缓存系统 (O(1) 查找) ===");
         w.println("#define CLASS_CACHE_SIZE 256    // 必须是 2 的幂");
         w.println("#define METHOD_CACHE_SIZE 1024  // 必须是 2 的幂");
@@ -276,10 +328,10 @@ public class VmInterpreterGenerator {
         w.println("    uint8_t* bytecode = m->bytecode;");
         w.println();
         
-        // 初始化帧
+        // 初始化帧（使用内存池）
         w.println("    VMFrame frame = { .pc = 0, .sp = 0, .callerClass = callerClass };");
-        w.println("    frame.stack = (VMValue*)calloc(m->maxStack, sizeof(VMValue));");
-        w.println("    frame.locals = (VMValue*)calloc(m->maxLocals, sizeof(VMValue));");
+        w.println("    frame.stack = frame_pool_push(m->maxStack);");
+        w.println("    frame.locals = frame_pool_push(m->maxLocals);");
         w.println();
         
         // 设置参数
@@ -343,8 +395,8 @@ public class VmInterpreterGenerator {
         w.println("    if (frame.sp > 0) {");
         w.println("        execResult.value = frame.stack[frame.sp - 1];");
         w.println("    }");
-        w.println("    free(frame.locals);");
-        w.println("    free(frame.stack);");
+        w.println("    frame_pool_pop(frame.locals);");
+        w.println("    frame_pool_pop(frame.stack);");
         w.println("    return execResult;");
         w.println("}");
         w.println();

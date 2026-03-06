@@ -140,6 +140,9 @@ public class VmBridgeGenerator {
         w.println("        return JNI_ERR;");
         w.println("    }");
         w.println();
+        w.println("    // 初始化帧内存池");
+        w.println("    frame_pool_init();");
+        w.println();
         if (encryptStrings) {
             w.println("    // 初始化字符串池（解密所有字符串）");
             w.println("    vm_init_strings();");
