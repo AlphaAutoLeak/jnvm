@@ -211,28 +211,6 @@ public class VmDataGenerator {
                     method.getMethodId(), method.getMaxStack(), method.getMaxLocals());
                 w.printf(".bytecode=(uint8_t*)m%d_bc, .bytecodeLen=%d, ",
                     method.getMethodId(), method.getEncryptedBytecode().length);
-                
-                // 只有加密时才生成 key 和 nonce
-                if (method.isEncrypted()) {
-                    // 添加 key
-                    w.printf(".key={");
-                    byte[] key = method.getKey();
-                    for (int i = 0; i < key.length; i++) {
-                        w.printf("0x%02x%s", key[i] & 0xFF, (i < key.length - 1 ? ", " : ""));
-                    }
-                    w.printf("}, ");
-                    // 添加 nonce
-                    w.printf(".nonce={");
-                    byte[] nonce = method.getNonce();
-                    for (int i = 0; i < nonce.length; i++) {
-                        w.printf("0x%02x%s", nonce[i] & 0xFF, (i < nonce.length - 1 ? ", " : ""));
-                    }
-                    w.printf("}, ");
-                    w.printf(".encrypted=1, ");
-                } else {
-                    w.printf(".encrypted=0, ");
-                }
-                
                 w.printf(".metadata=m%d_meta, .metadataCount=%d, ",
                     method.getMethodId(), method.getMetadata().size());
                 w.printf(".pcToMetaIdx=m%d_pc2meta, ", method.getMethodId());

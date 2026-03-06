@@ -89,10 +89,6 @@ public class ConfigBuilder {
         if (cmd.hasOption("encrypt-strings")) {
             config.setEncryptStrings(Boolean.parseBoolean(cmd.getOptionValue("encrypt-strings")));
         }
-
-        if (cmd.hasOption("encrypt-bytecode")) {
-            config.setEncryptBytecode(Boolean.parseBoolean(cmd.getOptionValue("encrypt-bytecode")));
-        }
     }
 
     private static void setNativeDir(ProtectConfig config, CommandLine cmd) {

@@ -272,19 +272,8 @@ public class VmInterpreterGenerator {
         w.println("    VMMethod* m = &vm_methods[methodId];");
         w.println();
         
-        // 解密字节码
-        w.println("    uint8_t* bytecode;");
-        w.println("    if (m->encrypted) {");
-        w.println("        if (m->cachedBytecode == NULL) {");
-        w.println("            bytecode = (uint8_t*)malloc(m->bytecodeLen);");
-        w.println("            chacha20_encrypt(m->key, m->nonce, m->bytecode, bytecode, m->bytecodeLen);");
-        w.println("            m->cachedBytecode = bytecode;");
-        w.println("        } else {");
-        w.println("            bytecode = m->cachedBytecode;");
-        w.println("        }");
-        w.println("    } else {");
-        w.println("        bytecode = m->bytecode;");
-        w.println("    }");
+        // 字节码直接使用（不再加密）
+        w.println("    uint8_t* bytecode = m->bytecode;");
         w.println();
         
         // 初始化帧

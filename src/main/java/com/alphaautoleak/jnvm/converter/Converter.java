@@ -53,9 +53,9 @@ public class Converter {
         System.out.println("  Total metadata:     " + totalMetadata + " entries");
         System.out.println();
 
-        // ===== STEP 2: 加密字节码 =====
+        // ===== STEP 2: 封装字节码数据 =====
         System.out.println("[STEP 2/7] Encrypting bytecode...");
-        BytecodeEncryptor encryptor = new BytecodeEncryptor(config.isEncryptBytecode());
+        BytecodeEncryptor encryptor = new BytecodeEncryptor();
         encryptedMethods = encryptor.encryptAll(protectedMethods);
         System.out.println();
 

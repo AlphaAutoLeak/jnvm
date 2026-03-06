@@ -8,7 +8,7 @@ import com.alphaautoleak.jnvm.asm.MethodInfo;
 import java.util.List;
 
 /**
- * 一个方法加密后的完整数据包。
+ * 一个方法的完整数据包（字节码以明文存储，ChaCha20 仅用于字符串加密）
  * 所有字段将被序列化到 C 源码中。
  */
 public class EncryptedMethodData {
@@ -28,20 +28,8 @@ public class EncryptedMethodData {
     /** 访问标志 */
     private final int access;
 
-    /** 加密后的字节码（或原始字节码，如果 encryptBytecode=false） */
-    private final byte[] encryptedBytecode;
-
-    /** 原始字节码长度（解密时需要） */
-    private final int originalLength;
-
-    /** 加密密钥 (32 bytes)，如果 encryptBytecode=false 则为 null */
-    private final byte[] key;
-
-    /** 加密 nonce (12 bytes)，如果 encryptBytecode=false 则为 null */
-    private final byte[] nonce;
-
-    /** 是否加密 */
-    private final boolean encrypted;
+    /** 字节码 */
+    private final byte[] bytecode;
 
     /** max_stack */
     private final int maxStack;
@@ -70,18 +58,13 @@ public class EncryptedMethodData {
     /** 是否同步 */
     private final boolean isSynchronized;
 
-    public EncryptedMethodData(MethodInfo info, byte[] encryptedBytecode,
-                               byte[] key, byte[] nonce, boolean encrypted) {
+    public EncryptedMethodData(MethodInfo info) {
         this.methodId = info.getMethodId();
         this.owner = info.getOwner();
         this.name = info.getName();
         this.descriptor = info.getDescriptor();
         this.access = info.getAccess();
-        this.encryptedBytecode = encryptedBytecode;
-        this.originalLength = info.getBytecode().length;
-        this.key = key;
-        this.nonce = nonce;
-        this.encrypted = encrypted;
+        this.bytecode = info.getBytecode();
         this.maxStack = info.getMaxStack();
         this.maxLocals = info.getMaxLocals();
         this.metadata = info.getMetadata();
@@ -100,11 +83,7 @@ public class EncryptedMethodData {
     public String getName() { return name; }
     public String getDescriptor() { return descriptor; }
     public int getAccess() { return access; }
-    public byte[] getEncryptedBytecode() { return encryptedBytecode; }
-    public int getOriginalLength() { return originalLength; }
-    public byte[] getKey() { return key; }
-    public byte[] getNonce() { return nonce; }
-    public boolean isEncrypted() { return encrypted; }
+    public byte[] getEncryptedBytecode() { return bytecode; }
     public int getMaxStack() { return maxStack; }
     public int getMaxLocals() { return maxLocals; }
     public List<MetaEntry> getMetadata() { return metadata; }
@@ -118,9 +97,9 @@ public class EncryptedMethodData {
     @Override
     public String toString() {
         return String.format(
-                "Encrypted{id=%d, %s.%s, bytecode=%d bytes, encrypted=%b, meta=%d, strings=%d, exc=%d, bsm=%d}",
+                "Encrypted{id=%d, %s.%s, bytecode=%d bytes, meta=%d, strings=%d, exc=%d, bsm=%d}",
                 methodId, owner, name,
-                originalLength, encrypted,
+                bytecode.length,
                 metadata.size(), stringPool.size(), exceptionTable.size(), bootstrapMethods.size()
         );
     }
