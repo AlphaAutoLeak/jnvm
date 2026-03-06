@@ -21,15 +21,15 @@ public class InvokeDynamicHelper extends VMHelper {
     public void generateSource(PrintWriter w) {
         w.println("jobject vm_invoke_dynamic(JNIEnv* env, VMFrame* frame, MetaEntry* meta) {");
         w.println("    if (!meta) { VM_LOG(\"INVOKEDYNAMIC: meta is NULL\\n\"); return NULL; }");
-        w.println("    const char* methodName = vm_strings[meta->nameIdx].data;");
-        w.println("    const char* methodDesc = vm_strings[meta->descIdx].data;");
+        w.println("    const char* methodName = vm_get_string(meta->nameIdx);");
+        w.println("    const char* methodDesc = vm_get_string(meta->descIdx);");
         w.println("    VM_LOG(\"INVOKEDYNAMIC: name=%s, desc=%s, bsmIdx=%d\\n\", methodName, methodDesc, meta->bsmIdx);");
         w.println();
         w.println("    if (meta->bsmIdx < 0 || meta->bsmIdx >= vm_bootstrap_count) {");
         w.println("        VM_LOG(\"INVOKEDYNAMIC: Invalid bsmIdx=%d\\n\", meta->bsmIdx); return NULL;");
         w.println("    }");
         w.println("    VMBootstrapMethod* bsm = &vm_bootstrap_methods[meta->bsmIdx];");
-        w.println("    const char* bsmClass = vm_strings[bsm->ownerIdx].data;");
+        w.println("    const char* bsmClass = vm_get_string(bsm->ownerIdx);");
         w.println();
         w.println("    if (strstr(bsmClass, \"LambdaMetafactory\") == NULL) {");
         w.println("        VM_LOG(\"INVOKEDYNAMIC: Unsupported bootstrap: %s\\n\", bsmClass); return NULL;");
@@ -51,9 +51,9 @@ public class InvokeDynamicHelper extends VMHelper {
         w.println();
         
         // ===== Step 2: Get BSM argument strings =====
-        w.println("    const char* samMethodTypeStr = vm_strings[bsm->args[0].strIdx].data;");
-        w.println("    const char* implMethodStr = vm_strings[bsm->args[1].strIdx].data;");
-        w.println("    const char* instantiatedMethodTypeStr = vm_strings[bsm->args[2].strIdx].data;");
+        w.println("    const char* samMethodTypeStr = vm_get_string(bsm->args[0].strIdx);");
+        w.println("    const char* implMethodStr = vm_get_string(bsm->args[1].strIdx);");
+        w.println("    const char* instantiatedMethodTypeStr = vm_get_string(bsm->args[2].strIdx);");
         w.println("    int handleTag = bsm->args[1].handleTag; // implMethod handle tag (REF_invokeStatic=6, etc)");
         w.println("    VM_LOG(\"INVOKEDYNAMIC: samType=%s, implMethod=%s, instType=%s, handleTag=%d\\n\",");
         w.println("        samMethodTypeStr, implMethodStr, instantiatedMethodTypeStr, handleTag);");

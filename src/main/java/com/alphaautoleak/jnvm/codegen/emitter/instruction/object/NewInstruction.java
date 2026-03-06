@@ -15,7 +15,7 @@ public class NewInstruction extends Instruction {
 
     @Override
     protected void generateBody(PrintWriter w) {
-        w.println("                { const char* clsName = vm_strings[meta->classIdx].data;");
+        w.println("                { const char* clsName = vm_get_string(meta->classIdx);");
         w.println("                  jclass cls = (*env)->FindClass(env, clsName);");
         w.println("                  if (cls) {");
         w.println("                      frame.stack[frame.sp].l = (*env)->AllocObject(env, cls);");

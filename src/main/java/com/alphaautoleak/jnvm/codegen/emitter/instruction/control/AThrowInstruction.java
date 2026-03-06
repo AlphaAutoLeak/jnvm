@@ -42,7 +42,7 @@ public class AThrowInstruction extends Instruction {
         w.println("                                break;");
         w.println("                            }");
         w.println("                            // 检查异常类型是否匹配");
-        w.println("                            const char* catchType = vm_strings[entry->catchTypeIdx].data;");
+        w.println("                            const char* catchType = vm_get_string(entry->catchTypeIdx);");
         w.println("                            jclass catchClass = (*env)->FindClass(env, catchType);");
         w.println("                            if (catchClass && (*env)->IsInstanceOf(env, exception, catchClass)) {");
         w.println("                                athrowHandlerPc = entry->handlerPc;");

@@ -19,7 +19,7 @@ public class InstanceOfInstruction extends Instruction {
         w.println("                      frame.stack[frame.sp - 1].i = 0;"); // null instanceof X = false
         w.println("                      frame.stackTypes[frame.sp - 1] = TYPE_INT;");
         w.println("                  } else {");
-        w.println("                      const char* clsName = vm_strings[meta->classIdx].data;");
+        w.println("                      const char* clsName = vm_get_string(meta->classIdx);");
         w.println("                      jclass cls = (*env)->FindClass(env, clsName);");
         w.println("                      frame.stack[frame.sp - 1].i = (*env)->IsInstanceOf(env, obj, cls);");
         w.println("                      frame.stackTypes[frame.sp - 1] = TYPE_INT;");

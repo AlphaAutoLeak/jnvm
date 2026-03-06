@@ -14,9 +14,9 @@ public class GetStaticInstruction extends Instruction {
 
         @Override
         protected void generateBody(PrintWriter w) {
-        w.println("                { const char* owner = vm_strings[meta->ownerIdx].data;");
-        w.println("                  const char* name = vm_strings[meta->nameIdx].data;");
-        w.println("                  const char* desc = vm_strings[meta->descIdx].data;");
+        w.println("                { const char* owner = vm_get_string(meta->ownerIdx);");
+        w.println("                  const char* name = vm_get_string(meta->nameIdx);");
+        w.println("                  const char* desc = vm_get_string(meta->descIdx);");
         w.println("                  jclass cls = (*env)->FindClass(env, owner);");
         w.println("                  if (!cls) { frame.pc++; break; }");
         w.println("                  jfieldID fid = (*env)->GetStaticFieldID(env, cls, name, desc);");

@@ -1,0 +1,24 @@
+# JNVM Protection Configuration
+
+# Input JAR file
+jar: test/114514.jar
+
+# Output JAR file (optional)
+out: test/114514-obf.jar
+
+# Protection rules
+protect:
+  - "**"  # Protect all methods
+
+# Target platforms
+targets:
+  - x86_64-windows-gnu
+
+# Enable anti-debug protections
+anti-debug: false
+
+# Enable debug logging
+debug: false
+
+# Native source output directory
+native-dir: native

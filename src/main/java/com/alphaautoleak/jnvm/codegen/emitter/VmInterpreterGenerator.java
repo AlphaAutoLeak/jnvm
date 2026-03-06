@@ -116,7 +116,7 @@ public class VmInterpreterGenerator {
         
         // 设置 this 和参数
         w.println("    frame.locals[0].l = instance;");
-        w.println("    const char* methodDesc = (m->descIdx >= 0) ? vm_strings[m->descIdx].data : NULL;");
+        w.println("    const char* methodDesc = (m->descIdx >= 0) ? vm_get_string(m->descIdx) : NULL;");
         w.println("    vm_unbox_args(env, &frame, args, methodDesc, instance ? 1 : 0);");
         w.println();
         

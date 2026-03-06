@@ -20,7 +20,7 @@ public class MultiANewArrayInstruction extends Instruction {
     @Override
     protected void generateBody(PrintWriter w) {
         w.println("                {");
-        w.println("                    const char* className = vm_strings[meta->classIdx].data;");
+        w.println("                    const char* className = vm_get_string(meta->classIdx);");
         w.println("                    int dims = meta->dims;");
         w.println("                    VM_LOG(\"MULTIANEWARRAY: class=%s, dims=%d\\n\", className, dims);");
         w.println();

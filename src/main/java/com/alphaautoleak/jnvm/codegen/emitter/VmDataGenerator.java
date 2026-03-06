@@ -3,6 +3,7 @@ package com.alphaautoleak.jnvm.codegen.emitter;
 import com.alphaautoleak.jnvm.asm.*;
 import com.alphaautoleak.jnvm.asm.BytecodeExtractor.MetaEntry;
 import com.alphaautoleak.jnvm.asm.BytecodeExtractor.MetaType;
+import com.alphaautoleak.jnvm.crypto.CryptoUtils;
 import com.alphaautoleak.jnvm.crypto.EncryptedMethodData;
 import com.alphaautoleak.jnvm.crypto.StringEncryptor;
 
@@ -16,7 +17,7 @@ import java.util.*;
  * 生成 vm_data.h 和 vm_data.c - VM 数据（方法元数据、字符串池等）
  * 
  * 新格式：
- * - 字符串池：所有字符串统一存储
+ * - 字符串池：所有字符串使用 ChaCha20 加密存储
  * - 元数据数组：每条指令的操作数
  * - pcToMetaIdx：PC -> 元数据索引映射
  * - Bootstrap 方法表：全局共享
@@ -24,7 +25,9 @@ import java.util.*;
 public class VmDataGenerator {
     
     private final List<EncryptedMethodData> methods;
-    private final byte[] stringKey;
+    private final byte[] stringKey;       // 方法字节码解密密钥 (8 bytes)
+    private final byte[] vmStringKey;     // 字符串 ChaCha20 密钥 (32 bytes)
+    private final byte[] stringNonce;     // ChaCha20 nonce for strings (12 bytes)
     private final File dir;
     
     /** 全局字符串池：字符串 -> 全局索引 */
@@ -37,7 +40,9 @@ public class VmDataGenerator {
     public VmDataGenerator(File dir, List<EncryptedMethodData> methods, byte[] stringKey) {
         this.dir = dir;
         this.methods = methods;
-        this.stringKey = stringKey;
+        this.stringKey = stringKey;           // 方法字节码密钥 (8 bytes)
+        this.vmStringKey = CryptoUtils.generateKey();  // 字符串 ChaCha20 密钥 (32 bytes)
+        this.stringNonce = CryptoUtils.generateNonce(); // 字符串 ChaCha20 nonce (12 bytes)
     }
     
     public void generate() throws IOException {
@@ -91,6 +96,8 @@ public class VmDataGenerator {
             w.println("extern VMMethod vm_methods[];");
             w.println("extern VMString vm_strings[];");
             w.println("extern const int vm_string_count;");
+            w.println("extern const uint8_t vm_string_key[];");
+            w.println("extern const uint8_t vm_string_nonce[];");
             w.println("extern VMBootstrapMethod vm_bootstrap_methods[];");
             w.println("extern const int vm_bootstrap_count;");
             w.println();
@@ -235,10 +242,34 @@ public class VmDataGenerator {
     }
     
     private void emitStringPool(PrintWriter w, Set<String> strings) {
+        // 生成字符串加密密钥 (32 bytes) 和 nonce (12 bytes)
+        w.println("const uint8_t vm_string_key[] = {");
+        for (int i = 0; i < vmStringKey.length; i++) {
+            if (i % 16 == 0) w.print("    ");
+            w.printf("0x%02x%s", vmStringKey[i] & 0xFF, (i < vmStringKey.length - 1 ? ", " : ""));
+        }
+        w.println("\n};");
+        
+        w.println("const uint8_t vm_string_nonce[] = {");
+        for (int i = 0; i < stringNonce.length; i++) {
+            if (i % 16 == 0) w.print("    ");
+            w.printf("0x%02x%s", stringNonce[i] & 0xFF, (i < stringNonce.length - 1 ? ", " : ""));
+        }
+        w.println("\n};");
+        w.println();
+        
+        // 加密并存储每个字符串
         int idx = 0;
         for (String s : strings) {
-            // 直接存储明文字符串，不加密
-            w.printf("static const char vm_str_%d[] = \"%s\";\n", idx, escapeCString(s));
+            byte[] plaintext = s.getBytes(StandardCharsets.UTF_8);
+            byte[] encrypted = CryptoUtils.chacha20(vmStringKey, stringNonce, 0, plaintext);
+            
+            w.printf("static const unsigned char vm_str_%d[] = {", idx);
+            for (int i = 0; i < encrypted.length; i++) {
+                if (i % 16 == 0) w.printf("\n    ");
+                w.printf("0x%02x%s", encrypted[i] & 0xFF, (i < encrypted.length - 1 ? ", " : ""));
+            }
+            w.println("\n};");
             idx++;
         }
         w.println();
@@ -246,7 +277,7 @@ public class VmDataGenerator {
         w.println("VMString vm_strings[] = {");
         idx = 0;
         for (String s : strings) {
-            w.printf("    { .data=vm_str_%d, .len=%d },\n", idx, s.length());
+            w.printf("    { .encData=vm_str_%d, .decData=NULL, .len=%d, .encrypted=1 },\n", idx, s.length());
             idx++;
         }
         w.println("};");
