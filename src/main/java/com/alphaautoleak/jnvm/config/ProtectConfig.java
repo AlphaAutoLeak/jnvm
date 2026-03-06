@@ -1,18 +1,22 @@
 package com.alphaautoleak.jnvm.config;
 
+import org.yaml.snakeyaml.Yaml;
+
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
+import java.io.FileInputStream;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 public class ProtectConfig {
 
     private File inputJar;
     private File outputJar;
     private List<String> protectRules = new ArrayList<>();
-    private File configFile;       // protect.conf
+    private File configFile;       // protect.conf or config.yml
     private List<String> targets = new ArrayList<>();
     private boolean antiDebug = true;
     private File nativeDir;
@@ -22,29 +26,112 @@ public class ProtectConfig {
     public boolean isDebug() { return debug; }
     public void setDebug(boolean debug) { this.debug = debug; }
 
+    /**
+     * 从 YAML 文件加载配置
+     */
+    @SuppressWarnings("unchecked")
+    public void loadFromYaml(File yamlFile) throws IOException {
+        if (yamlFile == null || !yamlFile.exists()) {
+            return;
+        }
+
+        System.out.println("[INFO] Loading config from YAML: " + yamlFile);
+        Yaml yaml = new Yaml();
+        try (FileInputStream fis = new FileInputStream(yamlFile)) {
+            Map<String, Object> config = yaml.load(fis);
+            if (config == null) {
+                return;
+            }
+
+            // jar
+            if (config.containsKey("jar")) {
+                String jarPath = (String) config.get("jar");
+                if (inputJar == null) {
+                    inputJar = new File(jarPath);
+                }
+            }
+
+            // out
+            if (config.containsKey("out")) {
+                String outPath = (String) config.get("out");
+                if (outputJar == null) {
+                    outputJar = new File(outPath);
+                }
+            }
+
+            // protect (List<String>)
+            if (config.containsKey("protect")) {
+                Object protectObj = config.get("protect");
+                if (protectObj instanceof List) {
+                    List<String> yamlRules = (List<String>) protectObj;
+                    // 合并到现有规则（命令行优先）
+                    for (String rule : yamlRules) {
+                        if (!protectRules.contains(rule)) {
+                            protectRules.add(rule);
+                        }
+                    }
+                }
+            }
+
+            // targets (List<String>)
+            if (config.containsKey("targets")) {
+                Object targetsObj = config.get("targets");
+                if (targetsObj instanceof List) {
+                    List<String> yamlTargets = (List<String>) targetsObj;
+                    if (targets.isEmpty()) {
+                        targets.addAll(yamlTargets);
+                    }
+                }
+            }
+
+            // anti-debug
+            if (config.containsKey("anti-debug")) {
+                antiDebug = Boolean.TRUE.equals(config.get("anti-debug"));
+            }
+
+            // debug
+            if (config.containsKey("debug")) {
+                debug = Boolean.TRUE.equals(config.get("debug"));
+            }
+
+            // native-dir
+            if (config.containsKey("native-dir")) {
+                String nativeDirPath = (String) config.get("native-dir");
+                if (nativeDir == null) {
+                    nativeDir = new File(nativeDirPath);
+                }
+            }
+        }
+    }
 
     /**
      * 校验 + 合并 configFile 中的规则
      */
     public void validate() throws IOException {
-        if (inputJar == null || !inputJar.exists()) {
-            throw new IllegalArgumentException("Input JAR not found: " + inputJar);
-        }
-
-        // 如果指定了 protect.conf，读取并合并规则
+        // 如果指定了 config 文件，先加载
         if (configFile != null && configFile.exists()) {
-            System.out.println("[INFO] Loading protect rules from: " + configFile);
-            try (BufferedReader br = new BufferedReader(new FileReader(configFile))) {
-                String line;
-                while ((line = br.readLine()) != null) {
-                    line = line.trim();
-                    // 跳过空行和注释
-                    if (line.isEmpty() || line.startsWith("#") || line.startsWith("//")) {
-                        continue;
+            String fileName = configFile.getName().toLowerCase();
+            if (fileName.endsWith(".yml") || fileName.endsWith(".yaml")) {
+                loadFromYaml(configFile);
+            } else {
+                // 旧格式：逐行读取规则
+                System.out.println("[INFO] Loading protect rules from: " + configFile);
+                try (BufferedReader br = new BufferedReader(new FileReader(configFile))) {
+                    String line;
+                    while ((line = br.readLine()) != null) {
+                        line = line.trim();
+                        // 跳过空行和注释
+                        if (line.isEmpty() || line.startsWith("#") || line.startsWith("//")) {
+                            continue;
+                        }
+                        protectRules.add(line);
                     }
-                    protectRules.add(line);
                 }
             }
+        }
+
+        if (inputJar == null || !inputJar.exists()) {
+            throw new IllegalArgumentException("Input JAR not found: " + inputJar);
         }
 
         // 如果没有任何规则，默认保护全部

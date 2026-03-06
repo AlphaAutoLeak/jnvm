@@ -23,14 +23,22 @@ public class Main {
                 return;
             }
 
-            if (!cmd.hasOption("jar")) {
-                System.err.println("[ERROR] --jar is required");
+            // jar 或 config 必须指定一个
+            if (!cmd.hasOption("jar") && !cmd.hasOption("config")) {
+                System.err.println("[ERROR] Either --jar or --config is required");
                 CliOptions.printHelp(options);
                 System.exit(1);
             }
 
             ProtectConfig config = ConfigBuilder.build(cmd);
             config.validate();
+
+            // 如果没有指定输出，根据输入生成默认输出
+            if (config.getOutputJar() == null && config.getInputJar() != null) {
+                String input = config.getInputJar().getAbsolutePath();
+                String out = input.replaceAll("\\.jar$", "-protected.jar");
+                config.setOutputJar(new java.io.File(out));
+            }
 
             printConfig(config);
 

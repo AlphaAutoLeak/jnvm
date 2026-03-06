@@ -25,6 +25,9 @@ dependencies {
 
     // CLI 参数解析
     implementation 'commons-cli:commons-cli:1.9.0'
+
+    // YAML 解析
+    implementation 'org.yaml:snakeyaml:2.3'
 }
 
 application {
