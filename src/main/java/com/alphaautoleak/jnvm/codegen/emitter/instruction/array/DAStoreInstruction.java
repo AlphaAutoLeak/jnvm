@@ -5,7 +5,7 @@ import com.alphaautoleak.jnvm.codegen.emitter.Instruction;
 import java.io.PrintWriter;
 
 /**
- * DASTORE instruction - store to double array
+ * DASTORE instruction - store to double array (optimized)
  */
 public class DAStoreInstruction extends Instruction {
     public DAStoreInstruction() {
@@ -17,9 +17,7 @@ public class DAStoreInstruction extends Instruction {
         w.println("                { jdouble val = frame.stack[--frame.sp].d;");
         w.println("                  jint idx = frame.stack[--frame.sp].i;");
         w.println("                  jdoubleArray arr = (jdoubleArray)frame.stack[--frame.sp].l;");
-        w.println("                  jdouble* elems = (*env)->GetDoubleArrayElements(env, arr, NULL);");
-        w.println("                  elems[idx] = val;");
-        w.println("                  (*env)->ReleaseDoubleArrayElements(env, arr, elems, 0); }");
+        w.println("                  (*env)->SetDoubleArrayRegion(env, arr, idx, 1, &val); }");
         pcIncBreak(w);
     }
 }

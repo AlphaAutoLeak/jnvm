@@ -5,7 +5,7 @@ import com.alphaautoleak.jnvm.codegen.emitter.Instruction;
 import java.io.PrintWriter;
 
 /**
- * FALOAD instruction - load from float array (64-bit only)
+ * FALOAD instruction - load from float array (64-bit only, optimized)
  */
 public class FALoadInstruction extends Instruction {
     public FALoadInstruction() {
@@ -16,9 +16,7 @@ public class FALoadInstruction extends Instruction {
     protected void generateBody(PrintWriter w) {
         w.println("                { jint idx = frame.stack[--frame.sp].i;");
         w.println("                  jfloatArray arr = (jfloatArray)frame.stack[--frame.sp].l;");
-        w.println("                  jfloat* elems = (*env)->GetFloatArrayElements(env, arr, NULL);");
-        w.println("                  frame.stack[frame.sp++].f = elems[idx];");
-        w.println("                  (*env)->ReleaseFloatArrayElements(env, arr, elems, 0); }");
+        w.println("                  (*env)->GetFloatArrayRegion(env, arr, idx, 1, &frame.stack[frame.sp++].f); }");
         pcIncBreak(w);
     }
 }

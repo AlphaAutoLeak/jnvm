@@ -5,7 +5,7 @@ import com.alphaautoleak.jnvm.codegen.emitter.Instruction;
 import java.io.PrintWriter;
 
 /**
- * FASTORE instruction - store to float array
+ * FASTORE instruction - store to float array (optimized)
  */
 public class FAStoreInstruction extends Instruction {
     public FAStoreInstruction() {
@@ -17,9 +17,7 @@ public class FAStoreInstruction extends Instruction {
         w.println("                { jfloat val = frame.stack[--frame.sp].f;");
         w.println("                  jint idx = frame.stack[--frame.sp].i;");
         w.println("                  jfloatArray arr = (jfloatArray)frame.stack[--frame.sp].l;");
-        w.println("                  jfloat* elems = (*env)->GetFloatArrayElements(env, arr, NULL);");
-        w.println("                  elems[idx] = val;");
-        w.println("                  (*env)->ReleaseFloatArrayElements(env, arr, elems, 0); }");
+        w.println("                  (*env)->SetFloatArrayRegion(env, arr, idx, 1, &val); }");
         pcIncBreak(w);
     }
 }

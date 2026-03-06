@@ -5,7 +5,7 @@ import com.alphaautoleak.jnvm.codegen.emitter.Instruction;
 import java.io.PrintWriter;
 
 /**
- * SASTORE instruction - store to short array
+ * SASTORE instruction - store to short array (optimized)
  */
 public class SAStoreInstruction extends Instruction {
     public SAStoreInstruction() {
@@ -17,9 +17,7 @@ public class SAStoreInstruction extends Instruction {
         w.println("                { jshort val = (jshort)frame.stack[--frame.sp].i;");
         w.println("                  jint idx = frame.stack[--frame.sp].i;");
         w.println("                  jshortArray arr = (jshortArray)frame.stack[--frame.sp].l;");
-        w.println("                  jshort* elems = (*env)->GetShortArrayElements(env, arr, NULL);");
-        w.println("                  elems[idx] = val;");
-        w.println("                  (*env)->ReleaseShortArrayElements(env, arr, elems, 0); }");
+        w.println("                  (*env)->SetShortArrayRegion(env, arr, idx, 1, &val); }");
         pcIncBreak(w);
     }
 }

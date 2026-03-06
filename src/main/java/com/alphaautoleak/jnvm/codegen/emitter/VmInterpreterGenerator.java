@@ -115,141 +115,139 @@ public class VmInterpreterGenerator {
     }
     
     private void emitCachingSystem(PrintWriter w) {
-        w.println("// === 类、方法ID、字段ID缓存 ===");
-        w.println("#define CLASS_CACHE_SIZE 256");
-        w.println("#define METHOD_CACHE_SIZE 1024");
-        w.println("#define FIELD_CACHE_SIZE 512");
+        w.println("// === 哈希缓存系统 (O(1) 查找) ===");
+        w.println("#define CLASS_CACHE_SIZE 256    // 必须是 2 的幂");
+        w.println("#define METHOD_CACHE_SIZE 1024  // 必须是 2 的幂");
+        w.println("#define FIELD_CACHE_SIZE 512    // 必须是 2 的幂");
         w.println();
         
+        // 哈希函数
+        w.println("static inline uint32_t ptr_hash(const void* p) {");
+        w.println("    return (uint32_t)((uintptr_t)p >> 3);  // 忽略低位对齐");
+        w.println("}");
+        w.println();
+        
+        // 组合哈希：三个指针
+        w.println("static inline uint32_t triple_hash(const void* a, const void* b, const void* c) {");
+        w.println("    return ptr_hash(a) ^ (ptr_hash(b) << 5) ^ (ptr_hash(c) << 11);");
+        w.println("}");
+        w.println();
+        
+        // 类缓存条目
         w.println("typedef struct {");
-        w.println("    const char* className;");
-        w.println("    jclass cls;");
+        w.println("    const char* key;    // className");
+        w.println("    jclass value;");
         w.println("} ClassCacheEntry;");
         w.println();
         
+        // 方法缓存条目
         w.println("typedef struct {");
         w.println("    const char* owner;");
         w.println("    const char* name;");
         w.println("    const char* desc;");
         w.println("    jmethodID mid;");
-        w.println("    jclass cls;");
         w.println("} MethodCacheEntry;");
         w.println();
         
+        // 字段缓存条目
         w.println("typedef struct {");
         w.println("    const char* owner;");
         w.println("    const char* name;");
         w.println("    const char* desc;");
         w.println("    jfieldID fid;");
-        w.println("    jclass cls;");
-        w.println("    int isStatic;");
         w.println("} FieldCacheEntry;");
         w.println();
         
+        // 静态缓存数组
         w.println("static ClassCacheEntry classCache[CLASS_CACHE_SIZE];");
-        w.println("static int classCacheCount = 0;");
         w.println("static MethodCacheEntry methodCache[METHOD_CACHE_SIZE];");
-        w.println("static int methodCacheCount = 0;");
         w.println("static FieldCacheEntry fieldCache[FIELD_CACHE_SIZE];");
-        w.println("static int fieldCacheCount = 0;");
         w.println();
         
+        // 类查找 - O(1) 哈希
         w.println("static jclass vm_find_class(JNIEnv* env, const char* className) {");
-        w.println("    for (int i = 0; i < classCacheCount; i++) {");
-        w.println("        if (classCache[i].className == className && classCache[i].cls != NULL) {");
-        w.println("            return classCache[i].cls;");
-        w.println("        }");
+        w.println("    uint32_t idx = ptr_hash(className) & (CLASS_CACHE_SIZE - 1);");
+        w.println("    ClassCacheEntry* e = &classCache[idx];");
+        w.println("    if (LIKELY(e->key == className && e->value != NULL)) {");
+        w.println("        return e->value;  // 缓存命中");
         w.println("    }");
         w.println("    jclass localCls = (*env)->FindClass(env, className);");
-        w.println("    if (localCls && classCacheCount < CLASS_CACHE_SIZE) {");
+        w.println("    if (localCls) {");
         w.println("        jclass globalCls = (*env)->NewGlobalRef(env, localCls);");
         w.println("        if (globalCls) {");
-        w.println("            classCache[classCacheCount].className = className;");
-        w.println("            classCache[classCacheCount].cls = globalCls;");
-        w.println("            classCacheCount++;");
+        w.println("            e->key = className;");
+        w.println("            e->value = globalCls;");
         w.println("        }");
         w.println("    }");
         w.println("    return localCls;");
         w.println("}");
         w.println();
         
+        // 方法查找 - O(1) 哈希
         w.println("static jmethodID vm_get_method_id(JNIEnv* env, jclass cls, const char* owner, const char* name, const char* desc) {");
-        w.println("    for (int i = 0; i < methodCacheCount; i++) {");
-        w.println("        if (methodCache[i].owner == owner && methodCache[i].name == name && ");
-        w.println("            methodCache[i].desc == desc && methodCache[i].mid != NULL) {");
-        w.println("            return methodCache[i].mid;");
-        w.println("        }");
+        w.println("    uint32_t idx = triple_hash(owner, name, desc) & (METHOD_CACHE_SIZE - 1);");
+        w.println("    MethodCacheEntry* e = &methodCache[idx];");
+        w.println("    if (LIKELY(e->owner == owner && e->name == name && e->desc == desc && e->mid != NULL)) {");
+        w.println("        return e->mid;  // 缓存命中");
         w.println("    }");
         w.println("    jmethodID mid = (*env)->GetMethodID(env, cls, name, desc);");
-        w.println("    if (mid && methodCacheCount < METHOD_CACHE_SIZE) {");
-        w.println("        methodCache[methodCacheCount].owner = owner;");
-        w.println("        methodCache[methodCacheCount].name = name;");
-        w.println("        methodCache[methodCacheCount].desc = desc;");
-        w.println("        methodCache[methodCacheCount].mid = mid;");
-        w.println("        methodCache[methodCacheCount].cls = cls;");
-        w.println("        methodCacheCount++;");
+        w.println("    if (mid) {");
+        w.println("        e->owner = owner;");
+        w.println("        e->name = name;");
+        w.println("        e->desc = desc;");
+        w.println("        e->mid = mid;");
         w.println("    }");
         w.println("    return mid;");
         w.println("}");
         w.println();
         
         w.println("static jmethodID vm_get_static_method_id(JNIEnv* env, jclass cls, const char* owner, const char* name, const char* desc) {");
-        w.println("    for (int i = 0; i < methodCacheCount; i++) {");
-        w.println("        if (methodCache[i].owner == owner && methodCache[i].name == name && ");
-        w.println("            methodCache[i].desc == desc && methodCache[i].mid != NULL) {");
-        w.println("            return methodCache[i].mid;");
-        w.println("        }");
+        w.println("    uint32_t idx = triple_hash(owner, name, desc) & (METHOD_CACHE_SIZE - 1);");
+        w.println("    MethodCacheEntry* e = &methodCache[idx];");
+        w.println("    if (LIKELY(e->owner == owner && e->name == name && e->desc == desc && e->mid != NULL)) {");
+        w.println("        return e->mid;  // 缓存命中");
         w.println("    }");
         w.println("    jmethodID mid = (*env)->GetStaticMethodID(env, cls, name, desc);");
-        w.println("    if (mid && methodCacheCount < METHOD_CACHE_SIZE) {");
-        w.println("        methodCache[methodCacheCount].owner = owner;");
-        w.println("        methodCache[methodCacheCount].name = name;");
-        w.println("        methodCache[methodCacheCount].desc = desc;");
-        w.println("        methodCache[methodCacheCount].mid = mid;");
-        w.println("        methodCache[methodCacheCount].cls = cls;");
-        w.println("        methodCacheCount++;");
+        w.println("    if (mid) {");
+        w.println("        e->owner = owner;");
+        w.println("        e->name = name;");
+        w.println("        e->desc = desc;");
+        w.println("        e->mid = mid;");
         w.println("    }");
         w.println("    return mid;");
         w.println("}");
         w.println();
         
+        // 字段查找 - O(1) 哈希
         w.println("static jfieldID vm_get_field_id(JNIEnv* env, jclass cls, const char* owner, const char* name, const char* desc) {");
-        w.println("    for (int i = 0; i < fieldCacheCount; i++) {");
-        w.println("        if (fieldCache[i].owner == owner && fieldCache[i].name == name && ");
-        w.println("            fieldCache[i].desc == desc && fieldCache[i].fid != NULL) {");
-        w.println("            return fieldCache[i].fid;");
-        w.println("        }");
+        w.println("    uint32_t idx = triple_hash(owner, name, desc) & (FIELD_CACHE_SIZE - 1);");
+        w.println("    FieldCacheEntry* e = &fieldCache[idx];");
+        w.println("    if (LIKELY(e->owner == owner && e->name == name && e->desc == desc && e->fid != NULL)) {");
+        w.println("        return e->fid;  // 缓存命中");
         w.println("    }");
         w.println("    jfieldID fid = (*env)->GetFieldID(env, cls, name, desc);");
-        w.println("    if (fid && fieldCacheCount < FIELD_CACHE_SIZE) {");
-        w.println("        fieldCache[fieldCacheCount].owner = owner;");
-        w.println("        fieldCache[fieldCacheCount].name = name;");
-        w.println("        fieldCache[fieldCacheCount].desc = desc;");
-        w.println("        fieldCache[fieldCacheCount].fid = fid;");
-        w.println("        fieldCache[fieldCacheCount].cls = cls;");
-        w.println("        fieldCache[fieldCacheCount].isStatic = 0;");
-        w.println("        fieldCacheCount++;");
+        w.println("    if (fid) {");
+        w.println("        e->owner = owner;");
+        w.println("        e->name = name;");
+        w.println("        e->desc = desc;");
+        w.println("        e->fid = fid;");
         w.println("    }");
         w.println("    return fid;");
         w.println("}");
         w.println();
         
         w.println("static jfieldID vm_get_static_field_id(JNIEnv* env, jclass cls, const char* owner, const char* name, const char* desc) {");
-        w.println("    for (int i = 0; i < fieldCacheCount; i++) {");
-        w.println("        if (fieldCache[i].owner == owner && fieldCache[i].name == name && ");
-        w.println("            fieldCache[i].desc == desc && fieldCache[i].fid != NULL) {");
-        w.println("            return fieldCache[i].fid;");
-        w.println("        }");
+        w.println("    uint32_t idx = triple_hash(owner, name, desc) & (FIELD_CACHE_SIZE - 1);");
+        w.println("    FieldCacheEntry* e = &fieldCache[idx];");
+        w.println("    if (LIKELY(e->owner == owner && e->name == name && e->desc == desc && e->fid != NULL)) {");
+        w.println("        return e->fid;  // 缓存命中");
         w.println("    }");
         w.println("    jfieldID fid = (*env)->GetStaticFieldID(env, cls, name, desc);");
-        w.println("    if (fid && fieldCacheCount < FIELD_CACHE_SIZE) {");
-        w.println("        fieldCache[fieldCacheCount].owner = owner;");
-        w.println("        fieldCache[fieldCacheCount].name = name;");
-        w.println("        fieldCache[fieldCacheCount].desc = desc;");
-        w.println("        fieldCache[fieldCacheCount].fid = fid;");
-        w.println("        fieldCache[fieldCacheCount].cls = cls;");
-        w.println("        fieldCache[fieldCacheCount].isStatic = 1;");
-        w.println("        fieldCacheCount++;");
+        w.println("    if (fid) {");
+        w.println("        e->owner = owner;");
+        w.println("        e->name = name;");
+        w.println("        e->desc = desc;");
+        w.println("        e->fid = fid;");
         w.println("    }");
         w.println("    return fid;");
         w.println("}");

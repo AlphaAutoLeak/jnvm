@@ -5,7 +5,7 @@ import com.alphaautoleak.jnvm.codegen.emitter.Instruction;
 import java.io.PrintWriter;
 
 /**
- * IASTORE instruction - store to int array
+ * IASTORE instruction - store to int array (optimized)
  */
 public class IAStoreInstruction extends Instruction {
     public IAStoreInstruction() {
@@ -17,9 +17,7 @@ public class IAStoreInstruction extends Instruction {
         w.println("                { jint val = frame.stack[--frame.sp].i;");
         w.println("                  jint idx = frame.stack[--frame.sp].i;");
         w.println("                  jintArray arr = (jintArray)frame.stack[--frame.sp].l;");
-        w.println("                  jint* elems = (*env)->GetIntArrayElements(env, arr, NULL);");
-        w.println("                  elems[idx] = val;");
-        w.println("                  (*env)->ReleaseIntArrayElements(env, arr, elems, 0); }");
+        w.println("                  (*env)->SetIntArrayRegion(env, arr, idx, 1, &val); }");
         pcIncBreak(w);
     }
 }

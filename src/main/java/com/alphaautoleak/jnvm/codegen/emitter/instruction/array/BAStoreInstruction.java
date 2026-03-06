@@ -5,7 +5,7 @@ import com.alphaautoleak.jnvm.codegen.emitter.Instruction;
 import java.io.PrintWriter;
 
 /**
- * BASTORE instruction - store to byte/boolean array
+ * BASTORE instruction - store to byte/boolean array (optimized)
  */
 public class BAStoreInstruction extends Instruction {
     public BAStoreInstruction() {
@@ -17,9 +17,7 @@ public class BAStoreInstruction extends Instruction {
         w.println("                { jbyte val = (jbyte)frame.stack[--frame.sp].i;");
         w.println("                  jint idx = frame.stack[--frame.sp].i;");
         w.println("                  jbyteArray arr = (jbyteArray)frame.stack[--frame.sp].l;");
-        w.println("                  jbyte* elems = (*env)->GetByteArrayElements(env, arr, NULL);");
-        w.println("                  elems[idx] = val;");
-        w.println("                  (*env)->ReleaseByteArrayElements(env, arr, elems, 0); }");
+        w.println("                  (*env)->SetByteArrayRegion(env, arr, idx, 1, &val); }");
         pcIncBreak(w);
     }
 }
