@@ -55,10 +55,18 @@ public class ZigCompiler {
         cmd.add("cc");
         cmd.add("-target");
         cmd.add(target);
-        cmd.add("-shared");
-        cmd.add("-O2");
+
+        cmd.add("-fno-sanitize=all");           // 禁用所有运行时代码清洗/安全检查
+        cmd.add("-fno-sanitize-trap=all");      // 防止编译器为未定义行为生成陷阱指令
+        cmd.add("-Os");                         // 优化代码体积（替代 -O2）
+        cmd.add("-fno-optimize-sibling-calls"); // 禁用兄弟调用优化
+        cmd.add("-fno-slp-vectorize");          // 禁用 SLP 向量化
+
         cmd.add("-std=c11");
-        cmd.add("-fvisibility=hidden");
+        cmd.add("-fPIC");
+        cmd.add("-shared");
+        cmd.add("-s");                          // 删除符号表和调试信息
+        cmd.add("-fvisibility=hidden");         // 隐藏符号
 
         // JNI 头文件
         if (javaHome != null) {
