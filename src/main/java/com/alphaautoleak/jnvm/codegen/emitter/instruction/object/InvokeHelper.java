@@ -3,22 +3,22 @@ package com.alphaautoleak.jnvm.codegen.emitter.instruction.object;
 import java.io.PrintWriter;
 
 /**
- * Method invocation helper
+ * Method invocation helper (64-bit only)
  */
 public class InvokeHelper {
     
     public static void generate(PrintWriter w, boolean isStatic) {
-        w.println("                { int invokePc = frame.pc;  // Save PC before invocation");
+        w.println("                { int invokePc = frame.pc;");
         w.println("                  if (!meta) { VM_LOG(\"INVOKE: meta is NULL at pc=%d\\n\", frame.pc); frame.pc++; break; }");
         w.println("                  const char* owner = vm_get_string(meta->ownerIdx);");
         w.println("                  const char* name = vm_get_string(meta->nameIdx);");
         w.println("                  const char* desc = vm_get_string(meta->descIdx);");
-        w.println("                  jclass cls = vm_find_class(env, owner);");  // 使用缓存版本
+        w.println("                  jclass cls = vm_find_class(env, owner);");
         w.println("                  if (!cls) { VM_LOG(\"INVOKE: Class not found: %s\\n\", owner); frame.pc++; break; }");
         if (isStatic) {
-            w.println("                  jmethodID mid = vm_get_static_method_id(env, cls, owner, name, desc);");  // 使用缓存版本
+            w.println("                  jmethodID mid = vm_get_static_method_id(env, cls, owner, name, desc);");
         } else {
-            w.println("                  jmethodID mid = vm_get_method_id(env, cls, owner, name, desc);");  // 使用缓存版本
+            w.println("                  jmethodID mid = vm_get_method_id(env, cls, owner, name, desc);");
         }
         w.println("                  if (!mid) { VM_LOG(\"INVOKE: Method not found: %s.%s%s\\n\", owner, name, desc); (*env)->ExceptionClear(env); frame.pc++; break; }");
         w.println("                  int argCount = 0; char returnType = 'V';");
@@ -54,48 +54,35 @@ public class InvokeHelper {
         }
         w.println("                      case 'I': case 'B': case 'C': case 'S': case 'Z':");
         if (isStatic) {
-            w.println("                          { jint res = (*env)->CallStaticIntMethodA(env, cls, mid, args);");
+            w.println("                          frame.stack[frame.sp++].i = (*env)->CallStaticIntMethodA(env, cls, mid, args); break;");
         } else {
-            w.println("                          { jint res = (*env)->CallIntMethodA(env, receiver, mid, args);");
+            w.println("                          frame.stack[frame.sp++].i = (*env)->CallIntMethodA(env, receiver, mid, args); break;");
         }
-        w.println("                            frame.stack[frame.sp].i = res;");
-        w.println("                            frame.stackTypes[frame.sp++] = TYPE_INT; break; }");
         w.println("                      case 'J':");
         if (isStatic) {
-            w.println("                          frame.stack[frame.sp].j = (*env)->CallStaticLongMethodA(env, cls, mid, args);");
+            w.println("                          frame.stack[frame.sp++].j = (*env)->CallStaticLongMethodA(env, cls, mid, args); break;");
         } else {
-            w.println("                          frame.stack[frame.sp].j = (*env)->CallLongMethodA(env, receiver, mid, args);");
+            w.println("                          frame.stack[frame.sp++].j = (*env)->CallLongMethodA(env, receiver, mid, args); break;");
         }
-        w.println("                          frame.stackTypes[frame.sp++] = TYPE_LONG; break;");
         w.println("                      case 'F':");
         if (isStatic) {
-            w.println("                          frame.stack[frame.sp].f = (*env)->CallStaticFloatMethodA(env, cls, mid, args);");
+            w.println("                          frame.stack[frame.sp++].f = (*env)->CallStaticFloatMethodA(env, cls, mid, args); break;");
         } else {
-            w.println("                          frame.stack[frame.sp].f = (*env)->CallFloatMethodA(env, receiver, mid, args);");
+            w.println("                          frame.stack[frame.sp++].f = (*env)->CallFloatMethodA(env, receiver, mid, args); break;");
         }
-        w.println("                          frame.stackTypes[frame.sp++] = TYPE_FLOAT; break;");
         w.println("                      case 'D':");
         if (isStatic) {
-            w.println("                          frame.stack[frame.sp].d = (*env)->CallStaticDoubleMethodA(env, cls, mid, args);");
+            w.println("                          frame.stack[frame.sp++].d = (*env)->CallStaticDoubleMethodA(env, cls, mid, args); break;");
         } else {
-            w.println("                          frame.stack[frame.sp].d = (*env)->CallDoubleMethodA(env, receiver, mid, args);");
+            w.println("                          frame.stack[frame.sp++].d = (*env)->CallDoubleMethodA(env, receiver, mid, args); break;");
         }
-        w.println("                          frame.stackTypes[frame.sp++] = TYPE_DOUBLE; break;");
         w.println("                      default:");
         if (isStatic) {
-            w.println("                          { jobject _res = (*env)->CallStaticObjectMethodA(env, cls, mid, args);");
-            w.println("                            VM_LOG(\"INVOKE: CallStaticObjectMethodA returned %p\\n\", _res);");
-            w.println("                            fflush(stdout);");
-            w.println("                            frame.stack[frame.sp].l = _res; }");
+            w.println("                          frame.stack[frame.sp++].l = (*env)->CallStaticObjectMethodA(env, cls, mid, args); break;");
         } else {
-            w.println("                          { jobject _res = (*env)->CallObjectMethodA(env, receiver, mid, args);");
-            w.println("                            VM_LOG(\"INVOKE: CallObjectMethodA returned %p\\n\", _res);");
-            w.println("                            fflush(stdout);");
-            w.println("                            frame.stack[frame.sp].l = _res; }");
+            w.println("                          frame.stack[frame.sp++].l = (*env)->CallObjectMethodA(env, receiver, mid, args); break;");
         }
-        w.println("                          frame.stackTypes[frame.sp++] = TYPE_REF; break;");
         w.println("                  }");
-        // Check exception immediately after method call with correct PC
         w.println("                  if ((*env)->ExceptionCheck(env)) {");
         w.println("                      VM_LOG(\"Exception thrown at pc=%d\\n\", invokePc);");
         w.println("                      jthrowable exc = (*env)->ExceptionOccurred(env);");
@@ -116,7 +103,7 @@ public class InvokeHelper {
     }
 
     /**
-     * Generate computed goto version with branch prediction hints
+     * Generate computed goto version
      */
     public static void generateComputedGoto(PrintWriter w, boolean isStatic, int opcode, String comment) {
         w.printf("        OP_%02x:  /* %s */\n", opcode, comment);
@@ -166,48 +153,35 @@ public class InvokeHelper {
         }
         w.println("                  case 'I': case 'B': case 'C': case 'S': case 'Z':");
         if (isStatic) {
-            w.println("                      { jint res = (*env)->CallStaticIntMethodA(env, cls, mid, args);");
+            w.println("                      frame.stack[frame.sp++].i = (*env)->CallStaticIntMethodA(env, cls, mid, args); break;");
         } else {
-            w.println("                      { jint res = (*env)->CallIntMethodA(env, receiver, mid, args);");
+            w.println("                      frame.stack[frame.sp++].i = (*env)->CallIntMethodA(env, receiver, mid, args); break;");
         }
-        w.println("                        frame.stack[frame.sp].i = res;");
-        w.println("                        frame.stackTypes[frame.sp++] = TYPE_INT; break; }");
         w.println("                  case 'J':");
         if (isStatic) {
-            w.println("                      frame.stack[frame.sp].j = (*env)->CallStaticLongMethodA(env, cls, mid, args);");
+            w.println("                      frame.stack[frame.sp++].j = (*env)->CallStaticLongMethodA(env, cls, mid, args); break;");
         } else {
-            w.println("                      frame.stack[frame.sp].j = (*env)->CallLongMethodA(env, receiver, mid, args);");
+            w.println("                      frame.stack[frame.sp++].j = (*env)->CallLongMethodA(env, receiver, mid, args); break;");
         }
-        w.println("                      frame.stackTypes[frame.sp++] = TYPE_LONG; break;");
         w.println("                  case 'F':");
         if (isStatic) {
-            w.println("                      frame.stack[frame.sp].f = (*env)->CallStaticFloatMethodA(env, cls, mid, args);");
+            w.println("                      frame.stack[frame.sp++].f = (*env)->CallStaticFloatMethodA(env, cls, mid, args); break;");
         } else {
-            w.println("                      frame.stack[frame.sp].f = (*env)->CallFloatMethodA(env, receiver, mid, args);");
+            w.println("                      frame.stack[frame.sp++].f = (*env)->CallFloatMethodA(env, receiver, mid, args); break;");
         }
-        w.println("                      frame.stackTypes[frame.sp++] = TYPE_FLOAT; break;");
         w.println("                  case 'D':");
         if (isStatic) {
-            w.println("                      frame.stack[frame.sp].d = (*env)->CallStaticDoubleMethodA(env, cls, mid, args);");
+            w.println("                      frame.stack[frame.sp++].d = (*env)->CallStaticDoubleMethodA(env, cls, mid, args); break;");
         } else {
-            w.println("                      frame.stack[frame.sp].d = (*env)->CallDoubleMethodA(env, receiver, mid, args);");
+            w.println("                      frame.stack[frame.sp++].d = (*env)->CallDoubleMethodA(env, receiver, mid, args); break;");
         }
-        w.println("                      frame.stackTypes[frame.sp++] = TYPE_DOUBLE; break;");
         w.println("                  default:");
         if (isStatic) {
-            w.println("                      { jobject _res = (*env)->CallStaticObjectMethodA(env, cls, mid, args);");
-            w.println("                        VM_LOG(\"INVOKE: CallStaticObjectMethodA returned %p\\n\", _res);");
-            w.println("                        fflush(stdout);");
-            w.println("                        frame.stack[frame.sp].l = _res; }");
+            w.println("                      frame.stack[frame.sp++].l = (*env)->CallStaticObjectMethodA(env, cls, mid, args); break;");
         } else {
-            w.println("                      { jobject _res = (*env)->CallObjectMethodA(env, receiver, mid, args);");
-            w.println("                        VM_LOG(\"INVOKE: CallObjectMethodA returned %p\\n\", _res);");
-            w.println("                        fflush(stdout);");
-            w.println("                        frame.stack[frame.sp].l = _res; }");
+            w.println("                      frame.stack[frame.sp++].l = (*env)->CallObjectMethodA(env, receiver, mid, args); break;");
         }
-        w.println("                      frame.stackTypes[frame.sp++] = TYPE_REF; break;");
         w.println("              }");
-        // Check exception
         w.println("              if (UNLIKELY((*env)->ExceptionCheck(env))) {");
         w.println("                  VM_LOG(\"Exception thrown at pc=%d\\n\", invokePc);");
         w.println("                  jthrowable exc = (*env)->ExceptionOccurred(env);");

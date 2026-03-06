@@ -5,7 +5,7 @@ import com.alphaautoleak.jnvm.codegen.emitter.Instruction;
 import java.io.PrintWriter;
 
 /**
- * BALOAD instruction - load from byte/boolean array
+ * BALOAD instruction - load from byte/boolean array (64-bit only)
  */
 public class BALoadInstruction extends Instruction {
     public BALoadInstruction() {
@@ -17,8 +17,7 @@ public class BALoadInstruction extends Instruction {
         w.println("                { jint idx = frame.stack[--frame.sp].i;");
         w.println("                  jbyteArray arr = (jbyteArray)frame.stack[--frame.sp].l;");
         w.println("                  jbyte* elems = (*env)->GetByteArrayElements(env, arr, NULL);");
-        w.println("                  frame.stack[frame.sp].i = elems[idx];");
-        w.println("                  frame.stackTypes[frame.sp++] = TYPE_INT;");
+        w.println("                  frame.stack[frame.sp++].i = elems[idx];");
         w.println("                  (*env)->ReleaseByteArrayElements(env, arr, elems, 0); }");
         pcIncBreak(w);
     }

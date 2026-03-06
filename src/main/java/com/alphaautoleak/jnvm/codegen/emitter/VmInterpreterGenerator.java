@@ -293,7 +293,6 @@ public class VmInterpreterGenerator {
         w.println("    VMFrame frame = { .pc = 0, .sp = 0, .callerClass = callerClass };");
         w.println("    frame.stack = (VMValue*)calloc(m->maxStack, sizeof(VMValue));");
         w.println("    frame.locals = (VMValue*)calloc(m->maxLocals, sizeof(VMValue));");
-        w.println("    frame.stackTypes = (VMType*)calloc(m->maxStack, sizeof(VMType));");
         w.println();
         
         // 设置参数
@@ -359,7 +358,6 @@ public class VmInterpreterGenerator {
         w.println("    }");
         w.println("    free(frame.locals);");
         w.println("    free(frame.stack);");
-        w.println("    free(frame.stackTypes);");
         w.println("    return execResult;");
         w.println("}");
         w.println();

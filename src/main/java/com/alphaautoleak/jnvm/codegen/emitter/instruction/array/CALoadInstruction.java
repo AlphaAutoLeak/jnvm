@@ -5,7 +5,7 @@ import com.alphaautoleak.jnvm.codegen.emitter.Instruction;
 import java.io.PrintWriter;
 
 /**
- * CALOAD instruction - load from char array
+ * CALOAD instruction - load from char array (64-bit only)
  */
 public class CALoadInstruction extends Instruction {
     public CALoadInstruction() {
@@ -17,8 +17,7 @@ public class CALoadInstruction extends Instruction {
         w.println("                { jint idx = frame.stack[--frame.sp].i;");
         w.println("                  jcharArray arr = (jcharArray)frame.stack[--frame.sp].l;");
         w.println("                  jchar* elems = (*env)->GetCharArrayElements(env, arr, NULL);");
-        w.println("                  frame.stack[frame.sp].i = elems[idx];");
-        w.println("                  frame.stackTypes[frame.sp++] = TYPE_INT;");
+        w.println("                  frame.stack[frame.sp++].i = elems[idx];");
         w.println("                  (*env)->ReleaseCharArrayElements(env, arr, elems, 0); }");
         pcIncBreak(w);
     }

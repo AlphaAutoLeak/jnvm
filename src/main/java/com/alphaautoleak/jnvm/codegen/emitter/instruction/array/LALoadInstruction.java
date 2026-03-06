@@ -5,7 +5,7 @@ import com.alphaautoleak.jnvm.codegen.emitter.Instruction;
 import java.io.PrintWriter;
 
 /**
- * LALOAD instruction - load from long array
+ * LALOAD instruction - load from long array (64-bit only)
  */
 public class LALoadInstruction extends Instruction {
     public LALoadInstruction() {
@@ -24,8 +24,7 @@ public class LALoadInstruction extends Instruction {
         w.println("                  }");
         w.println("                  jlongArray arr = (jlongArray)arrObj;");
         w.println("                  jlong* elems = (*env)->GetLongArrayElements(env, arr, NULL);");
-        w.println("                  frame.stack[frame.sp].j = elems[idx];");
-        w.println("                  frame.stackTypes[frame.sp++] = TYPE_LONG;");
+        w.println("                  frame.stack[frame.sp++].j = elems[idx];");
         w.println("                  (*env)->ReleaseLongArrayElements(env, arr, elems, 0); }");
         pcIncBreak(w);
     }

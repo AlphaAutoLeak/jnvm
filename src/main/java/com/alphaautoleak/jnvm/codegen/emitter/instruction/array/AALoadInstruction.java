@@ -5,7 +5,7 @@ import com.alphaautoleak.jnvm.codegen.emitter.Instruction;
 import java.io.PrintWriter;
 
 /**
- * AALOAD instruction - load from reference array
+ * AALOAD instruction - load from reference array (64-bit only)
  */
 public class AALoadInstruction extends Instruction {
     public AALoadInstruction() {
@@ -16,8 +16,7 @@ public class AALoadInstruction extends Instruction {
     protected void generateBody(PrintWriter w) {
         w.println("                { jint idx = frame.stack[--frame.sp].i;");
         w.println("                  jobjectArray arr = (jobjectArray)frame.stack[--frame.sp].l;");
-        w.println("                  frame.stack[frame.sp].l = (*env)->GetObjectArrayElement(env, arr, idx);");
-        w.println("                  frame.stackTypes[frame.sp++] = TYPE_REF; }");
+        w.println("                  frame.stack[frame.sp++].l = (*env)->GetObjectArrayElement(env, arr, idx); }");
         pcIncBreak(w);
     }
 }

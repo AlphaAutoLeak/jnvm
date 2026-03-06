@@ -5,7 +5,7 @@ import com.alphaautoleak.jnvm.codegen.emitter.Instruction;
 import java.io.PrintWriter;
 
 /**
- * ANEWARRAY instruction - create reference type array
+ * ANEWARRAY instruction - create reference type array (64-bit only)
  */
 public class ANewArrayInstruction extends Instruction {
     public ANewArrayInstruction() {
@@ -16,9 +16,8 @@ public class ANewArrayInstruction extends Instruction {
     protected void generateBody(PrintWriter w) {
         w.println("                { jint size = frame.stack[--frame.sp].i;");
         w.println("                  const char* elemCls = vm_get_string(meta->classIdx);");
-        w.println("                  jclass cls = vm_find_class(env, elemCls);");  // 使用缓存版本
-        w.println("                  frame.stack[frame.sp].l = (*env)->NewObjectArray(env, size, cls, NULL);");
-        w.println("                  frame.stackTypes[frame.sp++] = TYPE_REF; }");
+        w.println("                  jclass cls = vm_find_class(env, elemCls);");
+        w.println("                  frame.stack[frame.sp++].l = (*env)->NewObjectArray(env, size, cls, NULL); }");
         pcIncBreak(w);
     }
 }

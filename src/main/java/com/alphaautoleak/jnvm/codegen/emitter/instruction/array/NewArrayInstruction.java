@@ -5,7 +5,7 @@ import com.alphaautoleak.jnvm.codegen.emitter.Instruction;
 import java.io.PrintWriter;
 
 /**
- * NEWARRAY instruction - create primitive type array
+ * NEWARRAY instruction - create primitive type array (64-bit only)
  */
 public class NewArrayInstruction extends Instruction {
     public NewArrayInstruction() {
@@ -26,8 +26,7 @@ public class NewArrayInstruction extends Instruction {
         w.println("                      case 10: arr = (*env)->NewIntArray(env, size); break;");
         w.println("                      case 11: arr = (*env)->NewLongArray(env, size); break;");
         w.println("                  }");
-        w.println("                  frame.stack[frame.sp].l = arr;");
-        w.println("                  frame.stackTypes[frame.sp++] = TYPE_REF; }");
+        w.println("                  frame.stack[frame.sp++].l = arr; }");
         pcIncBreak(w);
     }
 
@@ -46,8 +45,7 @@ public class NewArrayInstruction extends Instruction {
         w.println("                  case 10: arr = (*env)->NewIntArray(env, size); break;");
         w.println("                  case 11: arr = (*env)->NewLongArray(env, size); break;");
         w.println("              }");
-        w.println("              frame.stack[frame.sp].l = arr;");
-        w.println("              frame.stackTypes[frame.sp++] = TYPE_REF; }");
+        w.println("              frame.stack[frame.sp++].l = arr; }");
         w.println("            frame.pc++;");
         w.println("            DISPATCH_NEXT;");
     }
