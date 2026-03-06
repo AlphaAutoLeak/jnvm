@@ -5,7 +5,7 @@ A powerful Java bytecode protection tool that converts Java methods into native 
 ## Features
 
 - **Native VM Execution**: Converts Java bytecode to native C code executed by a custom VM interpreter
-- **ChaCha20 Encryption**: All bytecode is encrypted using ChaCha20 stream cipher
+  - **ChaCha20 Encryption**: All bytecode and string is encrypted using ChaCha20 stream cipher
 - **Cross-Platform**: Supports multiple targets via Zig compiler (Windows, Linux, macOS, Android)
 - **Anti-Debug**: Built-in anti-debugging protections
 
@@ -32,6 +32,7 @@ java -jar jnvm.jar --jar input.jar --out output-obf.jar
 | `--protect <RULE>` | Protection rule (repeatable) | Protect all methods |
 | `--target <TARGETS>` | Comma-separated Zig targets | Current platform |
 | `--anti-debug <BOOL>` | Enable anti-debug protections | true |
+| `--encrypt-strings <BOOL>` | Enable ChaCha20 string encryption | true |
 | `--debug <BOOL>` | Enable debug logging | false |
 | `--native-dir <DIR>` | Output directory for native sources | `./native` |
 

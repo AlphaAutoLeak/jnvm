@@ -16,9 +16,11 @@ import java.io.PrintWriter;
 public class VmTypesGenerator {
     
     private final File dir;
+    private final boolean encryptStrings;
     
-    public VmTypesGenerator(File dir) {
+    public VmTypesGenerator(File dir, boolean encryptStrings) {
         this.dir = dir;
+        this.encryptStrings = encryptStrings;
     }
     
     public void generate() throws IOException {
@@ -27,7 +29,7 @@ public class VmTypesGenerator {
             VMValueType.generate(w);
             MetaType.generate(w);
             VMMethodType.generate(w);
-            VMStringType.generate(w);
+            VMStringType.generate(w, encryptStrings);
             BootstrapType.generate(w);
             emitFooter(w);
         }

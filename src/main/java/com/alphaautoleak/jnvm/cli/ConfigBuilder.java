@@ -85,6 +85,10 @@ public class ConfigBuilder {
         if (cmd.hasOption("anti-debug")) {
             config.setAntiDebug(Boolean.parseBoolean(cmd.getOptionValue("anti-debug")));
         }
+
+        if (cmd.hasOption("encrypt-strings")) {
+            config.setEncryptStrings(Boolean.parseBoolean(cmd.getOptionValue("encrypt-strings")));
+        }
     }
 
     private static void setNativeDir(ProtectConfig config, CommandLine cmd) {

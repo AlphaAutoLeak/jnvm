@@ -26,8 +26,9 @@ public class VmDataGenerator {
     
     private final List<EncryptedMethodData> methods;
     private final byte[] stringKey;       // 方法字节码解密密钥 (8 bytes)
-    private final byte[] vmStringKey;     // 字符串 ChaCha20 密钥 (32 bytes)
-    private final byte[] stringNonce;     // ChaCha20 nonce for strings (12 bytes)
+    private final byte[] vmStringKey;     // 字符串 ChaCha20 密钥 (32 bytes), 仅当 encryptStrings=true 时使用
+    private final byte[] stringNonce;     // ChaCha20 nonce for strings (12 bytes), 仅当 encryptStrings=true 时使用
+    private final boolean encryptStrings; // 是否加密字符串
     private final File dir;
     
     /** 全局字符串池：字符串 -> 全局索引 */
@@ -37,12 +38,18 @@ public class VmDataGenerator {
     private List<BootstrapEntry> globalBootstrapMethods = new ArrayList<>();
     private Map<String, Integer> bootstrapIndexMap = new HashMap<>();
     
-    public VmDataGenerator(File dir, List<EncryptedMethodData> methods, byte[] stringKey) {
+    public VmDataGenerator(File dir, List<EncryptedMethodData> methods, byte[] stringKey, boolean encryptStrings) {
         this.dir = dir;
         this.methods = methods;
         this.stringKey = stringKey;           // 方法字节码密钥 (8 bytes)
-        this.vmStringKey = CryptoUtils.generateKey();  // 字符串 ChaCha20 密钥 (32 bytes)
-        this.stringNonce = CryptoUtils.generateNonce(); // 字符串 ChaCha20 nonce (12 bytes)
+        this.encryptStrings = encryptStrings;
+        if (encryptStrings) {
+            this.vmStringKey = CryptoUtils.generateKey();  // 字符串 ChaCha20 密钥 (32 bytes)
+            this.stringNonce = CryptoUtils.generateNonce(); // 字符串 ChaCha20 nonce (12 bytes)
+        } else {
+            this.vmStringKey = null;
+            this.stringNonce = null;
+        }
     }
     
     public void generate() throws IOException {
@@ -96,8 +103,10 @@ public class VmDataGenerator {
             w.println("extern VMMethod vm_methods[];");
             w.println("extern VMString vm_strings[];");
             w.println("extern const int vm_string_count;");
-            w.println("extern const uint8_t vm_string_key[];");
-            w.println("extern const uint8_t vm_string_nonce[];");
+            if (encryptStrings) {
+                w.println("extern const uint8_t vm_string_key[];");
+                w.println("extern const uint8_t vm_string_nonce[];");
+            }
             w.println("extern VMBootstrapMethod vm_bootstrap_methods[];");
             w.println("extern const int vm_bootstrap_count;");
             w.println();
@@ -242,46 +251,71 @@ public class VmDataGenerator {
     }
     
     private void emitStringPool(PrintWriter w, Set<String> strings) {
-        // 生成字符串加密密钥 (32 bytes) 和 nonce (12 bytes)
-        w.println("const uint8_t vm_string_key[] = {");
-        for (int i = 0; i < vmStringKey.length; i++) {
-            if (i % 16 == 0) w.print("    ");
-            w.printf("0x%02x%s", vmStringKey[i] & 0xFF, (i < vmStringKey.length - 1 ? ", " : ""));
-        }
-        w.println("\n};");
-        
-        w.println("const uint8_t vm_string_nonce[] = {");
-        for (int i = 0; i < stringNonce.length; i++) {
-            if (i % 16 == 0) w.print("    ");
-            w.printf("0x%02x%s", stringNonce[i] & 0xFF, (i < stringNonce.length - 1 ? ", " : ""));
-        }
-        w.println("\n};");
-        w.println();
-        
-        // 加密并存储每个字符串
-        int idx = 0;
-        for (String s : strings) {
-            byte[] plaintext = s.getBytes(StandardCharsets.UTF_8);
-            byte[] encrypted = CryptoUtils.chacha20(vmStringKey, stringNonce, 0, plaintext);
-            
-            w.printf("static const unsigned char vm_str_%d[] = {", idx);
-            for (int i = 0; i < encrypted.length; i++) {
-                if (i % 16 == 0) w.printf("\n    ");
-                w.printf("0x%02x%s", encrypted[i] & 0xFF, (i < encrypted.length - 1 ? ", " : ""));
+        if (encryptStrings) {
+            // 加密模式：生成 ChaCha20 密钥和 nonce
+            w.println("const uint8_t vm_string_key[] = {");
+            for (int i = 0; i < vmStringKey.length; i++) {
+                if (i % 16 == 0) w.print("    ");
+                w.printf("0x%02x%s", vmStringKey[i] & 0xFF, (i < vmStringKey.length - 1 ? ", " : ""));
             }
             w.println("\n};");
-            idx++;
+            
+            w.println("const uint8_t vm_string_nonce[] = {");
+            for (int i = 0; i < stringNonce.length; i++) {
+                if (i % 16 == 0) w.print("    ");
+                w.printf("0x%02x%s", stringNonce[i] & 0xFF, (i < stringNonce.length - 1 ? ", " : ""));
+            }
+            w.println("\n};");
+            w.println();
+            
+            // 加密并存储每个字符串
+            int idx = 0;
+            for (String s : strings) {
+                byte[] plaintext = s.getBytes(StandardCharsets.UTF_8);
+                byte[] encrypted = CryptoUtils.chacha20(vmStringKey, stringNonce, 0, plaintext);
+                
+                w.printf("static const unsigned char vm_str_%d[] = {", idx);
+                for (int i = 0; i < encrypted.length; i++) {
+                    if (i % 16 == 0) w.printf("\n    ");
+                    w.printf("0x%02x%s", encrypted[i] & 0xFF, (i < encrypted.length - 1 ? ", " : ""));
+                }
+                w.println("\n};");
+                idx++;
+            }
+            w.println();
+            
+            w.println("VMString vm_strings[] = {");
+            idx = 0;
+            for (String s : strings) {
+                w.printf("    { .encData=vm_str_%d, .decData=NULL, .len=%d, .encrypted=1 },\n", idx, s.length());
+                idx++;
+            }
+            w.println("};");
+            w.println();
+        } else {
+            // 非加密模式：直接存储明文字符串
+            int idx = 0;
+            for (String s : strings) {
+                byte[] bytes = s.getBytes(StandardCharsets.UTF_8);
+                w.printf("static const char vm_str_%d[] = {", idx);
+                for (int i = 0; i < bytes.length; i++) {
+                    if (i % 16 == 0) w.printf("\n    ");
+                    w.printf("0x%02x%s", bytes[i] & 0xFF, (i < bytes.length - 1 ? ", " : ""));
+                }
+                w.println("\n};");
+                idx++;
+            }
+            w.println();
+            
+            w.println("VMString vm_strings[] = {");
+            idx = 0;
+            for (String s : strings) {
+                w.printf("    { .encData=(const unsigned char*)vm_str_%d, .decData=NULL, .len=%d, .encrypted=0 },\n", idx, s.length());
+                idx++;
+            }
+            w.println("};");
+            w.println();
         }
-        w.println();
-        
-        w.println("VMString vm_strings[] = {");
-        idx = 0;
-        for (String s : strings) {
-            w.printf("    { .encData=vm_str_%d, .decData=NULL, .len=%d, .encrypted=1 },\n", idx, s.length());
-            idx++;
-        }
-        w.println("};");
-        w.println();
     }
     
     /**

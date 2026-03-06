@@ -20,6 +20,7 @@ public class ProtectConfig {
     private List<String> targets = new ArrayList<>();
     private boolean antiDebug = true;
     private File nativeDir;
+    private boolean encryptStrings = true;  // 是否使用 ChaCha20 加密字符串
 
     private boolean debug = false;
 
@@ -87,6 +88,11 @@ public class ProtectConfig {
             // anti-debug
             if (config.containsKey("anti-debug")) {
                 antiDebug = Boolean.TRUE.equals(config.get("anti-debug"));
+            }
+
+            // encrypt-strings
+            if (config.containsKey("encrypt-strings")) {
+                encryptStrings = Boolean.TRUE.equals(config.get("encrypt-strings"));
             }
 
             // debug
@@ -264,5 +270,13 @@ public class ProtectConfig {
 
     public void setNativeDir(File nativeDir) {
         this.nativeDir = nativeDir;
+    }
+
+    public boolean isEncryptStrings() {
+        return encryptStrings;
+    }
+
+    public void setEncryptStrings(boolean encryptStrings) {
+        this.encryptStrings = encryptStrings;
     }
 }

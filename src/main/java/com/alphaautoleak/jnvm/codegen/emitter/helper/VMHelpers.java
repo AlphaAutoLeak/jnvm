@@ -10,9 +10,9 @@ public class VMHelpers {
     
     private final List<VMHelper> helpers = new ArrayList<>();
     
-    public VMHelpers() {
+    public VMHelpers(boolean encryptStrings) {
         // 注册所有辅助函数
-        helpers.add(new StringHelper());
+        helpers.add(new StringHelper(encryptStrings));
         helpers.add(new MetaHelper());
         helpers.add(new MethodDescHelper());
         helpers.add(new UnboxHelper());

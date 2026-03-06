@@ -64,6 +64,12 @@ public class CliOptions {
                 .build());
 
         options.addOption(Option.builder()
+                .longOpt("encrypt-strings")
+                .desc("Enable ChaCha20 string encryption (default: true)")
+                .hasArg().argName("BOOL")
+                .build());
+
+        options.addOption(Option.builder()
                 .longOpt("global-bridge")
                 .desc("Use single global native entry point (default: true)")
                 .hasArg().argName("BOOL")

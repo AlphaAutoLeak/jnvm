@@ -39,8 +39,10 @@ public class NativeCodeGenerator {
 
         System.out.println("[CODEGEN] Output directory: " + dir.getAbsolutePath());
 
+        boolean encryptStrings = config.isEncryptStrings();
+
         // 1. vm_types.h
-        new VmTypesGenerator(dir).generate();
+        new VmTypesGenerator(dir, encryptStrings).generate();
         System.out.println("  [+] vm_types.h");
 
         // 2. chacha20.h / chacha20.c
@@ -48,15 +50,15 @@ public class NativeCodeGenerator {
         System.out.println("  [+] chacha20.h / chacha20.c");
 
         // 3. vm_data.h / vm_data.c
-        new VmDataGenerator(dir, methods, stringKey).generate();
+        new VmDataGenerator(dir, methods, stringKey, encryptStrings).generate();
         System.out.println("  [+] vm_data.h / vm_data.c");
 
         // 4. vm_interpreter.h / vm_interpreter.c
-        new VmInterpreterGenerator(dir, config.isDebug(), methodIdXorKey).generate();
+        new VmInterpreterGenerator(dir, config.isDebug(), encryptStrings, methodIdXorKey).generate();
         System.out.println("  [+] vm_interpreter.h / vm_interpreter.c");
 
         // 5. vm_bridge.c
-        new VmBridgeGenerator(dir, bridgeClass).generate();
+        new VmBridgeGenerator(dir, bridgeClass, encryptStrings).generate();
         System.out.println("  [+] vm_bridge.c");
 
         // 6. build.zig

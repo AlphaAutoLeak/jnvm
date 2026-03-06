@@ -14,15 +14,17 @@ public class VmInterpreterGenerator {
     
     private final File dir;
     private final boolean debug;
+    private final boolean encryptStrings;
     private final Instructions instructions;
     private final VMHelpers helpers;
     private final int methodIdXorKey;
     
-    public VmInterpreterGenerator(File dir, boolean debug, int methodIdXorKey) {
+    public VmInterpreterGenerator(File dir, boolean debug, boolean encryptStrings, int methodIdXorKey) {
         this.dir = dir;
         this.debug = debug;
+        this.encryptStrings = encryptStrings;
         this.instructions = new Instructions();
-        this.helpers = new VMHelpers();
+        this.helpers = new VMHelpers(encryptStrings);
         this.methodIdXorKey = methodIdXorKey;
     }
     

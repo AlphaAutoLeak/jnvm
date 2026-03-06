@@ -12,10 +12,12 @@ public class VmBridgeGenerator {
 
     private final File dir;
     private final String bridgeClass;
+    private final boolean encryptStrings;
 
-    public VmBridgeGenerator(File dir, String bridgeClass) {
+    public VmBridgeGenerator(File dir, String bridgeClass, boolean encryptStrings) {
         this.dir = dir;
         this.bridgeClass = bridgeClass;
+        this.encryptStrings = encryptStrings;
     }
 
     public void generate() throws IOException {
@@ -83,9 +85,11 @@ public class VmBridgeGenerator {
         w.println("        return JNI_ERR;");
         w.println("    }");
         w.println();
-        w.println("    // 初始化字符串池（解密所有字符串）");
-        w.println("    vm_init_strings();");
-        w.println();
+        if (encryptStrings) {
+            w.println("    // 初始化字符串池（解密所有字符串）");
+            w.println("    vm_init_strings();");
+            w.println();
+        }
         w.println("    if (register_native_methods(env) != JNI_OK) {");
         w.println("        return JNI_ERR;");
         w.println("    }");
