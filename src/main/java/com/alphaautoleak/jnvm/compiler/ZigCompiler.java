@@ -58,9 +58,10 @@ public class ZigCompiler {
 
         cmd.add("-fno-sanitize=all");           // Disable all runtime sanitizers
         cmd.add("-fno-sanitize-trap=all");      // Prevent trap instructions for undefined behavior
-        cmd.add("-Os");                         // Optimize for size (instead of -O2)
-        cmd.add("-fno-optimize-sibling-calls"); // Disable sibling call optimization
-        cmd.add("-fno-slp-vectorize");          // Disable SLP vectorization
+        cmd.add("-O3");                         // Maximum speed optimization
+        cmd.add("-ffast-math");                 // Aggressive float optimization
+        cmd.add("-flto");                       // Link-time optimization
+        cmd.add("-DNDEBUG");                    // Disable assertions
 
         cmd.add("-std=c11");
         cmd.add("-fPIC");

@@ -50,6 +50,11 @@ public class VmInterpreterGenerator {
             w.println("void frame_pool_init(void);");
             w.println();
 
+            // VM method lookup initialization
+            w.println("// VM method lookup initialization (called in JNI_OnLoad)");
+            w.println("void vm_init_method_lookup(void);");
+            w.println();
+
             // Helper function declarations
             for (VMHelper helper : helpers.getAllHelpers()) {
                 helper.generateHeader(w);
@@ -70,6 +75,7 @@ public class VmInterpreterGenerator {
     
     private void generateSource() throws IOException {
         try (PrintWriter w = new PrintWriter(new java.io.FileWriter(new File(dir, "vm_interpreter.c")))) {
+            w.println("#define _POSIX_C_SOURCE 200809L");
             w.println("#include \"vm_interpreter.h\"");
             w.println("#include \"vm_data.h\"");
             w.println("#include \"chacha20.h\"");
@@ -124,48 +130,26 @@ public class VmInterpreterGenerator {
     }
     
     private void emitCachingSystem(PrintWriter w) {
-        // === Frame memory pool ===
-        w.println("// === Frame memory pool (avoid calloc/free on each call) ===");
+        // === Frame memory pool (ultra-fast bump allocator) ===
+        w.println("// === Frame memory pool (ultra-fast bump allocator) ===");
         w.println("#define FRAME_POOL_SIZE (4 * 1024 * 1024)  // 4MB pool");
-        w.println("#define MAX_FRAME_DEPTH 256                 // max call nesting depth");
         w.println();
-        w.println("typedef struct {");
-        w.println("    uint8_t* base;                         // pool base address");
-        w.println("    size_t offset;                         // current allocation offset");
-        w.println("    size_t frameOffsets[MAX_FRAME_DEPTH];  // per-frame start offset stack");
-        w.println("    int depth;                             // current frame depth");
-        w.println("} FramePool;");
+        w.println("static VMValue* _frameBase;");
+        w.println("static int _frameOffset;  // offset in VMValue units");
         w.println();
-        w.println("static FramePool framePool;");
-        w.println();
-        w.println("// Initialize frame pool (called in JNI_OnLoad)");
         w.println("void frame_pool_init(void) {");
-        w.println("    framePool.base = (uint8_t*)malloc(FRAME_POOL_SIZE);");
-        w.println("    framePool.offset = 0;");
-        w.println("    framePool.depth = 0;");
+        w.println("    _frameBase = (VMValue*)malloc(FRAME_POOL_SIZE);");
+        w.println("    _frameOffset = 0;");
         w.println("}");
         w.println();
-        w.println("// Enter method frame - save position and allocate (no zeroing, caller handles if needed)");
-        w.println("static VMValue* frame_pool_push(int count) {");
-        w.println("    size_t size = count * sizeof(VMValue);");
-        w.println("    size = (size + 15) & ~(size_t)15;  // 16-byte alignment");
-        w.println("    if (framePool.offset + size > FRAME_POOL_SIZE || framePool.depth >= MAX_FRAME_DEPTH) {");
-        w.println("        return (VMValue*)calloc(count, sizeof(VMValue));  // fallback when pool full (calloc zeros)");
-        w.println("    }");
-        w.println("    framePool.frameOffsets[framePool.depth++] = framePool.offset;");
-        w.println("    VMValue* ptr = (VMValue*)(framePool.base + framePool.offset);");
-        w.println("    framePool.offset += size;");
-        w.println("    return ptr;  // not zeroed, caller handles if needed");
+        w.println("static inline VMValue* frame_pool_push(int count) {");
+        w.println("    VMValue* ptr = _frameBase + _frameOffset;");
+        w.println("    _frameOffset += count;");
+        w.println("    return ptr;");
         w.println("}");
         w.println();
-        w.println("// Exit method frame - restore pointer");
-        w.println("static void frame_pool_pop(VMValue* ptr) {");
-        w.println("    if (ptr >= (VMValue*)framePool.base && ptr < (VMValue*)(framePool.base + FRAME_POOL_SIZE)) {");
-        w.println("        framePool.depth--;");
-        w.println("        framePool.offset = framePool.frameOffsets[framePool.depth];");
-        w.println("    } else {");
-        w.println("        free(ptr);  // allocated outside pool, free directly");
-        w.println("    }");
+        w.println("static inline void frame_pool_pop(int count) {");
+        w.println("    _frameOffset -= count;");
         w.println("}");
         w.println();
 
@@ -307,6 +291,65 @@ public class VmInterpreterGenerator {
         w.println("    return fid;");
         w.println("}");
         w.println();
+
+        // === VM method lookup for direct calls ===
+        w.println("// === VM method lookup (direct VM-to-VM calls) ===");
+        w.println("#define VM_METHOD_LOOKUP_SIZE 256");
+        w.println();
+        w.println("typedef struct {");
+        w.println("    const char* owner;");
+        w.println("    const char* name;");
+        w.println("    const char* desc;");
+        w.println("    int methodId;");
+        w.println("} VMMethodLookupEntry;");
+        w.println();
+        w.println("static VMMethodLookupEntry vmMethodLookup[VM_METHOD_LOOKUP_SIZE];");
+        w.println();
+        w.println("static inline int vm_lookup_method(const char* owner, const char* name, const char* desc) {");
+        w.println("    uint32_t hash = triple_hash(owner, name, desc);");
+        w.println("    for (int probe = 0; probe < 8; probe++) {");
+        w.println("        uint32_t idx = (hash + probe) & (VM_METHOD_LOOKUP_SIZE - 1);");
+        w.println("        VMMethodLookupEntry* e = &vmMethodLookup[idx];");
+        w.println("        if (e->owner == NULL) return -1;");
+        w.println("        if (e->owner == owner && e->name == name && e->desc == desc) return e->methodId;");
+        w.println("    }");
+        w.println("    return -1;");
+        w.println("}");
+        w.println();
+        w.println("void vm_init_method_lookup(void) {");
+        w.println("    memset(vmMethodLookup, 0, sizeof(vmMethodLookup));");
+        w.println("    for (int i = 0; i < vm_method_count; i++) {");
+        w.println("        VMMethod* m = &vm_methods[i];");
+        w.println("        if (m->ownerIdx < 0 || m->nameIdx < 0 || m->descIdx < 0) continue;");
+        w.println("        const char* o = vm_get_string(m->ownerIdx);");
+        w.println("        const char* n = vm_get_string(m->nameIdx);");
+        w.println("        const char* d = vm_get_string(m->descIdx);");
+        w.println("        uint32_t hash = triple_hash(o, n, d);");
+        w.println("        for (int probe = 0; probe < 8; probe++) {");
+        w.println("            uint32_t idx = (hash + probe) & (VM_METHOD_LOOKUP_SIZE - 1);");
+        w.println("            if (vmMethodLookup[idx].owner == NULL) {");
+        w.println("                vmMethodLookup[idx].owner = o;");
+        w.println("                vmMethodLookup[idx].name = n;");
+        w.println("                vmMethodLookup[idx].desc = d;");
+        w.println("                vmMethodLookup[idx].methodId = i;");
+        w.println("                break;");
+        w.println("            }");
+        w.println("        }");
+        w.println("    }");
+        w.println("    // Pre-cache vmTargetId in all MetaEntry structs for invoke instructions");
+        w.println("    for (int i = 0; i < vm_method_count; i++) {");
+        w.println("        VMMethod* m = &vm_methods[i];");
+        w.println("        for (int j = 0; j < m->metadataCount; j++) {");
+        w.println("            MetaEntry* me = &m->metadata[j];");
+        w.println("            if (me->type == META_METHOD && me->ownerIdx >= 0 && me->nameIdx >= 0 && me->descIdx >= 0) {");
+        w.println("                me->vmTargetId = vm_lookup_method(vm_get_string(me->ownerIdx), vm_get_string(me->nameIdx), vm_get_string(me->descIdx));");
+        w.println("            } else {");
+        w.println("                me->vmTargetId = -1;");
+        w.println("            }");
+        w.println("        }");
+        w.println("    }");
+        w.println("}");
+        w.println();
     }
     
     private void emitExecuteCommon(PrintWriter w) {
@@ -317,7 +360,8 @@ public class VmInterpreterGenerator {
         w.println("} ExecuteResult;");
         w.println();
 
-        w.println("static ExecuteResult vm_execute_common(JNIEnv* env, int methodId, jobject instance, jobjectArray args, jclass callerClass) {");
+        w.println("__attribute__((hot))");
+        w.println("static ExecuteResult vm_execute_common(JNIEnv* env, int methodId, jobject instance, jobjectArray args, jclass callerClass, VMValue* directLocals, int directLocalSlots) {");
         w.println("    ExecuteResult execResult = { .returnType = 'V' };");
         w.println("    methodId ^= METHOD_ID_XOR_KEY;");
         w.println("    if (methodId < 0 || methodId >= vm_method_count) {");
@@ -331,18 +375,22 @@ public class VmInterpreterGenerator {
         w.println("    uint8_t* bytecode = m->bytecode;");
         w.println();
 
-        // Initialize frame (using memory pool)
+        // Initialize frame
         w.println("    VMFrame frame = { .pc = 0, .sp = 0, .callerClass = callerClass };");
-        w.println("    frame.stack = frame_pool_push(m->maxStack);  // stack doesn't need zeroing, will be overwritten");
-        w.println("    frame.locals = frame_pool_push(m->maxLocals);");
-        w.println("    memset(frame.locals, 0, m->maxLocals * sizeof(VMValue));  // locals must be zeroed");
+        w.println("    frame.stack = frame_pool_push(m->maxStack);");
         w.println();
 
-        // Set up arguments
-        w.println("    frame.locals[0].l = instance;");
+        // Set up arguments - direct path (zero copy) or unboxing path
         w.println("    const char* methodDesc = (m->descIdx >= 0) ? vm_get_string(m->descIdx) : NULL;");
-        w.println("    const char* argTypes = (m->argTypesIdx >= 0) ? vm_get_string(m->argTypesIdx) : NULL;");
-        w.println("    vm_unbox_args_fast(env, &frame, args, argTypes, m->argCount, instance ? 1 : 0);");
+        w.println("    if (directLocals) {");
+        w.println("        frame.locals = directLocals;  // reuse caller's buffer directly (zero copy)");
+        w.println("    } else {");
+        w.println("        frame.locals = frame_pool_push(m->maxLocals);");
+        w.println("        memset(frame.locals, 0, m->maxLocals * sizeof(VMValue));");
+        w.println("        frame.locals[0].l = instance;");
+        w.println("        const char* argTypes = (m->argTypesIdx >= 0) ? vm_get_string(m->argTypesIdx) : NULL;");
+        w.println("        vm_unbox_args_fast(env, &frame, args, argTypes, m->argCount, instance ? 1 : 0);");
+        w.println("    }");
         w.println();
 
         // Lookup table for whether instruction needs metadata (indexed by OBFUSCATED opcode)
@@ -390,20 +438,17 @@ public class VmInterpreterGenerator {
         w.println();
 
         // DISPATCH_NEXT: directly use obfuscated opcode as index (NO decoding!)
+        // Unconditional meta lookup (branchless, pcToMetaIdx returns -1 for non-meta instructions)
         w.println("    #define DISPATCH_NEXT \\");
         w.println("        do { \\");
-        w.println("            if (UNLIKELY(frame.pc >= m->bytecodeLen)) goto method_exit; \\");
         w.println("            uint8_t _op = bytecode[frame.pc]; \\");
-        w.println("            if (needs_meta[_op]) { \\");
-        w.println("                int _metaIdx = m->pcToMetaIdx[frame.pc]; \\");
-        w.println("                meta = (_metaIdx >= 0) ? &m->metadata[_metaIdx] : NULL; \\");
-        w.println("            } else { \\");
-        w.println("                meta = NULL; \\");
-        w.println("            } \\");
+        w.println("            int _metaIdx = m->pcToMetaIdx[frame.pc]; \\");
+        w.println("            meta = (_metaIdx >= 0) ? &m->metadata[_metaIdx] : NULL; \\");
         w.println("            goto *dispatch_table[_op]; \\");
         w.println("        } while(0)");
         w.println();
 
+        w.println("    int _hasException = 0;  // set to 1 when unhandled exception causes exit");
         w.println("    MetaEntry* meta = NULL;");
         w.println("    DISPATCH_NEXT;");
         w.println();
@@ -432,18 +477,22 @@ public class VmInterpreterGenerator {
         // Return result on exit
         w.println("    method_exit:");
         w.println("    ;");
-        w.println("    // Get return type from method descriptor");
-        w.println("    if (methodDesc) {");
-        w.println("        const char* p = methodDesc;");
-        w.println("        while (*p && *p != ')') p++;");
-        w.println("        if (*p == ')') execResult.returnType = *(p + 1);");
+        w.println("    if (UNLIKELY(_hasException)) {");
+        w.println("        execResult.returnType = 'X';  // signal unhandled exception");
+        w.println("    } else {");
+        w.println("        // Get return type from method descriptor");
+        w.println("        if (methodDesc) {");
+        w.println("            const char* p = methodDesc;");
+        w.println("            while (*p && *p != ')') p++;");
+        w.println("            if (*p == ')') execResult.returnType = *(p + 1);");
+        w.println("        }");
+        w.println("        // Get return value from top of stack");
+        w.println("        if (frame.sp > 0) {");
+        w.println("            execResult.value = frame.stack[frame.sp - 1];");
+        w.println("        }");
         w.println("    }");
-        w.println("    // Get return value from top of stack");
-        w.println("    if (frame.sp > 0) {");
-        w.println("        execResult.value = frame.stack[frame.sp - 1];");
-        w.println("    }");
-        w.println("    frame_pool_pop(frame.locals);");
-        w.println("    frame_pool_pop(frame.stack);");
+        w.println("    if (!directLocals) frame_pool_pop(m->maxLocals);");
+        w.println("    frame_pool_pop(m->maxStack);");
         w.println("    return execResult;");
         w.println("}");
         w.println();
@@ -452,42 +501,42 @@ public class VmInterpreterGenerator {
     private void emitExecuteWrappers(PrintWriter w) {
         // void
         w.println("void vm_execute_method_void(JNIEnv* env, int methodId, jobject instance, jobjectArray args, jclass callerClass) {");
-        w.println("    ExecuteResult r = vm_execute_common(env, methodId, instance, args, callerClass);");
+        w.println("    ExecuteResult r = vm_execute_common(env, methodId, instance, args, callerClass, NULL, 0);");
         w.println("    (void)r;  // ignore return value");
         w.println("}");
         w.println();
-        
+
         // int
         w.println("jint vm_execute_method_int(JNIEnv* env, int methodId, jobject instance, jobjectArray args, jclass callerClass) {");
-        w.println("    ExecuteResult r = vm_execute_common(env, methodId, instance, args, callerClass);");
+        w.println("    ExecuteResult r = vm_execute_common(env, methodId, instance, args, callerClass, NULL, 0);");
         w.println("    return r.value.i;");
         w.println("}");
         w.println();
-        
+
         // long
         w.println("jlong vm_execute_method_long(JNIEnv* env, int methodId, jobject instance, jobjectArray args, jclass callerClass) {");
-        w.println("    ExecuteResult r = vm_execute_common(env, methodId, instance, args, callerClass);");
+        w.println("    ExecuteResult r = vm_execute_common(env, methodId, instance, args, callerClass, NULL, 0);");
         w.println("    return r.value.j;");
         w.println("}");
         w.println();
-        
+
         // float
         w.println("jfloat vm_execute_method_float(JNIEnv* env, int methodId, jobject instance, jobjectArray args, jclass callerClass) {");
-        w.println("    ExecuteResult r = vm_execute_common(env, methodId, instance, args, callerClass);");
+        w.println("    ExecuteResult r = vm_execute_common(env, methodId, instance, args, callerClass, NULL, 0);");
         w.println("    return r.value.f;");
         w.println("}");
         w.println();
-        
+
         // double
         w.println("jdouble vm_execute_method_double(JNIEnv* env, int methodId, jobject instance, jobjectArray args, jclass callerClass) {");
-        w.println("    ExecuteResult r = vm_execute_common(env, methodId, instance, args, callerClass);");
+        w.println("    ExecuteResult r = vm_execute_common(env, methodId, instance, args, callerClass, NULL, 0);");
         w.println("    return r.value.d;");
         w.println("}");
         w.println();
-        
+
         // object
         w.println("jobject vm_execute_method_object(JNIEnv* env, int methodId, jobject instance, jobjectArray args, jclass callerClass) {");
-        w.println("    ExecuteResult r = vm_execute_common(env, methodId, instance, args, callerClass);");
+        w.println("    ExecuteResult r = vm_execute_common(env, methodId, instance, args, callerClass, NULL, 0);");
         w.println("    return r.value.l;");
         w.println("}");
     }

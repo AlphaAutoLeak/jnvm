@@ -4,7 +4,7 @@ public class TestBench {
 
     public static void main(String[] args) {
         Main.main(new String[]{
-            "sampples/bench-config.yml"
+            "samples/bench-config.yml"
         });
     }
 

@@ -37,7 +37,7 @@ public class InvokeDynamicInstruction extends Instruction {
         w.println("                      }");
         w.println("                      VM_LOG(\"No handler found, rethrowing\\n\");");
         w.println("                      (*env)->Throw(env, exc);");
-        w.println("                      goto method_exit;");
+        w.println("                      _hasException = 1; goto method_exit;");
         w.println("                  }");
         w.println("                }");
         w.println("                frame.pc++;");  // each instruction is 1 byte in protected bytecode format
@@ -62,7 +62,7 @@ public class InvokeDynamicInstruction extends Instruction {
         w.println("                  }");
         w.println("                  VM_LOG(\"No handler found, rethrowing\\n\");");
         w.println("                  (*env)->Throw(env, exc);");
-        w.println("                  goto method_exit;");
+        w.println("                  _hasException = 1; goto method_exit;");
         w.println("              }");
         w.println("            }");
         w.println("            frame.pc++;");

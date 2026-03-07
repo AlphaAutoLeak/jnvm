@@ -25,7 +25,7 @@ public class AThrowInstruction extends Instruction {
         w.println("                    // Throw NullPointerException for null exception");
         w.println("                    jclass npeClass = vm_find_class(env, \"java/lang/NullPointerException\");");
         w.println("                    if (npeClass) (*env)->ThrowNew(env, npeClass, \"Cannot throw null exception\");");
-        w.println("                    goto method_exit;");
+        w.println("                    _hasException = 1; goto method_exit;");
         w.println("                }");
         w.println("                VM_LOG(\"ATHROW: exception thrown at pc=%d\\n\", frame.pc);");
         w.println("                ");
@@ -63,7 +63,7 @@ public class AThrowInstruction extends Instruction {
         w.println("                    // No handler found, rethrow exception");
         w.println("                    VM_LOG(\"ATHROW: No handler found, rethrowing\\n\");");
         w.println("                    (*env)->Throw(env, (jthrowable)exception);");
-        w.println("                    goto method_exit;");
+        w.println("                    _hasException = 1; goto method_exit;");
         w.println("                }");
     }
     
@@ -88,7 +88,7 @@ public class AThrowInstruction extends Instruction {
         w.println("            if (exception == NULL) {");
         w.println("                jclass npeClass = vm_find_class(env, \"java/lang/NullPointerException\");");
         w.println("                if (npeClass) (*env)->ThrowNew(env, npeClass, \"Cannot throw null exception\");");
-        w.println("                goto method_exit;");
+        w.println("                _hasException = 1; goto method_exit;");
         w.println("            }");
         w.println("            VM_LOG(\"ATHROW: exception thrown at pc=%d\\n\", frame.pc);");
         w.println("            ");
@@ -123,7 +123,7 @@ public class AThrowInstruction extends Instruction {
         w.println("            } else {");
         w.println("                VM_LOG(\"ATHROW: No handler found, rethrowing\\n\");");
         w.println("                (*env)->Throw(env, (jthrowable)exception);");
-        w.println("                goto method_exit;");  // no handler found, exit
+        w.println("                _hasException = 1; goto method_exit;");  // no handler found, exit
         w.println("            }");
     }
 }

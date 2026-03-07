@@ -19,7 +19,7 @@ public class LALoadInstruction extends Instruction {
         w.println("                  if (arr == NULL) {");
         w.println("                      jclass npeClass = vm_find_class(env, \"java/lang/NullPointerException\");");
         w.println("                      if (npeClass) (*env)->ThrowNew(env, npeClass, \"null array\");");
-        w.println("                      goto method_exit;");
+        w.println("                      _hasException = 1; goto method_exit;");
         w.println("                  }");
         w.println("                  (*env)->GetLongArrayRegion(env, arr, idx, 1, &frame.stack[frame.sp++].j); }");
         pcIncBreak(w);

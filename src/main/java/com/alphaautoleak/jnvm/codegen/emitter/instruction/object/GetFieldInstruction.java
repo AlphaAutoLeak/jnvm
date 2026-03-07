@@ -24,7 +24,7 @@ public class GetFieldInstruction extends Instruction {
         w.println("                  if (!obj) {");
         w.println("                      jclass npeClass = vm_find_class(env, \"java/lang/NullPointerException\");");
         w.println("                      if (npeClass) (*env)->ThrowNew(env, npeClass, \"\");");
-        w.println("                      goto method_exit;");
+        w.println("                      _hasException = 1; goto method_exit;");
         w.println("                  }");
         w.println("                  const char* owner = vm_get_string(meta->ownerIdx);");
         w.println("                  const char* name = vm_get_string(meta->nameIdx);");
@@ -56,7 +56,7 @@ public class GetFieldInstruction extends Instruction {
         w.println("              if (UNLIKELY(!obj)) {");
         w.println("                  jclass npeClass = vm_find_class(env, \"java/lang/NullPointerException\");");
         w.println("                  if (npeClass) (*env)->ThrowNew(env, npeClass, \"\");");
-        w.println("                  goto method_exit;");
+        w.println("                  _hasException = 1; goto method_exit;");
         w.println("              }");
         w.println("              const char* owner = vm_get_string(meta->ownerIdx);");
         w.println("              const char* name = vm_get_string(meta->nameIdx);");

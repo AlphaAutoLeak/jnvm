@@ -161,6 +161,12 @@ public class VmDataGenerator {
                 }
             }
             
+            // Add method owner+name to string pool (for direct VM-to-VM call lookup)
+            for (EncryptedMethodData method : methods) {
+                if (method.getOwner() != null) allStrings.add(method.getOwner());
+                if (method.getName() != null) allStrings.add(method.getName());
+            }
+
             // First pass: pre-compute all INVOKE metadata
             for (EncryptedMethodData method : methods) {
                 List<String> localPool = method.getStringPool();
@@ -266,8 +272,11 @@ public class VmDataGenerator {
                 String argTypes = parseMethodArgTypes(desc);
                 int argCount = argTypes.length();
                 int argTypesIdx = argCount > 0 ? getOrAddStringIndex(argTypes) : -1;
-                w.printf(".isStatic=%d, .argCount=%d, .argTypesIdx=%d },\n",
-                    method.isStatic() ? 1 : 0, argCount, argTypesIdx);
+                // Method identity for direct VM-to-VM call optimization
+                int methodOwnerIdx = method.getOwner() != null ? getOrAddStringIndex(method.getOwner()) : -1;
+                int methodNameIdx = method.getName() != null ? getOrAddStringIndex(method.getName()) : -1;
+                w.printf(".isStatic=%d, .argCount=%d, .argTypesIdx=%d, .ownerIdx=%d, .nameIdx=%d },\n",
+                    method.isStatic() ? 1 : 0, argCount, argTypesIdx, methodOwnerIdx, methodNameIdx);
             }
             w.println("};");
         }
