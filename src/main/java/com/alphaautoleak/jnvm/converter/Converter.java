@@ -7,6 +7,7 @@ import com.alphaautoleak.jnvm.compiler.ZigCompiler;
 import com.alphaautoleak.jnvm.config.ProtectConfig;
 import com.alphaautoleak.jnvm.crypto.BytecodeEncryptor;
 import com.alphaautoleak.jnvm.crypto.EncryptedMethodData;
+import com.alphaautoleak.jnvm.crypto.OpcodeObfuscator;
 import com.alphaautoleak.jnvm.patcher.JarPatcher;
 import com.alphaautoleak.jnvm.patcher.OutputPackager;
 
@@ -17,6 +18,7 @@ import java.util.Set;
 public class Converter {
 
     private final ProtectConfig config;
+    private OpcodeObfuscator opcodeObfuscator;
     private List<MethodInfo> protectedMethods;
     private Set<String> affectedClasses;
     private List<EncryptedMethodData> encryptedMethods;
@@ -28,9 +30,13 @@ public class Converter {
     public void run() throws Exception {
         long startTime = System.currentTimeMillis();
 
+        // Create opcode obfuscator (global, shared across all methods)
+        opcodeObfuscator = new OpcodeObfuscator();
+        System.out.println("[INFO] Opcode obfuscation enabled - each bytecode is mapped to random value");
+
         // ===== STEP 1: Scan JAR =====
         System.out.println("[STEP 1/7] Scanning JAR: " + config.getInputJar());
-        JarScanner scanner = new JarScanner(config);
+        JarScanner scanner = new JarScanner(config, opcodeObfuscator);
         protectedMethods = scanner.scan(config.getInputJar());
         affectedClasses = scanner.getAffectedClasses();
 
@@ -66,7 +72,7 @@ public class Converter {
 
         // ===== STEP 4: Generate C source code =====
         System.out.println("[STEP 3/7] Generating native C sources...");
-        NativeCodeGenerator codegen = new NativeCodeGenerator(config, encryptedMethods, bridgeClass, methodIdXorKey);
+        NativeCodeGenerator codegen = new NativeCodeGenerator(config, encryptedMethods, bridgeClass, methodIdXorKey, opcodeObfuscator);
         codegen.generate();
         System.out.println();
 

@@ -1,6 +1,7 @@
 package com.alphaautoleak.jnvm.asm;
 
 import com.alphaautoleak.jnvm.config.ProtectConfig;
+import com.alphaautoleak.jnvm.crypto.OpcodeObfuscator;
 import org.objectweb.asm.*;
 import org.objectweb.asm.tree.*;
 
@@ -17,6 +18,7 @@ import java.util.jar.JarFile;
 public class JarScanner {
 
     private final ProtectConfig config;
+    private final OpcodeObfuscator opcodeObfuscator;
 
     /** Global method ID counter */
     private int nextMethodId = 0;
@@ -30,9 +32,27 @@ public class JarScanner {
     /** Annotation rule descriptor list */
     private final List<String> annotationDescs;
 
-    public JarScanner(ProtectConfig config) {
+    public JarScanner(ProtectConfig config, OpcodeObfuscator opcodeObfuscator) {
         this.config = config;
+        this.opcodeObfuscator = opcodeObfuscator;
         this.annotationDescs = config.getAnnotationRules();
+    }
+    
+    /**
+     * Legacy constructor (no obfuscation)
+     */
+    public JarScanner(ProtectConfig config) {
+        this(config, new OpcodeObfuscator() {
+            @Override public int encode(int opcode) { return opcode; }
+            @Override public int decode(int obfuscated) { return obfuscated; }
+        });
+    }
+
+    /**
+     * Returns the opcode obfuscator used during scanning
+     */
+    public OpcodeObfuscator getOpcodeObfuscator() {
+        return opcodeObfuscator;
     }
 
     /**
@@ -168,7 +188,7 @@ public class JarScanner {
         info.setSignature(mn.signature);
 
         // ===== Extract bytecode + metadata (new format) =====
-        BytecodeExtractor extractor = new BytecodeExtractor(cn, mn);
+        BytecodeExtractor extractor = new BytecodeExtractor(cn, mn, opcodeObfuscator);
         extractor.extract();
 
         info.setBytecode(extractor.getBytecode());

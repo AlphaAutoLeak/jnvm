@@ -1,5 +1,6 @@
 package com.alphaautoleak.jnvm.asm;
 
+import com.alphaautoleak.jnvm.crypto.OpcodeObfuscator;
 import org.objectweb.asm.*;
 import org.objectweb.asm.tree.*;
 
@@ -9,7 +10,7 @@ import java.util.*;
  * Serializes ASM InsnList to custom bytecode format.
  *
  * New format design:
- *   - Bytecode: each instruction has only opcode (1 byte)
+ *   - Bytecode: each instruction has only opcode (1 byte), obfuscated
  *   - Metadata: instruction operands stored in separate MetaEntry array
  *   - pcToMetaIdx: PC to metadata index mapping array
  *
@@ -19,6 +20,9 @@ public class BytecodeExtractor {
 
     private final ClassNode classNode;
     private final MethodNode methodNode;
+
+    /** Opcode obfuscator (shared globally) */
+    private final OpcodeObfuscator opcodeObfuscator;
 
     /** Bytecode buffer */
     private final List<Integer> bytecodes = new ArrayList<>();
@@ -77,9 +81,20 @@ public class BytecodeExtractor {
     }
 
 
-    public BytecodeExtractor(ClassNode cn, MethodNode mn) {
+    public BytecodeExtractor(ClassNode cn, MethodNode mn, OpcodeObfuscator opcodeObfuscator) {
         this.classNode = cn;
         this.methodNode = mn;
+        this.opcodeObfuscator = opcodeObfuscator;
+    }
+    
+    /**
+     * Legacy constructor (no obfuscation) - uses identity mapping
+     */
+    public BytecodeExtractor(ClassNode cn, MethodNode mn) {
+        this(cn, mn, new OpcodeObfuscator() {
+            @Override public int encode(int opcode) { return opcode; }
+            @Override public int decode(int obfuscated) { return obfuscated; }
+        });
     }
 
     /**
@@ -131,8 +146,8 @@ public class BytecodeExtractor {
         int opcode = node.getOpcode();
         int pc = bytecodes.size();
         
-        // Write opcode
-        bytecodes.add(opcode);
+        // Write obfuscated opcode
+        bytecodes.add(opcodeObfuscator.encode(opcode));
         
         switch (node.getType()) {
             case AbstractInsnNode.INSN:

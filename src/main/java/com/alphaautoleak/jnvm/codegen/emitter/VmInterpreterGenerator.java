@@ -381,11 +381,12 @@ public class VmInterpreterGenerator {
         w.println("    };");
         w.println();
 
-        // Optimized DISPATCH_NEXT: only lookup metadata for instructions that need it
+        // Optimized DISPATCH_NEXT: decode obfuscated opcode, then dispatch
         w.println("    #define DISPATCH_NEXT \\");
         w.println("        do { \\");
         w.println("            if (UNLIKELY(frame.pc >= m->bytecodeLen)) goto method_exit; \\");
-        w.println("            uint8_t _op = bytecode[frame.pc]; \\");
+        w.println("            uint8_t _obfuscated = bytecode[frame.pc]; \\");
+        w.println("            uint8_t _op = DECODE_OPCODE(_obfuscated); \\");
         w.println("            if (needs_meta[_op]) { \\");
         w.println("                int _metaIdx = m->pcToMetaIdx[frame.pc]; \\");
         w.println("                meta = (_metaIdx >= 0) ? &m->metadata[_metaIdx] : NULL; \\");
@@ -406,6 +407,7 @@ public class VmInterpreterGenerator {
             w.println();
         }
 
+        
         w.println("        OP_DEFAULT:");
         w.println("            VM_LOG(\"Unknown opcode: 0x%02x at pc=%d\\n\", bytecode[frame.pc], frame.pc);");
         w.println("            frame.pc++;");

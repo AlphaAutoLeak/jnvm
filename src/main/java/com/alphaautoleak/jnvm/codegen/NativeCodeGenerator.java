@@ -3,6 +3,7 @@ package com.alphaautoleak.jnvm.codegen;
 import com.alphaautoleak.jnvm.codegen.emitter.*;
 import com.alphaautoleak.jnvm.config.ProtectConfig;
 import com.alphaautoleak.jnvm.crypto.EncryptedMethodData;
+import com.alphaautoleak.jnvm.crypto.OpcodeObfuscator;
 import com.alphaautoleak.jnvm.crypto.StringEncryptor;
 
 import java.io.File;
@@ -22,17 +23,20 @@ public class NativeCodeGenerator {
     private final byte[] stringKey;
     private final String bridgeClass;
     private final int methodIdXorKey;
+    private final OpcodeObfuscator opcodeObfuscator;
 
-    public NativeCodeGenerator(ProtectConfig config, List<EncryptedMethodData> methods, String bridgeClass, int methodIdXorKey) {
+    public NativeCodeGenerator(ProtectConfig config, List<EncryptedMethodData> methods, 
+                               String bridgeClass, int methodIdXorKey, OpcodeObfuscator opcodeObfuscator) {
         this.config = config;
         this.methods = methods;
         this.stringKey = StringEncryptor.generateStringKey();
         this.bridgeClass = bridgeClass;
         this.methodIdXorKey = methodIdXorKey;
+        this.opcodeObfuscator = opcodeObfuscator;
     }
 
     /**
- * Generates native C code from Java bytecode.
+     * Generates native C code from Java bytecode.
      * Generates all files
      */
     public void generate() throws IOException {
@@ -43,8 +47,8 @@ public class NativeCodeGenerator {
 
         boolean encryptStrings = config.isEncryptStrings();
 
-        // 1. vm_types.h
-        new VmTypesGenerator(dir, encryptStrings).generate();
+        // 1. vm_types.h (includes opcode decode table)
+        new VmTypesGenerator(dir, encryptStrings, opcodeObfuscator).generate();
         System.out.println("  [+] vm_types.h");
 
         // 2. chacha20.h / chacha20.c
@@ -67,7 +71,6 @@ public class NativeCodeGenerator {
     }
 
     /**
- * Generates native C code from Java bytecode.
      * Gets string encryption key
      */
     public byte[] getStringKey() {
