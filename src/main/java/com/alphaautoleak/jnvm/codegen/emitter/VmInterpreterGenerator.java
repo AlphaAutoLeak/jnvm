@@ -141,18 +141,17 @@ public class VmInterpreterGenerator {
         w.println("    framePool.depth = 0;");
         w.println("}");
         w.println();
-        w.println("// 进入方法帧 - 保存当前位置并分配");
+        w.println("// 进入方法帧 - 保存当前位置并分配（不清零，由调用者按需清零）");
         w.println("static VMValue* frame_pool_push(int count) {");
         w.println("    size_t size = count * sizeof(VMValue);");
         w.println("    size = (size + 15) & ~(size_t)15;  // 16字节对齐");
         w.println("    if (framePool.offset + size > FRAME_POOL_SIZE || framePool.depth >= MAX_FRAME_DEPTH) {");
-        w.println("        return (VMValue*)calloc(count, sizeof(VMValue));  // 池满则回退");
+        w.println("        return (VMValue*)calloc(count, sizeof(VMValue));  // 池满则回退（calloc自动清零）");
         w.println("    }");
         w.println("    framePool.frameOffsets[framePool.depth++] = framePool.offset;");
         w.println("    VMValue* ptr = (VMValue*)(framePool.base + framePool.offset);");
         w.println("    framePool.offset += size;");
-        w.println("    memset(ptr, 0, size);  // 清零");
-        w.println("    return ptr;");
+        w.println("    return ptr;  // 不清零，由调用者按需清零");
         w.println("}");
         w.println();
         w.println("// 退出方法帧 - 恢复指针");
@@ -330,8 +329,9 @@ public class VmInterpreterGenerator {
         
         // 初始化帧（使用内存池）
         w.println("    VMFrame frame = { .pc = 0, .sp = 0, .callerClass = callerClass };");
-        w.println("    frame.stack = frame_pool_push(m->maxStack);");
+        w.println("    frame.stack = frame_pool_push(m->maxStack);  // stack不需要清零，会被压栈覆盖");
         w.println("    frame.locals = frame_pool_push(m->maxLocals);");
+        w.println("    memset(frame.locals, 0, m->maxLocals * sizeof(VMValue));  // locals必须清零");
         w.println();
         
         // 设置参数
