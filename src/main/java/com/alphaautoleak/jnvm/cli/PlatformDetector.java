@@ -1,12 +1,12 @@
 package com.alphaautoleak.jnvm.cli;
 
 /**
- * 平台检测工具
+ * Platform detection utility
  */
 public class PlatformDetector {
 
     /**
-     * 检测当前运行平台，映射为 Zig target triple
+     * Detects current platform, maps to Zig target triple
      */
     public static String detectCurrentTarget() {
         String os = System.getProperty("os.name", "").toLowerCase();

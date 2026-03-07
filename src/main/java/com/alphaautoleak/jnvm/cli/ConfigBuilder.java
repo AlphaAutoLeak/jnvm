@@ -8,18 +8,18 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * 从命令行参数构建配置
- * 支持通过 --config 指定 YAML 配置文件，命令行参数优先级高于配置文件
+ * Builds config from command line arguments
+ * Supports YAML config file via --config, CLI args take precedence over config file
  */
 public class ConfigBuilder {
 
     public static ProtectConfig build(CommandLine cmd) {
         ProtectConfig config = new ProtectConfig();
 
-        // 先设置配置文件路径（用于后续 validate 中加载）
+        // Set config file path first (for loading in validate)
         setConfigFile(config, cmd);
 
-        // 设置命令行参数（这些会覆盖配置文件中的值）
+        // Set CLI args (these override values from config file)
         setInputJar(config, cmd);
         setOutputJar(config, cmd);
         setProtectRules(config, cmd);
@@ -40,14 +40,14 @@ public class ConfigBuilder {
         if (cmd.hasOption("jar")) {
             config.setInputJar(new File(cmd.getOptionValue("jar")));
         }
-        // 如果没有指定，会从 YAML 配置文件加载
+        // If not specified, will load from YAML config file
     }
 
     private static void setOutputJar(ProtectConfig config, CommandLine cmd) {
         if (cmd.hasOption("out")) {
             config.setOutputJar(new File(cmd.getOptionValue("out")));
         }
-        // 如果没有指定，会在 validate 中根据 inputJar 自动生成
+        // If not specified, will auto-generate in validate based on inputJar
     }
 
     private static void setProtectRules(ProtectConfig config, CommandLine cmd) {
@@ -61,7 +61,7 @@ public class ConfigBuilder {
             }
         }
         config.setProtectRules(rules);
-        // YAML 中的规则会在 validate 中合并进来
+        // Rules from YAML will be merged in validate
     }
 
     private static void setTargets(ProtectConfig config, CommandLine cmd) {

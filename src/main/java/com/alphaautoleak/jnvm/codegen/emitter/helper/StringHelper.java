@@ -3,8 +3,8 @@ package com.alphaautoleak.jnvm.codegen.emitter.helper;
 import java.io.PrintWriter;
 
 /**
- * 字符串处理辅助函数
- * 支持 ChaCha20 加密字符串的按需解密
+ * String handling helper functions
+ * Supports on-demand decryption of ChaCha20 encrypted strings
  */
 public class StringHelper extends VMHelper {
     
@@ -34,7 +34,7 @@ public class StringHelper extends VMHelper {
     @Override
     public void generateSource(PrintWriter w) {
         if (encryptStrings) {
-            // 字符串初始化函数 - 预解密所有字符串
+            // String initialization function - pre-decrypt all strings
             w.println("void vm_init_strings() {");
             w.println("    for (int i = 0; i < vm_string_count; i++) {");
             w.println("        VMString* vs = &vm_strings[i];");
@@ -48,7 +48,7 @@ public class StringHelper extends VMHelper {
             w.println("}");
             w.println();
             
-            // 获取解密后的字符串
+            // Get decrypted string
             w.println("const char* vm_get_string(int idx) {");
             w.println("    if (idx < 0 || idx >= vm_string_count) return \"\";");
             w.println("    VMString* vs = &vm_strings[idx];");
@@ -59,7 +59,7 @@ public class StringHelper extends VMHelper {
             w.println("}");
             w.println();
         } else {
-            // 非加密模式：直接返回字符串
+            // Non-encryption mode: return string directly
             w.println("const char* vm_get_string(int idx) {");
             w.println("    if (idx < 0 || idx >= vm_string_count) return \"\";");
             w.println("    return (const char*)vm_strings[idx].encData;");

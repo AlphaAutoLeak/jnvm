@@ -8,7 +8,7 @@ import java.util.Set;
 import java.util.jar.*;
 
 /**
- * 将编译好的 native 库嵌入到输出 JAR 中。
+ * Embeds compiled native library into output JAR.
  */
 public class OutputPackager {
 
@@ -40,7 +40,7 @@ public class OutputPackager {
                 written.add(entry.getName());
             }
 
-            // 添加 native 库
+            // Add native library
             for (File lib : libraries) {
                 String target = inferTarget(lib);
                 String entryName = "META-INF/native/" + target + "/" + lib.getName();
@@ -72,7 +72,7 @@ public class OutputPackager {
         if (parentName.startsWith("out-")) {
             return parentName.substring(4);
         }
-        // zig-out/lib/ 情况
+        // zig-out/lib/ case
         if (parentName.equals("lib")) {
             return "default";
         }

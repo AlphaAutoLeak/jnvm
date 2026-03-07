@@ -3,25 +3,25 @@ package com.alphaautoleak.jnvm.codegen.emitter.types;
 import java.io.PrintWriter;
 
 /**
- * 生成 VMString 类型定义
- * 支持 ChaCha20 加密字符串
+ * Generates VMString type definition
+ * Supports ChaCha20 encrypted strings
  */
 public class VMStringType {
     
     public static void generate(PrintWriter w, boolean encryptStrings) {
-        w.println("/* 字符串池 */");
+        w.println("/* String pool */");
         w.println("typedef struct {");
         if (encryptStrings) {
-            w.println("    const unsigned char* encData;  // 加密数据");
-            w.println("    char* decData;                 // 解密缓存（运行时分配）");
-            w.println("    int len;                       // 原始长度");
-            w.println("    int encrypted;                 // 是否加密 (1=是, 0=否)");
+            w.println("    const unsigned char* encData;  // encrypted data");
+            w.println("    char* decData;                 // decryption cache (allocated at runtime)");
+            w.println("    int len;                       // original length");
+            w.println("    int encrypted;                 // is encrypted (1=yes, 0=no)");
         } else {
-            // 非加密模式：简化结构
-            w.println("    const unsigned char* encData;  // 字符串数据");
-            w.println("    char* decData;                 // 未使用");
-            w.println("    int len;                       // 字符串长度");
-            w.println("    int encrypted;                 // 始终为 0");
+            // Non-encryption mode: simplified structure
+            w.println("    const unsigned char* encData;  // string data");
+            w.println("    char* decData;                 // unused");
+            w.println("    int len;                       // string length");
+            w.println("    int encrypted;                 // always 0");
         }
         w.println("} VMString;");
         w.println();

@@ -31,12 +31,12 @@ public class ZigCompiler {
     }
 
     /**
-     * 直接用 zig cc 编译 — 最可靠，不依赖 build.zig API 版本
+     * Compiles directly with zig cc - most reliable, no build.zig API dependency
      */
     private void compileDirect(String target, String javaHome) throws Exception {
         File nativeDir = config.getNativeDir();
 
-        // 输出文件名
+        // Output filename
         String libName;
         if (target.contains("windows")) {
             libName = "customvm.dll";
@@ -56,25 +56,25 @@ public class ZigCompiler {
         cmd.add("-target");
         cmd.add(target);
 
-        cmd.add("-fno-sanitize=all");           // 禁用所有运行时代码清洗/安全检查
-        cmd.add("-fno-sanitize-trap=all");      // 防止编译器为未定义行为生成陷阱指令
-        cmd.add("-Os");                         // 优化代码体积（替代 -O2）
-        cmd.add("-fno-optimize-sibling-calls"); // 禁用兄弟调用优化
-        cmd.add("-fno-slp-vectorize");          // 禁用 SLP 向量化
+        cmd.add("-fno-sanitize=all");           // Disable all runtime sanitizers
+        cmd.add("-fno-sanitize-trap=all");      // Prevent trap instructions for undefined behavior
+        cmd.add("-Os");                         // Optimize for size (instead of -O2)
+        cmd.add("-fno-optimize-sibling-calls"); // Disable sibling call optimization
+        cmd.add("-fno-slp-vectorize");          // Disable SLP vectorization
 
         cmd.add("-std=c11");
         cmd.add("-fPIC");
         cmd.add("-shared");
-        cmd.add("-s");                          // 删除符号表和调试信息
-        cmd.add("-fvisibility=hidden");         // 隐藏符号
+        cmd.add("-s");                          // Strip symbol table and debug info
+        cmd.add("-fvisibility=hidden");         // Hide symbols
 
-        // JNI 头文件
+        // JNI headers
         if (javaHome != null) {
             File includeDir = new File(javaHome, "include");
             if (includeDir.exists()) {
                 cmd.add("-I" + includeDir.getAbsolutePath());
 
-                // 所有平台子目录都加上（交叉编译时需要目标平台的头文件）
+                // Add all platform subdirs (cross-compilation needs target platform headers)
                 String[] subDirs = {"win32", "linux", "darwin"};
                 for (String sub : subDirs) {
                     File subDir = new File(includeDir, sub);
@@ -85,7 +85,7 @@ public class ZigCompiler {
             }
         }
 
-        // 源文件
+        // Source files
         String[] sources = {"vm_data.c", "vm_interpreter.c", "vm_bridge.c", "chacha20.c"};
         for (String src : sources) {
             cmd.add(src);
@@ -94,7 +94,7 @@ public class ZigCompiler {
         cmd.add("-o");
         cmd.add(outputFile.getAbsolutePath());
 
-        // Windows 目标不需要 -lc，其他需要
+        // Windows target does not need -lc, others do
         if (!target.contains("windows")) {
             cmd.add("-lc");
         }
@@ -140,21 +140,21 @@ public class ZigCompiler {
     private String findJavaHome() {
         String javaHome = System.getenv("JAVA_HOME");
         if (javaHome != null && !javaHome.isEmpty()) {
-            // 确认 include 目录存在
+            // Confirm include directory exists
             if (new File(javaHome, "include").exists()) {
                 return javaHome;
             }
         }
 
-        // 从 java.home 推断
+        // Infer from java.home
         String javaHomeProp = System.getProperty("java.home");
         if (javaHomeProp != null) {
             File jh = new File(javaHomeProp);
-            // JDK 11+: java.home 直接是 JDK 根目录
+            // JDK 11+: java.home is directly JDK root
             if (new File(jh, "include").exists()) {
                 return jh.getAbsolutePath();
             }
-            // JDK 8: java.home 是 jre 子目录
+            // JDK 8: java.home is jre subdirectory
             File parent = jh.getParentFile();
             if (parent != null && new File(parent, "include").exists()) {
                 return parent.getAbsolutePath();

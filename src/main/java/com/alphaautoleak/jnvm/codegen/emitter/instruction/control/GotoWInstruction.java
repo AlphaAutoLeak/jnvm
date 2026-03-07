@@ -16,7 +16,7 @@ public class GotoWInstruction extends Instruction {
     
     @Override
     public boolean needsMeta() {
-        return true;  // 需要跳转偏移量
+        return true;
     }
 
     @Override

@@ -14,7 +14,7 @@ import java.util.*;
 import java.util.jar.*;
 
 /**
- * 将被保护方法的方法体重写为调用 VMBridge.execute()
+ * Rewrites protected method bodies to call VMBridge.execute()
  */
 public class JarPatcher {
 
@@ -94,7 +94,7 @@ public class JarPatcher {
                 }
             }
 
-            // 注入 VMBridge.class
+            // Inject VMBridge.class
             String bridgePath = bridgeClass + ".class";
             if (!written.contains(bridgePath)) {
                 jos.putNextEntry(new JarEntry(bridgePath));

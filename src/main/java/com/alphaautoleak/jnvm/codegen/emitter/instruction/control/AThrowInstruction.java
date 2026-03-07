@@ -7,8 +7,8 @@ import java.io.PrintWriter;
 /**
  * ATHROW instruction - throw exception
  * 
- * 注意：ATHROW 需要在异常表中查找 handler，而不是直接返回。
- * 如果找到 handler，跳转到 handler；否则重新抛出异常让外层处理。
+ * Note: ATHROW needs to find handler in exception table instead of returning directly.
+ * If handler found, jump to it; otherwise rethrow for outer handler.
  */
 public class AThrowInstruction extends Instruction {
     public AThrowInstruction() {
@@ -17,7 +17,7 @@ public class AThrowInstruction extends Instruction {
 
     @Override
     protected void generateBody(PrintWriter w) {
-        // 添加空语句，避免 C23 警告 (label 后不能直接跟声明)
+        // Empty statement to avoid C23 warning (declaration after label)
         w.println("                ;");
         // Pop exception object from stack
         w.println("                jobject exception = frame.stack[--frame.sp].l;");
@@ -29,19 +29,19 @@ public class AThrowInstruction extends Instruction {
         w.println("                }");
         w.println("                VM_LOG(\"ATHROW: exception thrown at pc=%d\\n\", frame.pc);");
         w.println("                ");
-        w.println("                // 在异常表中查找匹配的 handler");
+        w.println("                // Find matching handler in exception table");
         w.println("                int athrowHandlerPc = -1;");
         w.println("                if (m->exceptionTable != NULL && m->exceptionTableLength > 0) {");
         w.println("                    for (int i = 0; i < m->exceptionTableLength; i++) {");
         w.println("                        VMExceptionEntry* entry = &m->exceptionTable[i];");
         w.println("                        if (frame.pc >= entry->startPc && frame.pc < entry->endPc) {");
-        w.println("                            // catchTypeIdx == -1 表示 catch-all (finally)");
+        w.println("                            // catchTypeIdx == -1 means catch-all (finally)");
         w.println("                            if (entry->catchTypeIdx < 0) {");
         w.println("                                athrowHandlerPc = entry->handlerPc;");
         w.println("                                VM_LOG(\"ATHROW: Found catch-all handler at pc=%d\\n\", athrowHandlerPc);");
         w.println("                                break;");
         w.println("                            }");
-        w.println("                            // 检查异常类型是否匹配");
+        w.println("                            // Check if exception type matches");
         w.println("                            const char* catchType = vm_get_string(entry->catchTypeIdx);");
         w.println("                            jclass catchClass = vm_find_class(env, catchType);");
         w.println("                            if (catchClass && (*env)->IsInstanceOf(env, exception, catchClass)) {");
@@ -54,13 +54,13 @@ public class AThrowInstruction extends Instruction {
         w.println("                }");
         w.println("                ");
         w.println("                if (athrowHandlerPc >= 0) {");
-        w.println("                    // 找到 handler，将异常对象压入栈并跳转");
-        w.println("                    frame.sp = 0;  // 清空栈");
+        w.println("                    // Found handler, push exception and jump");
+        w.println("                    frame.sp = 0;  // clear stack");
         w.println("                    frame.stack[frame.sp++].l = exception;");
         w.println("                    frame.pc = athrowHandlerPc;");
         w.println("                    VM_LOG(\"ATHROW: Jumping to handler at pc=%d\\n\", athrowHandlerPc);");
         w.println("                } else {");
-        w.println("                    // 没有找到 handler，重新抛出异常");
+        w.println("                    // No handler found, rethrow exception");
         w.println("                    VM_LOG(\"ATHROW: No handler found, rethrowing\\n\");");
         w.println("                    (*env)->Throw(env, (jthrowable)exception);");
         w.println("                    goto method_exit;");
@@ -69,7 +69,7 @@ public class AThrowInstruction extends Instruction {
     
     @Override
     protected boolean needsPcIncrement() {
-        return false;  // ATHROW 自己设置 pc 或跳转到 method_exit
+        return false;
     }
 
     @Override
@@ -82,7 +82,7 @@ public class AThrowInstruction extends Instruction {
     @Override
     public void generateComputedGoto(PrintWriter w) {
         w.printf("        OP_%02x:  /* %s */\n", opcode, comment);
-        w.println("            ;");  // 避免 label 后直接跟声明
+        w.println("            ;");  // avoid declaration directly after label
         // Pop exception object from stack
         w.println("            jobject exception = frame.stack[--frame.sp].l;");
         w.println("            if (exception == NULL) {");
@@ -92,7 +92,7 @@ public class AThrowInstruction extends Instruction {
         w.println("            }");
         w.println("            VM_LOG(\"ATHROW: exception thrown at pc=%d\\n\", frame.pc);");
         w.println("            ");
-        w.println("            // 在异常表中查找匹配的 handler");
+        w.println("            // Find matching handler in exception table");
         w.println("            int athrowHandlerPc = -1;");
         w.println("            if (m->exceptionTable != NULL && m->exceptionTableLength > 0) {");
         w.println("                for (int i = 0; i < m->exceptionTableLength; i++) {");
@@ -119,11 +119,11 @@ public class AThrowInstruction extends Instruction {
         w.println("                frame.stack[frame.sp++].l = exception;");
         w.println("                frame.pc = athrowHandlerPc;");
         w.println("                VM_LOG(\"ATHROW: Jumping to handler at pc=%d\\n\", athrowHandlerPc);");
-        w.println("                DISPATCH_NEXT;");  // 找到 handler，继续执行
+        w.println("                DISPATCH_NEXT;");  // found handler, continue execution
         w.println("            } else {");
         w.println("                VM_LOG(\"ATHROW: No handler found, rethrowing\\n\");");
         w.println("                (*env)->Throw(env, (jthrowable)exception);");
-        w.println("                goto method_exit;");  // 没找到 handler，退出
+        w.println("                goto method_exit;");  // no handler found, exit
         w.println("            }");
     }
 }

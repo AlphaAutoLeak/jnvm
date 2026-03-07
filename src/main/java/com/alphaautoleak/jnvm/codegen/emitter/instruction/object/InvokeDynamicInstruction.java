@@ -14,7 +14,7 @@ public class InvokeDynamicInstruction extends Instruction {
     
     @Override
     public boolean needsMeta() {
-        return true;  // 需要 bootstrap 方法信息
+        return true;
     }
 
     @Override
@@ -40,7 +40,7 @@ public class InvokeDynamicInstruction extends Instruction {
         w.println("                      goto method_exit;");
         w.println("                  }");
         w.println("                }");
-        w.println("                frame.pc++;");  // 在保护的字节码格式中，每条指令只有 1 字节
+        w.println("                frame.pc++;");  // each instruction is 1 byte in protected bytecode format
     }
 
     @Override
@@ -58,7 +58,7 @@ public class InvokeDynamicInstruction extends Instruction {
         w.println("                      frame.sp = 0;");
         w.println("                      frame.stack[frame.sp++].l = exc;");
         w.println("                      frame.pc = hPc;");
-        w.println("                      DISPATCH_NEXT;");  // 使用 DISPATCH_NEXT
+        w.println("                      DISPATCH_NEXT;");  // use DISPATCH_NEXT
         w.println("                  }");
         w.println("                  VM_LOG(\"No handler found, rethrowing\\n\");");
         w.println("                  (*env)->Throw(env, exc);");

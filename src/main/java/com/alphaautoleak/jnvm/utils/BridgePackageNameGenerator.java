@@ -3,7 +3,7 @@ package com.alphaautoleak.jnvm.utils;
 import java.util.Random;
 
 /**
- * 生成随机的 Bridge 类包名
+ * Generates random Bridge class package name
  */
 public class BridgePackageNameGenerator {
 

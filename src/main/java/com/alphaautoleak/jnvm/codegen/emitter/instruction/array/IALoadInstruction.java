@@ -6,7 +6,7 @@ import java.io.PrintWriter;
 
 /**
  * IALOAD instruction - load from int array (64-bit only, optimized)
- * 使用 GetIntArrayRegion 避免 pin/unpin 开销
+ * Uses GetIntArrayRegion to avoid pin/unpin overhead
  */
 public class IALoadInstruction extends Instruction {
     public IALoadInstruction() {

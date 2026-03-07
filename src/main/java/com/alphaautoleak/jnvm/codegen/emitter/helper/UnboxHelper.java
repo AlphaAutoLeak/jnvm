@@ -3,7 +3,7 @@ package com.alphaautoleak.jnvm.codegen.emitter.helper;
 import java.io.PrintWriter;
 
 /**
- * 参数拆箱辅助函数 - 使用全局缓存的包装类
+ * Parameter unboxing helper - uses globally cached wrapper classes
  */
 public class UnboxHelper extends VMHelper {
     
@@ -19,13 +19,13 @@ public class UnboxHelper extends VMHelper {
     
     @Override
     public void generateSource(PrintWriter w) {
-        // 快速版本：直接使用预存的参数类型字符串
+        // Fast version: directly use pre-stored argument type string
         w.println("void vm_unbox_args_fast(JNIEnv* env, VMFrame* frame, jobjectArray args, const char* argTypes, int argCount, int hasThis) {");
         w.println("    if (!args) return;");
         w.println("    jsize len = (*env)->GetArrayLength(env, args);");
         w.println("    (*env)->EnsureLocalCapacity(env, len + 32);");
         w.println();
-        w.println("    // 使用 vm_find_class 缓存包装类（复用全局缓存）");
+        w.println("    // Use vm_find_class to cache wrapper classes (reuse global cache)");
         w.println("    jclass integerClass = vm_find_class(env, \"java/lang/Integer\");");
         w.println("    static jmethodID intValueMid = NULL;");
         w.println("    if (integerClass && !intValueMid) intValueMid = (*env)->GetMethodID(env, integerClass, \"intValue\", \"()I\");");
@@ -61,7 +61,7 @@ public class UnboxHelper extends VMHelper {
         w.println("    int localIdx = hasThis ? 1 : 0;");
         w.println("    for (jsize i = 0; i < len; i++) {");
         w.println("        jobject arg = (*env)->GetObjectArrayElement(env, args, i);");
-        w.println("        char expectedType = argTypes ? argTypes[i] : 0;  // 直接索引，O(1)");
+        w.println("        char expectedType = argTypes ? argTypes[i] : 0;  // direct index access, O(1)");
         w.println();
         w.println("        if (arg == NULL) {");
         w.println("            frame->locals[localIdx].l = NULL;");

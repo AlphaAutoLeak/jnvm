@@ -5,7 +5,7 @@ import java.io.IOException;
 import java.io.PrintWriter;
 
 /**
- * 生成 chacha20.h 和 chacha20.c - 加密算法
+ * Generates chacha20.h and chacha20.c - encryption algorithm
  */
 public class ChaCha20Generator extends CodeEmitter {
     

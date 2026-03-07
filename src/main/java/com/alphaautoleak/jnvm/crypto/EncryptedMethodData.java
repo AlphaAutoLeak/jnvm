@@ -8,27 +8,27 @@ import com.alphaautoleak.jnvm.asm.MethodInfo;
 import java.util.List;
 
 /**
- * 一个方法的完整数据包（字节码以明文存储，ChaCha20 仅用于字符串加密）
- * 所有字段将被序列化到 C 源码中。
+ * Complete data package for a method (bytecode stored in plaintext, ChaCha20 only for string encryption)
+ * All fields will be serialized to C source.
  */
 public class EncryptedMethodData {
 
-    /** 方法 ID */
+    /** Method ID */
     private final int methodId;
 
-    /** 所属类（内部名） */
+    /** Owner class (internal name) */
     private final String owner;
 
-    /** 方法名 */
+    /** Method name */
     private final String name;
 
-    /** 描述符 */
+    /** Descriptor */
     private final String descriptor;
 
-    /** 访问标志 */
+    /** Access flags */
     private final int access;
 
-    /** 字节码 */
+    /** Bytecode */
     private final byte[] bytecode;
 
     /** max_stack */
@@ -37,25 +37,25 @@ public class EncryptedMethodData {
     /** max_locals */
     private final int maxLocals;
 
-    /** 元数据列表（新格式） */
+    /** Metadata list (new format) */
     private final List<MetaEntry> metadata;
 
-    /** PC -> 元数据索引映射 */
+    /** PC to metadata index mapping */
     private final int[] pcToMetaIdx;
 
-    /** 字符串池 */
+    /** String pool */
     private final List<String> stringPool;
 
-    /** 异常表 */
+    /** Exception table */
     private final List<ExceptionEntry> exceptionTable;
 
-    /** Bootstrap 方法表 */
+    /** Bootstrap method table */
     private final List<BootstrapEntry> bootstrapMethods;
 
-    /** 是否静态 */
+    /** Is static */
     private final boolean isStatic;
 
-    /** 是否同步 */
+    /** Is synchronized */
     private final boolean isSynchronized;
 
     public EncryptedMethodData(MethodInfo info) {

@@ -14,7 +14,7 @@ public class PutFieldInstruction extends Instruction {
     
     @Override
     public boolean needsMeta() {
-        return true;  // 需要字段信息
+        return true;
     }
 
     @Override
@@ -32,7 +32,7 @@ public class PutFieldInstruction extends Instruction {
         w.println("                  const char* desc = vm_get_string(meta->descIdx);");
         w.println("                  jclass cls = vm_find_class(env, owner);");
         w.println("                  if (!cls) { VM_LOG(\"PUTFIELD: Class not found: %s\\n\", owner); frame.pc++; break; }");
-        w.println("                  jfieldID fid = vm_get_field_id(env, cls, owner, name, desc);");  // 使用缓存版本
+        w.println("                  jfieldID fid = vm_get_field_id(env, cls, owner, name, desc);");  // cached version
         w.println("                  if (!fid) { VM_LOG(\"PUTFIELD: Field not found: %s.%s\\n\", owner, name); (*env)->ExceptionClear(env); frame.pc++; break; }");
         w.println("                  char t = desc[0];");
         w.println("                  if (t == 'I' || t == 'B' || t == 'C' || t == 'S' || t == 'Z')");
@@ -64,7 +64,7 @@ public class PutFieldInstruction extends Instruction {
         w.println("              const char* desc = vm_get_string(meta->descIdx);");
         w.println("              jclass cls = vm_find_class(env, owner);");
         w.println("              if (!cls) { VM_LOG(\"PUTFIELD: Class not found: %s\\n\", owner); frame.pc++; DISPATCH_NEXT; }");
-        w.println("              jfieldID fid = vm_get_field_id(env, cls, owner, name, desc);");  // 使用缓存版本
+        w.println("              jfieldID fid = vm_get_field_id(env, cls, owner, name, desc);");  // cached version
         w.println("              if (!fid) { VM_LOG(\"PUTFIELD: Field not found: %s.%s\\n\", owner, name); (*env)->ExceptionClear(env); frame.pc++; DISPATCH_NEXT; }");
         w.println("              char t = desc[0];");
         w.println("              if (t == 'I' || t == 'B' || t == 'C' || t == 'S' || t == 'Z')");

@@ -3,7 +3,7 @@ package com.alphaautoleak.jnvm.cli;
 import org.apache.commons.cli.*;
 
 /**
- * 命令行选项定义
+ * Command line options definition
  */
 public class CliOptions {
 

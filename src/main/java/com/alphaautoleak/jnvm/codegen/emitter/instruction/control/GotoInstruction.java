@@ -15,7 +15,7 @@ public class GotoInstruction extends Instruction {
     
     @Override
     public boolean needsMeta() {
-        return true;  // GOTO 需要跳转偏移量
+        return true;
     }
 
     @Override
@@ -26,7 +26,7 @@ public class GotoInstruction extends Instruction {
 
     @Override
     protected boolean needsPcIncrement() {
-        return false;  // GOTO 自己设置 pc
+        return false;
     }
 
     @Override

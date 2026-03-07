@@ -11,7 +11,7 @@ import java.io.IOException;
 import java.io.PrintWriter;
 
 /**
- * 生成 vm_types.h - VM 类型定义
+ * Generates vm_types.h - VM type definitions
  */
 public class VmTypesGenerator {
     

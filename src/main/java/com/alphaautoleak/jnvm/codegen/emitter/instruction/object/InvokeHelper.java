@@ -21,13 +21,13 @@ public class InvokeHelper {
             w.println("                  jmethodID mid = vm_get_method_id(env, cls, owner, name, desc);");
         }
         w.println("                  if (!mid) { VM_LOG(\"INVOKE: Method not found: %s.%s%s\\n\", owner, name, desc); (*env)->ExceptionClear(env); frame.pc++; break; }");
-        // 使用预计算的元数据
+        // Use pre-computed metadata
         w.println("                  int argCount = meta->argCount;");
         w.println("                  char returnType = meta->returnTypeChar;");
         w.println("                  const char* argTypes = (meta->argTypesIdx >= 0) ? vm_get_string(meta->argTypesIdx) : NULL;");
         w.println("                  jvalue args[16];");
         w.println("                  for (int i = argCount - 1; i >= 0; i--) {");
-        w.println("                      char t = argTypes ? argTypes[i] : 'L';");  // 直接索引访问，O(1)
+        w.println("                      char t = argTypes ? argTypes[i] : 'L';");  // direct index access, O(1)
         w.println("                      switch (t) {");
         w.println("                          case 'I': case 'B': case 'C': case 'S': case 'Z':");
         w.println("                              args[i].i = frame.stack[--frame.sp].i; break;");
@@ -122,13 +122,13 @@ public class InvokeHelper {
             w.println("              jmethodID mid = vm_get_method_id(env, cls, owner, name, desc);");
         }
         w.println("              if (UNLIKELY(!mid)) { VM_LOG(\"INVOKE: Method not found: %s.%s%s\\n\", owner, name, desc); (*env)->ExceptionClear(env); frame.pc++; DISPATCH_NEXT; }");
-        // 使用预计算的元数据
+        // Use pre-computed metadata
         w.println("              int argCount = meta->argCount;");
         w.println("              char returnType = meta->returnTypeChar;");
         w.println("              const char* argTypes = (meta->argTypesIdx >= 0) ? vm_get_string(meta->argTypesIdx) : NULL;");
         w.println("              jvalue args[16];");
         w.println("              for (int i = argCount - 1; i >= 0; i--) {");
-        w.println("                  char t = argTypes ? argTypes[i] : 'L';");  // 直接索引访问，O(1)
+        w.println("                  char t = argTypes ? argTypes[i] : 'L';");  // direct index access, O(1)
         w.println("                  switch (t) {");
         w.println("                      case 'I': case 'B': case 'C': case 'S': case 'Z':");
         w.println("                          args[i].i = frame.stack[--frame.sp].i; break;");

@@ -3,27 +3,27 @@ package com.alphaautoleak.jnvm.codegen.emitter.helper;
 import java.io.PrintWriter;
 
 /**
- * VM 辅助函数生成器基类
+ * Base class for VM helper function generators
  */
 public abstract class VMHelper {
     
     /**
-     * 生成函数声明到头文件
+     * Generates function declarations to header file
      */
     public abstract void generateHeader(PrintWriter w);
     
     /**
-     * 生成函数实现到源文件
+     * Generates function implementations to source file
      */
     public abstract void generateSource(PrintWriter w);
     
     /**
-     * 获取需要的头文件
+     * Gets required header files
      */
     public abstract String[] getIncludes();
     
     /**
-     * 辅助方法：打印多行代码
+     * Helper method: prints multiple lines of code
      */
     protected void emit(PrintWriter w, String... lines) {
         for (String line : lines) {

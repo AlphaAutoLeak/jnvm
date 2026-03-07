@@ -7,11 +7,11 @@ import com.alphaautoleak.jnvm.codegen.emitter.instruction.InstructionRegistry;
 import java.io.PrintWriter;
 
 /**
- * Stack operation instructions (64-bit only - 所有类型只占1个槽位)
+ * Stack operation instructions (64-bit only - all types occupy 1 slot)
  */
 public class StackInstructions {
     
-    /** DUP instruction - 复制栈顶值 */
+    /** DUP instruction - duplicates top stack value */
     public static class DupInstruction extends Instruction {
         public DupInstruction(int opcode, String name) {
             super(opcode, name);
@@ -25,7 +25,7 @@ public class StackInstructions {
         }
     }
     
-    /** DUP_X1 instruction - 复制栈顶值并插入到下面两个值之下 */
+    /** DUP_X1 instruction - duplicates top and inserts below two values */
     public static class DupX1Instruction extends Instruction {
         public DupX1Instruction() {
             super(0x5a, "DUP_X1");
@@ -43,7 +43,7 @@ public class StackInstructions {
         }
     }
     
-    /** DUP_X2 instruction - 复制栈顶值并插入到下面三个值之下 */
+    /** DUP_X2 instruction - duplicates top and inserts below three values */
     public static class DupX2Instruction extends Instruction {
         public DupX2Instruction() {
             super(0x5b, "DUP_X2");
@@ -62,7 +62,7 @@ public class StackInstructions {
         }
     }
     
-    /** DUP2 instruction - 复制栈顶两个值 */
+    /** DUP2 instruction - duplicates top two values */
     public static class Dup2Instruction extends Instruction {
         public Dup2Instruction() {
             super(0x5c, "DUP2");
@@ -78,7 +78,7 @@ public class StackInstructions {
         }
     }
     
-    /** DUP2_X1 instruction - 复制栈顶两个值并插入到下面一个值之下 */
+    /** DUP2_X1 instruction - duplicates top two and inserts below one value */
     public static class Dup2X1Instruction extends Instruction {
         public Dup2X1Instruction() {
             super(0x5d, "DUP2_X1");
@@ -99,7 +99,7 @@ public class StackInstructions {
         }
     }
     
-    /** DUP2_X2 instruction - 复制栈顶两个值并插入到下面两个值之下 */
+    /** DUP2_X2 instruction - duplicates top two and inserts below two values */
     public static class Dup2X2Instruction extends Instruction {
         public Dup2X2Instruction() {
             super(0x5e, "DUP2_X2");
@@ -121,7 +121,7 @@ public class StackInstructions {
         }
     }
     
-    /** SWAP instruction - 交换栈顶两个值 */
+    /** SWAP instruction - swaps top two values */
     public static class SwapInstruction extends Instruction {
         public SwapInstruction() {
             super(0x5f, "SWAP");
@@ -136,7 +136,7 @@ public class StackInstructions {
         }
     }
     
-    /** POP2 instruction - 弹出两个值 (64-bit: 总是弹出2个) */
+    /** POP2 instruction - pops two values (64-bit: always 2) */
     public static class Pop2Instruction extends Instruction {
         public Pop2Instruction() {
             super(0x58, "POP2");

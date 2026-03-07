@@ -10,9 +10,10 @@ import java.io.IOException;
 import java.util.List;
 
 /**
- * 生成所有 C 源文件 + build.zig
+ * Generates native C code from Java bytecode.
+ * Generates all C source files
  * 
- * 重构后的版本，将各模块拆分到独立的生成器类中
+ * Refactored version with modules split into independent generator classes
  */
 public class NativeCodeGenerator {
 
@@ -31,7 +32,8 @@ public class NativeCodeGenerator {
     }
 
     /**
-     * 生成所有文件
+ * Generates native C code from Java bytecode.
+     * Generates all files
      */
     public void generate() throws IOException {
         File dir = config.getNativeDir();
@@ -61,16 +63,12 @@ public class NativeCodeGenerator {
         new VmBridgeGenerator(dir, bridgeClass, encryptStrings).generate();
         System.out.println("  [+] vm_bridge.c");
 
-        // 6. build.zig
-        String javaHome = System.getenv("JAVA_HOME");
-        new BuildZigGenerator(dir, config.getTargets(), javaHome).generate();
-        System.out.println("  [+] build.zig");
-
-        System.out.println("[CODEGEN] Generated " + 8 + " files.");
+        System.out.println("[CODEGEN] Generated " + 7 + " files.");
     }
 
     /**
-     * 获取字符串加密密钥
+ * Generates native C code from Java bytecode.
+     * Gets string encryption key
      */
     public byte[] getStringKey() {
         return stringKey;

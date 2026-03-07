@@ -14,7 +14,7 @@ public class NewArrayInstruction extends Instruction {
     
     @Override
     public boolean needsMeta() {
-        return true;  // 需要数组类型
+        return true;
     }
 
     @Override

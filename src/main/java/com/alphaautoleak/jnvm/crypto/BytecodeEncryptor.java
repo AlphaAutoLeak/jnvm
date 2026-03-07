@@ -6,7 +6,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * 封装方法字节码数据（不再加密字节码，ChaCha20 仅用于字符串加密）
+ * Packages method bytecode data (no longer encrypts bytecode, ChaCha20 only for string encryption)
  */
 public class BytecodeEncryptor {
 
@@ -15,10 +15,10 @@ public class BytecodeEncryptor {
     }
 
     /**
-     * 处理所有方法
+     * Processes all methods
      *
-     * @param methods 从 JarScanner 收集到的方法列表
-     * @return 封装后的数据列表
+     * @param methods method list collected from JarScanner
+     * @return packaged data list
      */
     public List<EncryptedMethodData> encryptAll(List<MethodInfo> methods) {
         List<EncryptedMethodData> result = new ArrayList<>();

@@ -4,10 +4,11 @@ A powerful Java bytecode protection tool that converts Java methods into native 
 
 ## Features
 
-- **Native VM Execution**: Converts Java bytecode to native C code executed by a custom VM interpreter
-  - **ChaCha20 Encryption**: All bytecode and string is encrypted using ChaCha20 stream cipher
+- **Native VM Execution**: Converts Java bytecode to native code executed by a custom VM interpreter
+- **ChaCha20 Encryption**: All bytecode and strings are encrypted using ChaCha20 stream cipher
 - **Cross-Platform**: Supports multiple targets via Zig compiler (Windows, Linux, macOS, Android)
 - **Anti-Debug**: Built-in anti-debugging protections
+- **INVOKEDYNAMIC Support**: Full support for lambda expressions and dynamic method invocation
 
 ## Requirements
 
@@ -17,18 +18,50 @@ A powerful Java bytecode protection tool that converts Java methods into native 
 
 ## Usage
 
-### Basic Usage
+### Command Line
 
 ```bash
 java -jar jnvm.jar --jar input.jar --out output-obf.jar
+```
+
+### Configuration File
+
+Create a `config.yml` file:
+
+```yaml
+# Input JAR file
+jar: test/app.jar
+
+# Output JAR file
+out: test/app-protected.jar
+
+# Protection rules
+protect:
+  - "**"  # Protect all methods
+
+# Target platforms
+targets:
+  - x86_64-windows-gnu
+
+# Options
+anti-debug: false
+debug: false
+native-dir: native
+```
+
+Then run:
+
+```bash
+java -jar jnvm.jar --config config.yml
 ```
 
 ### Command Line Options
 
 | Option | Description | Default |
 |--------|-------------|---------|
-| `--jar <FILE>` | Input JAR file path | (required) |
+| `--jar <FILE>` | Input JAR file path | (required if no --config) |
 | `--out <FILE>` | Output JAR file path | `<input>-protected.jar` |
+| `--config <FILE>` | Load configuration from YAML file | - |
 | `--protect <RULE>` | Protection rule (repeatable) | Protect all methods |
 | `--target <TARGETS>` | Comma-separated Zig targets | Current platform |
 | `--anti-debug <BOOL>` | Enable anti-debug protections | true |
@@ -38,16 +71,21 @@ java -jar jnvm.jar --jar input.jar --out output-obf.jar
 
 ### Protection Rules
 
-- `package.**` - Protect all methods in package and subpackages
-- `ClassName` - Protect all methods in class
-- `ClassName#methodName` - Protect specific method
-- `@annotation` - Protect methods with annotation
+| Rule | Description |
+|------|-------------|
+| `package.**` | Protect all methods in package and subpackages |
+| `ClassName` | Protect all methods in class |
+| `ClassName#methodName` | Protect specific method |
+| `@annotation` | Protect methods with annotation |
 
 ### Examples
 
 ```bash
+# Basic usage
+java -jar jnvm.jar --jar app.jar --out app-obf.jar
+
 # Protect with specific target
-java -jar jnvm.jar --jar app.jar --out app-obf.jar --target x86_64-linux-gnu
+java -jar jnvm.jar --jar app.jar --target x86_64-linux-gnu
 
 # Protect specific packages
 java -jar jnvm.jar --jar app.jar --protect "com.example.core.**" --protect "com.example.security.**"
@@ -55,19 +93,20 @@ java -jar jnvm.jar --jar app.jar --protect "com.example.core.**" --protect "com.
 # Multi-platform build
 java -jar jnvm.jar --jar app.jar --target x86_64-windows-gnu,x86_64-linux-gnu,aarch64-linux-android29
 
-# Enable debug mode
-java -jar jnvm.jar --jar app.jar --debug true
+# Using config file
+java -jar jnvm.jar --config config.yml
 ```
 
 ## How It Works
 
 1. **Scanning**: Analyzes the input JAR to find methods matching protection rules
 2. **Encryption**: Encrypts bytecode using ChaCha20 with unique keys per method
-3. **Code Generation**: Generates C source files including:
+3. **Code Generation**: Generates C source files:
    - `vm_types.h` - VM type definitions
    - `vm_data.c` - Encrypted method data and string pool
    - `vm_interpreter.c` - Custom bytecode interpreter
    - `vm_bridge.c` - JNI bridge with RegisterNatives
+   - `build.zig` - Zig build configuration
 4. **Compilation**: Compiles native code using Zig for specified targets
 5. **Patching**: Rewrites protected methods to call the native VM
 6. **Packaging**: Embeds native libraries into the output JAR
@@ -80,36 +119,56 @@ JNVM has been tested with JARs obfuscated by:
 - **Allatori** - String encryption and flow obfuscation
 - **Vanilla Java** - No obfuscation
 
-## Supported Bytecode Instructions (198/202 opcodes)
+## Supported Bytecode Instructions (190/202 opcodes)
 
-- **Constants**: `NOP`, `ACONST_NULL`, `ICONST_*`, `LCONST_*`, `FCONST_*`, `DCONST_*`, `BIPUSH`, `SIPUSH`, `LDC`, `LDC_W`, `LDC2_W`
-- **Load/Store**: `ILOAD`, `LLOAD`, `FLOAD`, `DLOAD`, `ALOAD` (+ `_*` variants), `ISTORE`, `LSTORE`, `FSTORE`, `DSTORE`, `ASTORE` (+ `_*` variants)
-- **Arithmetic**: `IADD`, `LADD`, `FADD`, `DADD`, `ISUB`, `LSUB`, `FSUB`, `DSUB`, `IMUL`, `LMUL`, `FMUL`, `DMUL`, `IDIV`, `LDIV`, `FDIV`, `DDIV`, `IREM`, `LREM`, `FREM`, `DREM`, `INEG`, `LNEG`, `FNEG`, `DNEG`
+### Constants (19 opcodes)
+`NOP`, `ACONST_NULL`, `ICONST_M1` to `ICONST_5`, `LCONST_0`, `LCONST_1`, `FCONST_0` to `FCONST_2`, `DCONST_0`, `DCONST_1`, `BIPUSH`, `SIPUSH`, `LDC`, `LDC_W`, `LDC2_W`
+
+### Load/Store (50 opcodes)
+`ILOAD`, `LLOAD`, `FLOAD`, `DLOAD`, `ALOAD`, `ILOAD_0` to `ILOAD_3`, `LLOAD_0` to `LLOAD_3`, `FLOAD_0` to `FLOAD_3`, `DLOAD_0` to `DLOAD_3`, `ALOAD_0` to `ALOAD_3`, `ISTORE`, `LSTORE`, `FSTORE`, `DSTORE`, `ASTORE`, `ISTORE_0` to `ISTORE_3`, `LSTORE_0` to `LSTORE_3`, `FSTORE_0` to `FSTORE_3`, `DSTORE_0` to `DSTORE_3`, `ASTORE_0` to `ASTORE_3`
+
+### Stack Operations (9 opcodes)
+`POP`, `POP2`, `DUP`, `DUP_X1`, `DUP_X2`, `DUP2`, `DUP2_X1`, `DUP2_X2`, `SWAP`
+
+### Arithmetic (52 opcodes)
+- **Add/Sub/Mul/Div/Rem**: `IADD`, `LADD`, `FADD`, `DADD`, `ISUB`, `LSUB`, `FSUB`, `DSUB`, `IMUL`, `LMUL`, `FMUL`, `DMUL`, `IDIV`, `LDIV`, `FDIV`, `DDIV`, `IREM`, `LREM`, `FREM`, `DREM`
+- **Negation**: `INEG`, `LNEG`, `FNEG`, `DNEG`
 - **Bitwise/Shift**: `ISHL`, `LSHL`, `ISHR`, `LSHR`, `IUSHR`, `LUSHR`, `IAND`, `LAND`, `IOR`, `LOR`, `IXOR`, `LXOR`
-- **Type Conversion**: `I2L`, `I2F`, `I2D`, `L2I`, `L2F`, `L2D`, `F2I`, `F2L`, `F2D`, `D2I`, `D2L`, `D2F`, `I2B`, `I2C`, `I2S`
-- **Comparisons**: `LCMP`, `FCMPL`, `FCMPG`, `DCMPL`, `DCMPG`
-- **Control Flow**: `IFEQ`, `IFNE`, `IFLT`, `IFGE`, `IFGT`, `IFLE`, `IF_ICMPEQ`, `IF_ICMPNE`, `IF_ICMPLT`, `IF_ICMPGE`, `IF_ICMPGT`, `IF_ICMPLE`, `IF_ACMPEQ`, `IF_ACMPNE`, `GOTO`, `GOTO_W`, `TABLESWITCH`, `LOOKUPSWITCH`
-- **References**: `IFNULL`, `IFNONNULL`
-- **Object Operations**: `NEW`, `CHECKCAST`, `INSTANCEOF`, `GETFIELD`, `PUTFIELD`, `GETSTATIC`, `PUTSTATIC`
-- **Method Invocation**: `INVOKEVIRTUAL`, `INVOKESPECIAL`, `INVOKESTATIC`, `INVOKEINTERFACE`, `INVOKEDYNAMIC`
-- **Array Operations**: `NEWARRAY`, `ANEWARRAY`, `MULTIANEWARRAY`, `ARRAYLENGTH`, `IALOAD`, `LALOAD`, `FALOAD`, `DALOAD`, `AALOAD`, `BALOAD`, `CALOAD`, `SALOAD`, `IASTORE`, `LASTORE`, `FASTORE`, `DASTORE`, `AASTORE`, `BASTORE`, `CASTORE`, `SASTORE`
-- **Stack Operations**: `POP`, `POP2`, `DUP`, `DUP_X1`, `DUP_X2`, `DUP2`, `DUP2_X1`, `DUP2_X2`, `SWAP`
-- **Exceptions**: `ATHROW`
-- **Monitor**: `MONITORENTER`, `MONITOREXIT`
-- **Returns**: `RETURN`, `IRETURN`, `LRETURN`, `FRETURN`, `DRETURN`, `ARETURN`
-- **Local Variable**: `IINC`
+- **Conversion**: `I2L`, `I2F`, `I2D`, `L2I`, `L2F`, `L2D`, `F2I`, `F2L`, `F2D`, `D2I`, `D2L`, `D2F`, `I2B`, `I2C`, `I2S`
+- **Comparison**: `LCMP`, `FCMPL`, `FCMPG`, `DCMPL`, `DCMPG`
 
-### Not Implemented (Legacy/Rarely Used)
-- `JSR`, `RET`, `JSR_W` - Deprecated since Java 6
-- `WIDE` - Extended local variable indexing (rarely needed)
+### Control Flow (26 opcodes)
+- **Conditional**: `IFEQ`, `IFNE`, `IFLT`, `IFGE`, `IFGT`, `IFLE`, `IF_ICMPEQ`, `IF_ICMPNE`, `IF_ICMPLT`, `IF_ICMPGE`, `IF_ICMPGT`, `IF_ICMPLE`, `IF_ACMPEQ`, `IF_ACMPNE`, `IFNULL`, `IFNONNULL`
+- **Unconditional**: `GOTO`, `GOTO_W`
+- **Switch**: `TABLESWITCH`, `LOOKUPSWITCH`
+- **Return**: `RETURN`, `IRETURN`, `LRETURN`, `FRETURN`, `DRETURN`, `ARETURN`
+- **Other**: `IINC`, `ATHROW`
+
+### Object Operations (12 opcodes)
+`NEW`, `CHECKCAST`, `INSTANCEOF`, `GETFIELD`, `PUTFIELD`, `GETSTATIC`, `PUTSTATIC`, `INVOKEVIRTUAL`, `INVOKESPECIAL`, `INVOKESTATIC`, `INVOKEINTERFACE`, `INVOKEDYNAMIC`
+
+### Array Operations (20 opcodes)
+`NEWARRAY`, `ANEWARRAY`, `MULTIANEWARRAY`, `ARRAYLENGTH`, `IALOAD`, `LALOAD`, `FALOAD`, `DALOAD`, `AALOAD`, `BALOAD`, `CALOAD`, `SALOAD`, `IASTORE`, `LASTORE`, `FASTORE`, `DASTORE`, `AASTORE`, `BASTORE`, `CASTORE`, `SASTORE`
+
+### Monitor (2 opcodes)
+`MONITORENTER`, `MONITOREXIT`
+
+### Not Implemented (12 opcodes)
+| Opcode | Reason |
+|--------|--------|
+| `JSR`, `RET`, `JSR_W` | Deprecated since Java 6 |
+| `WIDE` | Extended local variable indexing (rarely needed) |
+| `RET_*` variants | Part of WIDE extension |
 
 ## Building from Source
 
 ```bash
-git clone https://github.com/snowf14k3/JNVM.git
+git clone https://github.com/AlphaAutoLeak/jnvm.git
 cd JNVM
 ./gradlew build
 ```
+
+The compiled JAR will be in `build/libs/`.
 
 ## License
 

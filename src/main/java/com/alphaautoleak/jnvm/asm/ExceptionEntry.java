@@ -1,27 +1,27 @@
 package com.alphaautoleak.jnvm.asm;
 
 /**
- * 对应 JVM Code 属性中的 exception_table 条目。
- * startPc / endPc / handlerPc 是自定义字节码中的偏移量。
+ * Corresponds to exception_table entry in JVM Code attribute.
+ * startPc / endPc / handlerPc are offsets in custom bytecode.
  */
 public class ExceptionEntry {
 
-    /** try 块起始 PC（含） */
+    /** try block start PC (inclusive) */
     private int startPc;
 
-    /** try 块结束 PC（不含） */
+    /** try block end PC (exclusive) */
     private int endPc;
 
-    /** catch handler 起始 PC */
+    /** catch handler start PC */
     private int handlerPc;
 
     /**
-     * 捕获的异常类型（内部名，e.g. "java/lang/Exception"）
-     * null 表示 catch-all（finally）
+     * Caught exception type (internal name, e.g. "java/lang/Exception")
+     * null means catch-all (finally)
      */
     private String catchType;
 
-    /** 对应自定义常量池中的索引（catchType 的 class ref） */
+    /** Index in custom constant pool (catchType class ref) */
     private int catchTypeCpIndex;
 
     public ExceptionEntry() {}

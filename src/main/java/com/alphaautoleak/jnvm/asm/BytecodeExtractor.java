@@ -6,49 +6,49 @@ import org.objectweb.asm.tree.*;
 import java.util.*;
 
 /**
- * 将 ASM 的 InsnList 序列化为自定义格式的字节码。
+ * Serializes ASM InsnList to custom bytecode format.
  *
- * 新格式设计：
- *   - 字节码：每条指令只有 opcode（1 字节）
- *   - 元数据：指令操作数存储在独立的 MetaEntry 数组中
- *   - pcToMetaIdx：PC -> 元数据索引的映射数组
+ * New format design:
+ *   - Bytecode: each instruction has only opcode (1 byte)
+ *   - Metadata: instruction operands stored in separate MetaEntry array
+ *   - pcToMetaIdx: PC to metadata index mapping array
  *
- * 这样 C 解释器可以通过 pcToMetaIdx[pc] 获取当前指令的元数据。
+ * This allows C interpreter to get current instruction metadata via pcToMetaIdx[pc].
  */
 public class BytecodeExtractor {
 
     private final ClassNode classNode;
     private final MethodNode methodNode;
 
-    /** 字节码缓冲区 */
+    /** Bytecode buffer */
     private final List<Integer> bytecodes = new ArrayList<>();
     
-    /** 元数据列表 */
+    /** Metadata list */
     private final List<MetaEntry> metadataList = new ArrayList<>();
     
-    /** PC -> 元数据索引映射 */
+    /** PC to metadata index mapping */
     private final Map<Integer, Integer> pcToMetaIdx = new HashMap<>();
     
-    /** 字符串池 */
+    /** String pool */
     private final List<String> stringPool = new ArrayList<>();
     private final Map<String, Integer> stringPoolIdx = new HashMap<>();
 
-    /** 异常表 */
+    /** Exception table */
     private final List<ExceptionEntry> exceptionTable = new ArrayList<>();
 
-    /** Bootstrap 方法表 */
+    /** Bootstrap method table */
     private final List<BootstrapEntry> bootstrapMethods = new ArrayList<>();
 
-    /** Label -> PC 映射 */
+    /** Label to PC mapping */
     private final Map<LabelNode, Integer> labelToPc = new HashMap<>();
     
-    /** 需要回填的跳转：(元数据索引, 目标 Label) */
+    /** Jumps to backfill: (metadata index, target Label) */
     private final List<JumpBackpatch> jumpBackpatches = new ArrayList<>();
     
-    /** Switch 回填 */
+    /** Switch backfill */
     private final List<SwitchBackpatch> switchBackpatches = new ArrayList<>();
     
-    /** Switch 回填信息 */
+    /** Switch backfill info */
     private static class SwitchBackpatch {
         final int metaIdx;
         final int srcPc;
@@ -63,7 +63,7 @@ public class BytecodeExtractor {
         }
     }
     
-    /** 跳转回填信息 */
+    /** Jump backfill info */
     private static class JumpBackpatch {
         final int metaIdx;
         final int srcPc;
@@ -83,46 +83,46 @@ public class BytecodeExtractor {
     }
 
     /**
-     * 执行提取
+     * Performs extraction
      */
     public void extract() {
-        // 第一遍：生成字节码和元数据
+        // First pass: generate bytecode and metadata
         firstPass();
         
-        // 回填跳转目标
+        // Backfill jump targets
         backpatchJumps();
         
-        // 提取异常表
+        // Extract exception table
         extractExceptionTable();
     }
     
     /**
-     * 第一遍：遍历指令，生成字节码和元数据
-     * Label 映射到当前的 PC（bytecodes.size()）
+     * First pass: traverse instructions, generate bytecode and metadata
+     * Label maps to current PC (bytecodes.size())
      */
     private void firstPass() {
         InsnList insns = methodNode.instructions;
         
-        // 遍历所有指令，生成字节码和元数据
-        // 同时收集 Label 的 PC
+        // Traverse all instructions, generate bytecode and metadata
+        // Also collect Label PCs
         for (int i = 0; i < insns.size(); i++) {
             AbstractInsnNode node = insns.get(i);
             
-            // 处理 Label - 映射到当前 PC
+            // Handle Label - map to current PC
             if (node instanceof LabelNode) {
                 LabelNode labelNode = (LabelNode) node;
-                // Label 的 PC 是当前 bytecodes 的位置
+                // Label PC is current bytecodes position
                 int pc = bytecodes.size();
                 labelToPc.put(labelNode, pc);
                 continue;
             }
             
-            // 跳过 LineNumber 和 Frame
+            // Skip LineNumber and Frame
             if (node instanceof LineNumberNode || node instanceof FrameNode) {
                 continue;
             }
             
-            // 发射指令
+            // Emit instruction
             emitInstruction(node);
         }
     }
@@ -131,12 +131,12 @@ public class BytecodeExtractor {
         int opcode = node.getOpcode();
         int pc = bytecodes.size();
         
-        // 写入 opcode
+        // Write opcode
         bytecodes.add(opcode);
         
         switch (node.getType()) {
             case AbstractInsnNode.INSN:
-                // 无操作数指令
+                // No operand instruction
                 pcToMetaIdx.put(pc, -1);
                 break;
                 
@@ -194,7 +194,7 @@ public class BytecodeExtractor {
         }
     }
 
-    // ===== 各类型指令的元数据生成 =====
+    // ===== Metadata generation for each instruction type =====
 
     private void emitIntInsn(IntInsnNode node, int pc) {
         MetaEntry meta = new MetaEntry();
@@ -270,7 +270,7 @@ public class BytecodeExtractor {
     private void emitJumpInsn(JumpInsnNode node, int pc) {
         MetaEntry meta = new MetaEntry();
         meta.type = MetaType.META_JUMP;
-        // 偏移量稍后回填
+        // Offset backfilled later
         meta.jumpOffset = 0;
         int idx = metadataList.size();
         metadataList.add(meta);
@@ -301,12 +301,12 @@ public class BytecodeExtractor {
         } else if (cst instanceof Type) {
             Type t = (Type) cst;
             meta.type = MetaType.META_CLASS;
-            // 使用内部名称（如 "java/lang/String"）而不是描述符（如 "Ljava/lang/String;"）
+            // Use internal name (e.g. "java/lang/String") instead of descriptor (e.g. "Ljava/lang/String;")
             String internalName = t.getInternalName();
             meta.classIdx = getStringIndex(internalName);
             meta.classLen = internalName.length();
         } else if (cst instanceof Handle) {
-            // MethodHandle - 暂时作为字符串存储
+            // MethodHandle - temporarily stored as string
             Handle h = (Handle) cst;
             meta.type = MetaType.META_METHOD;
             meta.ownerIdx = getStringIndex(h.getOwner());
@@ -378,21 +378,21 @@ public class BytecodeExtractor {
         pcToMetaIdx.put(pc, idx);
     }
 
-    // ===== 回填跳转 =====
+    // ===== Backfill jumps =====
 
     private void backpatchJumps() {
-        // 回填普通跳转
+        // Backfill normal jumps
         for (JumpBackpatch bp : jumpBackpatches) {
             Integer targetPc = labelToPc.get(bp.targetLabel);
             if (targetPc == null) {
                 throw new RuntimeException("Unresolved label in jump");
             }
             MetaEntry meta = metadataList.get(bp.metaIdx);
-            // 存储绝对 PC 而不是偏移量
+            // Store absolute PC instead of offset
             meta.jumpOffset = targetPc;
         }
         
-        // 回填 switch
+        // Backfill switch
         for (SwitchBackpatch bp : switchBackpatches) {
             Integer defaultPc = labelToPc.get(bp.defaultLabel);
             if (defaultPc == null) {
@@ -400,7 +400,7 @@ public class BytecodeExtractor {
             }
             
             MetaEntry meta = metadataList.get(bp.metaIdx);
-            // 存储绝对 PC 而不是偏移量
+            // Store absolute PC instead of offset
             meta.switchOffsets[0] = defaultPc;
             
             for (int i = 0; i < bp.caseLabels.size(); i++) {
@@ -413,7 +413,7 @@ public class BytecodeExtractor {
         }
     }
 
-    // ===== 异常表提取 =====
+    // ===== Extract exception table =====
 
     private void extractExceptionTable() {
         if (methodNode.tryCatchBlocks == null) return;
@@ -435,14 +435,14 @@ public class BytecodeExtractor {
     // ===== Bootstrap Methods =====
 
     private int findOrCreateBootstrapMethod(Handle bsm, Object[] bsmArgs) {
-        // 查找时需要比较 args，不同的 args 应该创建不同的 BSM
+        // Need to compare args when searching, different args should create different BSM
         for (int i = 0; i < bootstrapMethods.size(); i++) {
             BootstrapEntry e = bootstrapMethods.get(i);
             if (e.getHandleTag() == bsm.getTag() &&
                 e.getHandleOwner().equals(bsm.getOwner()) &&
                 e.getHandleName().equals(bsm.getName()) &&
                 e.getHandleDescriptor().equals(bsm.getDesc())) {
-                // 还需要比较 args
+                // Also need to compare args
                 List<Object> existingArgs = e.getArguments();
                 if (argsEqual(existingArgs, bsmArgs)) {
                     return i;
@@ -512,7 +512,7 @@ public class BytecodeExtractor {
             if (a1 == null && a2 == null) continue;
             if (a1 == null || a2 == null) return false;
             
-            // 处理 Handle 序列化的情况
+            // Handle Handle serialization case
             if (a2 instanceof Handle) {
                 Handle h = (Handle) a2;
                 String serialized = h.getTag() + ":" + h.getOwner() + ":" +
@@ -527,7 +527,7 @@ public class BytecodeExtractor {
         return true;
     }
 
-    // ===== 字符串池管理 =====
+    // ===== String pool management =====
 
     private int getStringIndex(String s) {
         Integer idx = stringPoolIdx.get(s);
@@ -539,7 +539,7 @@ public class BytecodeExtractor {
         return idx;
     }
 
-    // ===== 结果获取 =====
+    // ===== Result getters =====
 
     public byte[] getBytecode() {
         byte[] result = new byte[bytecodes.size()];
@@ -574,7 +574,7 @@ public class BytecodeExtractor {
         return bootstrapMethods;
     }
 
-    // ===== 内部类型 =====
+    // ===== Internal types =====
 
     public enum MetaType {
         META_NONE(0),

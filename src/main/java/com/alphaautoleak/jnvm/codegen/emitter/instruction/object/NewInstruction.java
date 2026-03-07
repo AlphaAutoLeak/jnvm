@@ -15,7 +15,7 @@ public class NewInstruction extends Instruction {
     
     @Override
     public boolean needsMeta() {
-        return true;  // 需要类名
+        return true;
     }
 
     @Override

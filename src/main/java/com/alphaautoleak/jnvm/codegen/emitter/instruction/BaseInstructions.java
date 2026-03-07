@@ -10,7 +10,7 @@ import java.io.PrintWriter;
 public class BaseInstructions {
     
     /**
-     * Simple instruction - single line code (不需要元数据)
+     * Simple instruction - single line code (no metadata needed)
      */
     public static class SimpleInstruction extends Instruction {
         private final String code;
@@ -36,12 +36,12 @@ public class BaseInstructions {
         
         @Override
         public boolean needsMeta() {
-            return false;  // 简单指令不需要元数据
+            return false;
         }
     }
     
     /**
-     * Meta instruction - uses metadata (需要元数据)
+     * Meta instruction - uses metadata (metadata required)
      */
     public static class MetaInstruction extends Instruction {
         protected final String code;
@@ -59,7 +59,7 @@ public class BaseInstructions {
         
         @Override
         public boolean needsMeta() {
-            return true;  // 需要元数据
+            return true;
         }
     }
 }

@@ -14,7 +14,7 @@ public class IincInstruction extends Instruction {
     
     @Override
     public boolean needsMeta() {
-        return true;  // 需要索引和常量
+        return true;
     }
 
     @Override

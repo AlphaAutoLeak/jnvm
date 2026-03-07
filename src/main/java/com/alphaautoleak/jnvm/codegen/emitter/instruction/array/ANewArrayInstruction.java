@@ -14,7 +14,7 @@ public class ANewArrayInstruction extends Instruction {
     
     @Override
     public boolean needsMeta() {
-        return true;  // 需要类信息
+        return true;
     }
 
     @Override

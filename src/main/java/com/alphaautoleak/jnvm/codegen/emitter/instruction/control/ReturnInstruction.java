@@ -7,7 +7,7 @@ import java.io.PrintWriter;
 /**
  * Return instruction (RETURN, IRETURN, LRETURN, FRETURN, DRETURN, ARETURN)
  * 
- * 将返回值存入 execResult.value，设置 execResult.returnType，然后跳转到 method_exit
+ * Stores return value in execResult.value, sets execResult.returnType, then jumps to method_exit
  */
 public class ReturnInstruction extends Instruction {
     private final String returnType; // "void", "int", "long", "float", "double", "object"

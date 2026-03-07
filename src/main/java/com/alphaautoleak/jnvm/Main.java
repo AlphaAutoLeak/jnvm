@@ -23,7 +23,7 @@ public class Main {
                 return;
             }
 
-            // jar 或 config 必须指定一个
+            // Either jar or config must be specified
             if (!cmd.hasOption("jar") && !cmd.hasOption("config")) {
                 System.err.println("[ERROR] Either --jar or --config is required");
                 CliOptions.printHelp(options);
@@ -33,7 +33,7 @@ public class Main {
             ProtectConfig config = ConfigBuilder.build(cmd);
             config.validate();
 
-            // 如果没有指定输出，根据输入生成默认输出
+            // If output not specified, generate default output based on input
             if (config.getOutputJar() == null && config.getInputJar() != null) {
                 String input = config.getInputJar().getAbsolutePath();
                 String out = input.replaceAll("\\.jar$", "-protected.jar");

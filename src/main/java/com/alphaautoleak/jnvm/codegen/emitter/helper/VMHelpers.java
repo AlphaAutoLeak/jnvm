@@ -4,21 +4,21 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * VM 辅助函数注册表
+ * VM helper function registry
  */
 public class VMHelpers {
     
     private final List<VMHelper> helpers = new ArrayList<>();
     
     public VMHelpers(boolean encryptStrings) {
-        // 注册所有辅助函数
+        // Register all helper functions
         helpers.add(new StringHelper(encryptStrings));
         helpers.add(new MetaHelper());
-        // MethodDescHelper 已移除 - 使用预解析的 argTypes 替代运行时解析
+        // MethodDescHelper removed - using pre-parsed argTypes instead of runtime parsing
         helpers.add(new UnboxHelper());
         helpers.add(new InvokeDynamicHelper());
         helpers.add(new ExceptionHelper());
-        // BoxHelper 已移除 - 使用类型特化的执行函数替代装箱
+        // BoxHelper removed - using type-specialized execution functions instead of boxing
     }
     
     public List<VMHelper> getAllHelpers() {

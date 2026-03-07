@@ -3,7 +3,7 @@ package com.alphaautoleak.jnvm.codegen.emitter.helper;
 import java.io.PrintWriter;
 
 /**
- * 元数据辅助函数
+ * Metadata helper functions
  */
 public class MetaHelper extends VMHelper {
     

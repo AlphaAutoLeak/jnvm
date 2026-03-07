@@ -1,20 +1,20 @@
 package com.alphaautoleak.jnvm.crypto;
 
 /**
- * 常量池中字符串的加密。
- * 使用简单的 XOR + rotate 方案（轻量级，用于 C 端字符串混淆）。
+ * String encryption for constant pool.
+ * Uses simple XOR + rotate scheme (lightweight, for C-side string obfuscation).
  *
- * 重要字符串（类名/方法名/描述符）在 C 源码中不以明文存储，
- * 运行时解密后用于 JNI 调用。
+ * Important strings (class/method/descriptor names) are not stored in plaintext in C source,
+ * decrypted at runtime for JNI calls.
  */
 public class StringEncryptor {
 
     /**
-     * 加密字符串为字节数组
+     * Encrypts string to byte array
      *
-     * @param input 原始字符串
-     * @param key   8 字节密钥
-     * @return 加密后的字节数组
+     * @param input original string
+     * @param key   8-byte key
+     * @return encrypted byte array
      */
     public static byte[] encrypt(String input, byte[] key) {
         byte[] data = input.getBytes(java.nio.charset.StandardCharsets.UTF_8);
@@ -30,8 +30,8 @@ public class StringEncryptor {
     }
 
     /**
-     * 生成 C 端解密函数使用的密钥
-     * 基于 build-time 随机数
+     * Generates key for C-side decrypt function
+     * Based on build-time random number
      */
     public static byte[] generateStringKey() {
         byte[] key = new byte[8];
@@ -40,7 +40,7 @@ public class StringEncryptor {
     }
 
     /**
-     * 生成 C 端解密函数代码
+     * Generates C-side decrypt function code
      */
     public static String generateDecryptFunction(byte[] key) {
         StringBuilder sb = new StringBuilder();
@@ -54,7 +54,7 @@ public class StringEncryptor {
     }
 
     /**
-     * 将字符串加密并格式化为 C 数组字面量
+     * Encrypts string and formats as C array literal
      */
     public static String toCEncryptedString(String input, byte[] key, String varName) {
         byte[] enc = encrypt(input, key);

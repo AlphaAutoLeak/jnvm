@@ -14,48 +14,48 @@ import java.nio.charset.StandardCharsets;
 import java.util.*;
 
 /**
- * 生成 vm_data.h 和 vm_data.c - VM 数据（方法元数据、字符串池等）
+ * Generates vm_data.h and vm_data.c - VM data (method metadata, string pool, etc.)
  * 
- * 新格式：
- * - 字符串池：所有字符串使用 ChaCha20 加密存储
- * - 元数据数组：每条指令的操作数
- * - pcToMetaIdx：PC -> 元数据索引映射
- * - Bootstrap 方法表：全局共享
+ * New format:
+ * - String pool: all strings stored encrypted with ChaCha20
+ * - Metadata array: operands for each instruction
+ * - pcToMetaIdx: PC to metadata index mapping
+ * - Bootstrap method table: globally shared
  */
 public class VmDataGenerator {
     
     private final List<EncryptedMethodData> methods;
-    private final byte[] stringKey;       // 方法字节码解密密钥 (8 bytes)
-    private final byte[] vmStringKey;     // 字符串 ChaCha20 密钥 (32 bytes), 仅当 encryptStrings=true 时使用
-    private final byte[] stringNonce;     // ChaCha20 nonce for strings (12 bytes), 仅当 encryptStrings=true 时使用
-    private final boolean encryptStrings; // 是否加密字符串
+    private final byte[] stringKey;       // method bytecode decryption key (8 bytes)
+    private final byte[] vmStringKey;     // string ChaCha20 key (32 bytes), only used when encryptStrings=true
+    private final byte[] stringNonce;     // ChaCha20 nonce for strings (12 bytes), only used when encryptStrings=true
+    private final boolean encryptStrings; // whether to encrypt strings
     private final File dir;
     
-    /** 全局字符串池：字符串 -> 全局索引 */
+    /** Global string pool: string -> global index */
     private Map<String, Integer> globalStringIndexMap;
     
-    /** 全局 Bootstrap 方法表 */
+    /** Global Bootstrap method table */
     private List<BootstrapEntry> globalBootstrapMethods = new ArrayList<>();
     private Map<String, Integer> bootstrapIndexMap = new HashMap<>();
     
-    /** 方法调用元数据预计算结果缓存: "methodId_metaIdx" -> InvokeMetaInfo */
+    /** Method invocation metadata pre-computation cache: "methodId_metaIdx" -> InvokeMetaInfo */
     private Map<String, InvokeMetaInfo> invokeMetaCache = new HashMap<>();
     
-    /** 方法描述符解析结果 */
+    /** Method descriptor parsing result */
     private static class InvokeMetaInfo {
         int argCount;
         char returnTypeChar;
-        String argTypes;  // 预解析的参数类型字符串，如 "IJB"
+        String argTypes;  // pre-parsed argument type string, e.g. "IJB"
     }
     
     public VmDataGenerator(File dir, List<EncryptedMethodData> methods, byte[] stringKey, boolean encryptStrings) {
         this.dir = dir;
         this.methods = methods;
-        this.stringKey = stringKey;           // 方法字节码密钥 (8 bytes)
+        this.stringKey = stringKey;           // method bytecode key (8 bytes)
         this.encryptStrings = encryptStrings;
         if (encryptStrings) {
-            this.vmStringKey = CryptoUtils.generateKey();  // 字符串 ChaCha20 密钥 (32 bytes)
-            this.stringNonce = CryptoUtils.generateNonce(); // 字符串 ChaCha20 nonce (12 bytes)
+            this.vmStringKey = CryptoUtils.generateKey();  // string ChaCha20 key (32 bytes)
+            this.stringNonce = CryptoUtils.generateNonce(); // string ChaCha20 nonce (12 bytes)
         } else {
             this.vmStringKey = null;
             this.stringNonce = null;
@@ -63,7 +63,7 @@ public class VmDataGenerator {
     }
     
     public void generate() throws IOException {
-        // 第一遍：收集所有 bootstrap 方法
+        // First pass: collect all bootstrap methods
         collectBootstrapMethods();
         
         generateHeader();
@@ -71,7 +71,7 @@ public class VmDataGenerator {
     }
     
     /**
-     * 收集所有方法的 bootstrap 方法到全局表
+     * Collects all bootstrap methods to global table
      */
     private void collectBootstrapMethods() {
         for (EncryptedMethodData method : methods) {
@@ -79,11 +79,11 @@ public class VmDataGenerator {
             if (bsmList == null) continue;
             
             for (BootstrapEntry bsm : bsmList) {
-                // 包含 args 信息在 key 中，确保不同的 BSM 不会被合并
+                // Include args info in key to ensure different BSMs will not be merged
                 StringBuilder keyBuilder = new StringBuilder();
                 keyBuilder.append(bsm.getHandleOwner()).append(".");
                 keyBuilder.append(bsm.getHandleName()).append(bsm.getHandleDescriptor());
-                // 添加 args 信息
+                // Add args info
                 if (bsm.getArguments() != null) {
                     for (Object arg : bsm.getArguments()) {
                         keyBuilder.append("|").append(arg != null ? arg.toString() : "null");
@@ -98,8 +98,8 @@ public class VmDataGenerator {
             }
         }
         
-        // 更新每个方法的 bsmIdx 到全局索引
-        // 这需要在生成元数据时处理
+        // Update each method bsmIdx to global index
+        // This needs to be handled during metadata generation
     }
     
     private void generateHeader() throws IOException {
@@ -130,7 +130,7 @@ public class VmDataGenerator {
             w.println("#include \"chacha20.h\"");
             w.println();
             
-            // 加密密钥 (8 bytes)
+            // Encryption key (8 bytes)
             w.println("const uint8_t vm_key[] = {");
             for (int i = 0; i < stringKey.length; i++) {
                 w.printf("0x%02x%s", stringKey[i] & 0xFF, (i < stringKey.length - 1 ? ", " : ""));
@@ -138,18 +138,18 @@ public class VmDataGenerator {
             w.println("\n};");
             w.println();
             
-            // 全局字符串池
+            // Global string pool
             Set<String> allStrings = new LinkedHashSet<>();
             for (EncryptedMethodData method : methods) {
                 List<String> pool = method.getStringPool();
                 if (pool != null) {
                     allStrings.addAll(pool);
                 }
-                // 添加方法描述符到字符串池
+                // Add method descriptor to string pool
                 if (method.getDescriptor() != null) {
                     allStrings.add(method.getDescriptor());
                 }
-                // 添加异常表中的 catch 类型到字符串池
+                // Add exception table catch types to string pool
                 List<ExceptionEntry> excTable = method.getExceptionTable();
                 if (excTable != null) {
                     for (ExceptionEntry e : excTable) {
@@ -160,7 +160,7 @@ public class VmDataGenerator {
                 }
             }
             
-            // 第一遍：预计算所有 INVOKE 元数据
+            // First pass: pre-compute all INVOKE metadata
             for (EncryptedMethodData method : methods) {
                 List<String> localPool = method.getStringPool();
                 List<MetaEntry> metaList = method.getMetadata();
@@ -172,7 +172,7 @@ public class VmDataGenerator {
                             String desc = localPool.get(m.descIdx);
                             InvokeMetaInfo info = parseMethodDesc(desc);
                             invokeMetaCache.put(method.getMethodId() + "_" + i, info);
-                            // 添加 argTypes 字符串到全局池
+                            // Add argTypes string to global pool
                             if (info.argTypes != null && !info.argTypes.isEmpty()) {
                                 allStrings.add(info.argTypes);
                             }
@@ -181,14 +181,14 @@ public class VmDataGenerator {
                 }
             }
             
-            // 添加 BSM 相关的字符串到全局池
+            // Add BSM-related strings to global pool
             for (BootstrapEntry bsm : globalBootstrapMethods) {
-                // 添加 bootstrap 方法自身的信息
+                // Add bootstrap method info
                 allStrings.add(bsm.getHandleOwner());
                 allStrings.add(bsm.getHandleName());
                 allStrings.add(bsm.getHandleDescriptor());
                 
-                // 添加 BSM 参数中的字符串
+                // Add strings from BSM arguments
                 List<Object> args = bsm.getArguments();
                 List<BootstrapEntry.ArgType> argTypes = bsm.getArgumentTypes();
                 if (args != null && argTypes != null) {
@@ -201,10 +201,10 @@ public class VmDataGenerator {
                                 allStrings.add(arg.toString());
                                 break;
                             case METHOD_HANDLE:
-                                // 格式: "tag:owner:name:desc"
+                                // Format: "tag:owner:name:desc"
                                 String[] parts = arg.toString().split(":");
                                 if (parts.length >= 4) {
-                                    // 存储完整的方法引用字符串 (owner.name + desc)
+                                    // Store full method reference string (owner.name + desc)
                                     allStrings.add(parts[1] + "." + parts[2] + parts[3]);
                                 }
                                 break;
@@ -213,7 +213,7 @@ public class VmDataGenerator {
                 }
             }
             
-            // 建立全局字符串索引映射
+            // Build global string index mapping
             globalStringIndexMap = new HashMap<>();
             int globalIdx = 0;
             for (String s : allStrings) {
@@ -227,15 +227,15 @@ public class VmDataGenerator {
             w.println("const int vm_bootstrap_count = " + globalBootstrapMethods.size() + ";");
             w.println();
             
-            // 生成 Bootstrap 方法表
+            // Generate Bootstrap method table
             emitBootstrapMethods(w);
             
-            // 为每个方法生成数据
+            // Generate data for each method
             for (EncryptedMethodData method : methods) {
                 emitMethodData(w, method);
             }
             
-            // 方法数组
+            // Method array
             w.println("VMMethod vm_methods[] = {");
             for (EncryptedMethodData method : methods) {
                 w.printf("    { .methodId=%d, .maxStack=%d, .maxLocals=%d, ",
@@ -245,7 +245,7 @@ public class VmDataGenerator {
                 w.printf(".metadata=m%d_meta, .metadataCount=%d, ",
                     method.getMethodId(), method.getMetadata().size());
                 w.printf(".pcToMetaIdx=m%d_pc2meta, ", method.getMethodId());
-                // 添加 descIdx 和 descLen
+                // Add descIdx and descLen
                 String desc = method.getDescriptor();
                 Integer descIdx = globalStringIndexMap.get(desc);
                 if (descIdx != null) {
@@ -253,7 +253,7 @@ public class VmDataGenerator {
                 } else {
                     w.printf(".descIdx=-1, .descLen=0, ");
                 }
-                // 添加异常表
+                // Add exception table
                 List<ExceptionEntry> excTable = method.getExceptionTable();
                 if (excTable != null && !excTable.isEmpty()) {
                     w.printf(".exceptionTable=m%d_exc, .exceptionTableLength=%d, ",
@@ -261,7 +261,7 @@ public class VmDataGenerator {
                 } else {
                     w.printf(".exceptionTable=NULL, .exceptionTableLength=0, ");
                 }
-                // 添加预解析的参数信息
+                // Add pre-parsed argument info
                 String argTypes = parseMethodArgTypes(desc);
                 int argCount = argTypes.length();
                 int argTypesIdx = argCount > 0 ? getOrAddStringIndex(argTypes) : -1;
@@ -274,7 +274,7 @@ public class VmDataGenerator {
     
     private void emitStringPool(PrintWriter w, Set<String> strings) {
         if (encryptStrings) {
-            // 加密模式：生成 ChaCha20 密钥和 nonce
+            // Encryption mode: generate ChaCha20 key and nonce
             w.println("const uint8_t vm_string_key[] = {");
             for (int i = 0; i < vmStringKey.length; i++) {
                 if (i % 16 == 0) w.print("    ");
@@ -290,7 +290,7 @@ public class VmDataGenerator {
             w.println("\n};");
             w.println();
             
-            // 加密并存储每个字符串
+            // Encrypt and store each string
             int idx = 0;
             for (String s : strings) {
                 byte[] plaintext = s.getBytes(StandardCharsets.UTF_8);
@@ -315,7 +315,7 @@ public class VmDataGenerator {
             w.println("};");
             w.println();
         } else {
-            // 非加密模式：直接存储明文字符串（添加 null 终止符）
+            // Non-encryption mode: store plaintext strings directly (add null terminator)
             int idx = 0;
             for (String s : strings) {
                 byte[] bytes = s.getBytes(StandardCharsets.UTF_8);
@@ -324,7 +324,7 @@ public class VmDataGenerator {
                     if (i % 16 == 0) w.printf("\n    ");
                     w.printf("0x%02x, ", bytes[i] & 0xFF);
                 }
-                w.println("\n    0x00");  // null 终止符
+                w.println("\n    0x00");  // null terminator
                 w.println("};");
                 idx++;
             }
@@ -342,7 +342,7 @@ public class VmDataGenerator {
     }
     
     /**
-     * 生成全局 Bootstrap 方法表
+     * Generates global Bootstrap method table
      */
     private void emitBootstrapMethods(PrintWriter w) {
         if (globalBootstrapMethods.isEmpty()) {
@@ -351,7 +351,7 @@ public class VmDataGenerator {
             return;
         }
         
-        // 为每个 bootstrap 方法的参数生成数组
+        // Generate array for each bootstrap method's arguments
         for (int i = 0; i < globalBootstrapMethods.size(); i++) {
             BootstrapEntry bsm = globalBootstrapMethods.get(i);
             List<Object> args = bsm.getArguments();
@@ -385,7 +385,7 @@ public class VmDataGenerator {
                             w.printf(".strIdx=%d", getOrAddStringIndex(arg.toString()));
                             break;
                         case METHOD_HANDLE:
-                            // 格式: "tag:owner:name:desc"
+                            // Format: "tag:owner:name:desc"
                             String[] parts = arg.toString().split(":");
                             if (parts.length >= 4) {
                                 w.printf(".handleTag=%s, .strIdx=%d", parts[0], 
@@ -399,7 +399,7 @@ public class VmDataGenerator {
             }
         }
         
-        // 生成 bootstrap 方法数组
+        // Generate bootstrap method array
         w.println("VMBootstrapMethod vm_bootstrap_methods[] = {");
         for (int i = 0; i < globalBootstrapMethods.size(); i++) {
             BootstrapEntry bsm = globalBootstrapMethods.get(i);
@@ -421,12 +421,12 @@ public class VmDataGenerator {
     }
     
     /**
-     * 获取字符串索引
+     * Gets string index
      */
     private int getOrAddStringIndex(String s) {
         Integer idx = globalStringIndexMap.get(s);
         if (idx != null) return idx;
-        // 字符串应该已经在全局池中
+        // String should already be in global pool
         System.err.println("[WARN] String not found in global pool: " + s);
         return 0;
     }
@@ -458,8 +458,8 @@ public class VmDataGenerator {
                     if (c >= 32 && c < 127) {
                         sb.append(c);
                     } else {
-                        // 使用 \xhh 格式，但如果下一个字符是十六进制字符，需要用字符串结束
-                        // 更安全的做法：使用 "\" "\xhh" 拼接，这样 \xhh 后面是引号结束
+                        // Use \xhh format, but need string termination if next char is hex
+                        // Safer approach: use "" "\xhh" concatenation, so \xhh ends with quote
                         sb.append("\" \"\\x");
                         sb.append(String.format("%02x", (int) c));
                         sb.append("\" \"");
@@ -470,22 +470,22 @@ public class VmDataGenerator {
     }
     
     /**
-     * 将方法局部字符串索引映射到全局字符串索引
+     * Maps method-local string index to global string index
      */
     private int mapStringIndex(List<String> localPool, int localIdx) {
         if (localPool == null || localIdx < 0 || localIdx >= localPool.size()) {
-            return localIdx; // 保持原值（可能是错误的）
+            return localIdx; // Keep original value (may be incorrect)
         }
         String str = localPool.get(localIdx);
         Integer globalIdx = globalStringIndexMap.get(str);
         if (globalIdx == null) {
-            return localIdx; // 不应该发生
+            return localIdx; // Should not happen
         }
         return globalIdx;
     }
     
     /**
-     * 将方法局部的 bootstrap 方法索引映射到全局索引
+     * Maps method-local bootstrap method index to global index
      */
     private int mapBsmIndex(List<BootstrapEntry> localBsmList, int localIdx) {
         if (localBsmList == null || localIdx < 0 || localIdx >= localBsmList.size()) {
@@ -493,7 +493,7 @@ public class VmDataGenerator {
             return localIdx;
         }
         BootstrapEntry bsm = localBsmList.get(localIdx);
-        // 使用与 collectBootstrapMethods 相同的 key 生成逻辑
+        // Use same key generation logic as collectBootstrapMethods
         StringBuilder keyBuilder = new StringBuilder();
         keyBuilder.append(bsm.getHandleOwner()).append(".");
         keyBuilder.append(bsm.getHandleName()).append(bsm.getHandleDescriptor());
@@ -517,7 +517,7 @@ public class VmDataGenerator {
         int id = method.getMethodId();
         List<String> localPool = method.getStringPool();
         
-        // 调试：打印 BSM 信息
+        // Debug: print BSM info
         if (id == 111) {
             System.out.println("[DEBUG] Method 111 (Calculations.run) BSM info:");
             List<BootstrapEntry> bsmList = method.getBootstrapMethods();
@@ -542,7 +542,7 @@ public class VmDataGenerator {
             }
         }
         
-        // 字节码
+        // Bytecode
         w.printf("static const uint8_t m%d_bc[] = {", id);
         byte[] bc = method.getEncryptedBytecode();
         for (int i = 0; i < bc.length; i++) {
@@ -552,7 +552,7 @@ public class VmDataGenerator {
         w.println("\n};");
         w.println();
         
-        // 元数据数组
+        // Metadata array
         List<MetaEntry> metaList = method.getMetadata();
         if (!metaList.isEmpty()) {
             for (int i = 0; i < metaList.size(); i++) {
@@ -594,7 +594,7 @@ public class VmDataGenerator {
                             mapStringIndex(localPool, m.nameIdx), m.nameLen);
                         w.printf(".descIdx=%d, .descLen=%d",
                             mapStringIndex(localPool, m.descIdx), m.descLen);
-                        // 添加预计算的调用元数据
+                        // Add pre-computed invocation metadata
                         if (m.type == MetaType.META_METHOD) {
                             InvokeMetaInfo info = invokeMetaCache.get(id + "_" + i);
                             if (info != null) {
@@ -609,7 +609,7 @@ public class VmDataGenerator {
                         }
                         break;
                     case META_INVOKE_DYNAMIC:
-                        // 映射局部 bsmIdx 到全局索引
+                        // Map local bsmIdx to global index
                         int globalBsmIdx = mapBsmIndex(method.getBootstrapMethods(), m.bsmIdx);
                         if (id == 111) {
                             System.out.println("[DEBUG] Method 111 INVOKEDYNAMIC: localIdx=" + m.bsmIdx + " -> globalIdx=" + globalBsmIdx);
@@ -619,7 +619,7 @@ public class VmDataGenerator {
                             mapStringIndex(localPool, m.nameIdx), m.nameLen);
                         w.printf(".descIdx=%d, .descLen=%d",
                             mapStringIndex(localPool, m.descIdx), m.descLen);
-                        // 添加预计算的调用元数据
+                        // Add pre-computed invocation metadata
                         InvokeMetaInfo info = invokeMetaCache.get(id + "_" + i);
                         if (info != null) {
                             w.printf(", .argCount=%d, .returnTypeChar='%c'",
@@ -662,7 +662,7 @@ public class VmDataGenerator {
             w.println();
         }
         
-        // pcToMetaIdx 数组
+        // pcToMetaIdx array
         int[] pc2meta = method.getPcToMetaIdx();
         w.printf("static int m%d_pc2meta[] = {", id);
         for (int i = 0; i < pc2meta.length; i++) {
@@ -672,7 +672,7 @@ public class VmDataGenerator {
         w.println("\n};");
         w.println();
         
-        // 异常表（保持原始顺序）
+        // Exception table (preserve original order)
         List<ExceptionEntry> excTable = method.getExceptionTable();
         if (excTable != null && !excTable.isEmpty()) {
             w.printf("static VMExceptionEntry m%d_exc[] = {", id);
@@ -722,41 +722,41 @@ public class VmDataGenerator {
     }
     
     /**
-     * 解析方法描述符，预计算调用元数据
-     * @param desc 方法描述符，如 "(ILjava/lang/String;J)I"
-     * @return InvokeMetaInfo 包含 argCount, returnTypeChar, argTypes
+     * Parses method descriptor and pre-computes invocation metadata
+     * @param desc method descriptor, e.g. "(ILjava/lang/String;J)I"
+     * @return InvokeMetaInfo containing argCount, returnTypeChar, argTypes
      */
     private InvokeMetaInfo parseMethodDesc(String desc) {
         InvokeMetaInfo info = new InvokeMetaInfo();
         StringBuilder argTypes = new StringBuilder();
         
-        int i = 1; // 跳过 '('
+        int i = 1; // skip '('
         while (i < desc.length() && desc.charAt(i) != ')') {
             char c = desc.charAt(i);
             if (c == 'L') {
-                // 对象类型，添加 'L' 作为标记
+                // Object type, add 'L' as marker
                 argTypes.append('L');
                 while (i < desc.length() && desc.charAt(i) != ';') i++;
-                i++; // 跳过 ';'
+                i++; // skip ';'
             } else if (c == '[') {
-                // 数组类型，视为对象类型
+                // Array type, treat as object type
                 argTypes.append('L');
                 while (i < desc.length() && desc.charAt(i) == '[') i++;
                 if (desc.charAt(i) == 'L') {
                     while (i < desc.length() && desc.charAt(i) != ';') i++;
-                    i++; // 跳过 ';'
+                    i++; // skip ';'
                 } else {
-                    i++; // 跳过基本类型字符
+                    i++; // skip primitive type char
                 }
             } else {
-                // 基本类型
+                // Primitive type
                 argTypes.append(c);
                 i++;
             }
             info.argCount++;
         }
         
-        // 跳过 ')' 并获取返回类型
+        // Skip ')' and get return type
         if (i < desc.length() && desc.charAt(i) == ')') {
             i++;
             if (i < desc.length()) {
@@ -771,12 +771,12 @@ public class VmDataGenerator {
     }
     
     /**
-     * 解析方法描述符，只返回参数类型字符串
+     * Parses method descriptor, returns only argument type string
      */
     private String parseMethodArgTypes(String desc) {
         if (desc == null || desc.isEmpty()) return "";
         StringBuilder argTypes = new StringBuilder();
-        int i = 1; // 跳过 '('
+        int i = 1; // skip '('
         while (i < desc.length() && desc.charAt(i) != ')') {
             char c = desc.charAt(i);
             if (c == 'L') {
@@ -801,7 +801,7 @@ public class VmDataGenerator {
     }
     
     /**
-     * 预计算所有方法的 INVOKE 元数据
+     * Pre-computes INVOKE metadata for all methods
      */
     private void precomputeInvokeMeta(List<String> localPool, int methodId, List<MetaEntry> metaList) {
         if (metaList == null) return;

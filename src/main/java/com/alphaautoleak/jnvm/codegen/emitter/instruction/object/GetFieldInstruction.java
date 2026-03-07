@@ -14,7 +14,7 @@ public class GetFieldInstruction extends Instruction {
     
     @Override
     public boolean needsMeta() {
-        return true;  // 需要字段信息
+        return true;
     }
 
     @Override

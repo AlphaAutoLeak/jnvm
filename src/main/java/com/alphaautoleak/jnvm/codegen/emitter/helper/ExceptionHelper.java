@@ -3,8 +3,8 @@ package com.alphaautoleak.jnvm.codegen.emitter.helper;
 import java.io.PrintWriter;
 
 /**
- * 异常处理辅助函数
- * 注：异常表通常很小（0-3个条目），线性查找更快，无需二分优化
+ * Exception handling helper functions
+ * Note: exception tables are typically small (0-3 entries), linear search is faster, no binary optimization needed
  */
 public class ExceptionHelper extends VMHelper {
     

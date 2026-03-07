@@ -14,7 +14,7 @@ public class InvokeSpecialInstruction extends Instruction {
     
     @Override
     public boolean needsMeta() {
-        return true;  // 需要方法信息
+        return true;
     }
 
     @Override

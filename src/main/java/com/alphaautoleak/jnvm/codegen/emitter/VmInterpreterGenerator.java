@@ -8,8 +8,8 @@ import java.io.IOException;
 import java.io.PrintWriter;
 
 /**
- * 生成 vm_interpreter.h 和 vm_interpreter.c - VM 解释器核心
- * 为每种返回类型生成不同的函数，避免装箱/拆箱
+ * Generates vm_interpreter.h and vm_interpreter.c - VM interpreter core
+ * Generates separate functions for each return type to avoid boxing/unboxing
  */
 public class VmInterpreterGenerator {
     
@@ -41,18 +41,18 @@ public class VmInterpreterGenerator {
             w.println("#include \"vm_types.h\"");
             w.println();
             
-            // 帧内存池初始化
-            w.println("// 帧内存池初始化（在 JNI_OnLoad 中调用）");
+            // Frame memory pool initialization
+            w.println("// Frame memory pool initialization (called in JNI_OnLoad)");
             w.println("void frame_pool_init(void);");
             w.println();
-            
-            // 辅助函数声明
+
+            // Helper function declarations
             for (VMHelper helper : helpers.getAllHelpers()) {
                 helper.generateHeader(w);
             }
-            
+
             w.println();
-            // 各返回类型的执行函数声明
+            // Execution function declarations for each return type
             w.println("void vm_execute_method_void(JNIEnv* env, int methodId, jobject instance, jobjectArray args, jclass callerClass);");
             w.println("jint vm_execute_method_int(JNIEnv* env, int methodId, jobject instance, jobjectArray args, jclass callerClass);");
             w.println("jlong vm_execute_method_long(JNIEnv* env, int methodId, jobject instance, jobjectArray args, jclass callerClass);");
@@ -88,21 +88,21 @@ public class VmInterpreterGenerator {
             }
             w.println();
             
-            // === 分支预测提示宏 ===
-            w.println("// === 分支预测提示 ===");
+            // === Branch prediction hint macros ===
+            w.println("// === Branch prediction hints ===");
             w.println("#define LIKELY(x)   __builtin_expect(!!(x), 1)");
             w.println("#define UNLIKELY(x) __builtin_expect(!!(x), 0)");
             w.println();
-            
-            // === 类和方法缓存系统 ===
+
+            // === Class and method cache system ===
             emitCachingSystem(w);
-            
-            // 辅助函数实现
+
+            // Helper function implementations
             for (VMHelper helper : helpers.getAllHelpers()) {
                 helper.generateSource(w);
             }
-            
-            // 字符串解密函数
+
+            // String decryption function
             w.println("static void vm_decrypt_string(const unsigned char* enc, int len, char* out, const unsigned char* key) {");
             w.println("    for (int i = 0; i < len; i++) {");
             w.println("        out[i] = (char)((enc[i] - (i & 0xFF)) ^ key[i % 8]);");
@@ -111,87 +111,87 @@ public class VmInterpreterGenerator {
             w.println("}");
             w.println();
             
-            // 主解释器函数（带返回类型参数）
+            // Main interpreter function (with return type parameter)
             emitExecuteCommon(w);
-            
-            // 各返回类型的包装函数
+
+            // Wrapper functions for each return type
             emitExecuteWrappers(w);
         }
     }
     
     private void emitCachingSystem(PrintWriter w) {
-        // === 帧内存池 ===
-        w.println("// === 帧内存池 (避免每次 calloc/free) ===");
-        w.println("#define FRAME_POOL_SIZE (4 * 1024 * 1024)  // 4MB 池");
-        w.println("#define MAX_FRAME_DEPTH 256                 // 最大调用嵌套深度");
+        // === Frame memory pool ===
+        w.println("// === Frame memory pool (avoid calloc/free on each call) ===");
+        w.println("#define FRAME_POOL_SIZE (4 * 1024 * 1024)  // 4MB pool");
+        w.println("#define MAX_FRAME_DEPTH 256                 // max call nesting depth");
         w.println();
         w.println("typedef struct {");
-        w.println("    uint8_t* base;                         // 池基址");
-        w.println("    size_t offset;                         // 当前分配偏移");
-        w.println("    size_t frameOffsets[MAX_FRAME_DEPTH];  // 每帧起始偏移栈");
-        w.println("    int depth;                             // 当前帧深度");
+        w.println("    uint8_t* base;                         // pool base address");
+        w.println("    size_t offset;                         // current allocation offset");
+        w.println("    size_t frameOffsets[MAX_FRAME_DEPTH];  // per-frame start offset stack");
+        w.println("    int depth;                             // current frame depth");
         w.println("} FramePool;");
         w.println();
         w.println("static FramePool framePool;");
         w.println();
-        w.println("// 初始化帧池（在 JNI_OnLoad 中调用）");
+        w.println("// Initialize frame pool (called in JNI_OnLoad)");
         w.println("void frame_pool_init(void) {");
         w.println("    framePool.base = (uint8_t*)malloc(FRAME_POOL_SIZE);");
         w.println("    framePool.offset = 0;");
         w.println("    framePool.depth = 0;");
         w.println("}");
         w.println();
-        w.println("// 进入方法帧 - 保存当前位置并分配（不清零，由调用者按需清零）");
+        w.println("// Enter method frame - save position and allocate (no zeroing, caller handles if needed)");
         w.println("static VMValue* frame_pool_push(int count) {");
         w.println("    size_t size = count * sizeof(VMValue);");
-        w.println("    size = (size + 15) & ~(size_t)15;  // 16字节对齐");
+        w.println("    size = (size + 15) & ~(size_t)15;  // 16-byte alignment");
         w.println("    if (framePool.offset + size > FRAME_POOL_SIZE || framePool.depth >= MAX_FRAME_DEPTH) {");
-        w.println("        return (VMValue*)calloc(count, sizeof(VMValue));  // 池满则回退（calloc自动清零）");
+        w.println("        return (VMValue*)calloc(count, sizeof(VMValue));  // fallback when pool full (calloc zeros)");
         w.println("    }");
         w.println("    framePool.frameOffsets[framePool.depth++] = framePool.offset;");
         w.println("    VMValue* ptr = (VMValue*)(framePool.base + framePool.offset);");
         w.println("    framePool.offset += size;");
-        w.println("    return ptr;  // 不清零，由调用者按需清零");
+        w.println("    return ptr;  // not zeroed, caller handles if needed");
         w.println("}");
         w.println();
-        w.println("// 退出方法帧 - 恢复指针");
+        w.println("// Exit method frame - restore pointer");
         w.println("static void frame_pool_pop(VMValue* ptr) {");
         w.println("    if (ptr >= (VMValue*)framePool.base && ptr < (VMValue*)(framePool.base + FRAME_POOL_SIZE)) {");
         w.println("        framePool.depth--;");
         w.println("        framePool.offset = framePool.frameOffsets[framePool.depth];");
         w.println("    } else {");
-        w.println("        free(ptr);  // 池外分配，直接释放");
+        w.println("        free(ptr);  // allocated outside pool, free directly");
         w.println("    }");
         w.println("}");
         w.println();
-        
-        // === 哈希缓存系统 ===
-        w.println("// === 哈希缓存系统 (O(1) 查找) ===");
-        w.println("#define CLASS_CACHE_SIZE 256    // 必须是 2 的幂");
-        w.println("#define METHOD_CACHE_SIZE 1024  // 必须是 2 的幂");
-        w.println("#define FIELD_CACHE_SIZE 512    // 必须是 2 的幂");
+
+        // === Hash cache system ===
+        w.println("// === Hash cache system (O(1) lookup) ===");
+        w.println("#define CLASS_CACHE_SIZE 256    // must be power of 2");
+        w.println("#define METHOD_CACHE_SIZE 1024  // must be power of 2");
+        w.println("#define FIELD_CACHE_SIZE 512    // must be power of 2");
         w.println();
-        
-        // 哈希函数
+
+        // Hash function
         w.println("static inline uint32_t ptr_hash(const void* p) {");
-        w.println("    return (uint32_t)((uintptr_t)p >> 3);  // 忽略低位对齐");
+        w.println("    return (uint32_t)((uintptr_t)p >> 3);  // ignore low alignment bits");
         w.println("}");
         w.println();
-        
-        // 组合哈希：三个指针
+
+        // Combined hash: three pointers
         w.println("static inline uint32_t triple_hash(const void* a, const void* b, const void* c) {");
         w.println("    return ptr_hash(a) ^ (ptr_hash(b) << 5) ^ (ptr_hash(c) << 11);");
         w.println("}");
         w.println();
-        
-        // 类缓存条目
+
+        // Class cache entry
         w.println("typedef struct {");
         w.println("    const char* key;    // className");
         w.println("    jclass value;");
         w.println("} ClassCacheEntry;");
         w.println();
-        
-        // 方法缓存条目
+
+        // Method cache entry
         w.println("typedef struct {");
         w.println("    const char* owner;");
         w.println("    const char* name;");
@@ -199,8 +199,8 @@ public class VmInterpreterGenerator {
         w.println("    jmethodID mid;");
         w.println("} MethodCacheEntry;");
         w.println();
-        
-        // 字段缓存条目
+
+        // Field cache entry
         w.println("typedef struct {");
         w.println("    const char* owner;");
         w.println("    const char* name;");
@@ -208,19 +208,19 @@ public class VmInterpreterGenerator {
         w.println("    jfieldID fid;");
         w.println("} FieldCacheEntry;");
         w.println();
-        
-        // 静态缓存数组
+
+        // Static cache arrays
         w.println("static ClassCacheEntry classCache[CLASS_CACHE_SIZE];");
         w.println("static MethodCacheEntry methodCache[METHOD_CACHE_SIZE];");
         w.println("static FieldCacheEntry fieldCache[FIELD_CACHE_SIZE];");
         w.println();
-        
-        // 类查找 - O(1) 哈希
+
+        // Class lookup - O(1) hash
         w.println("static jclass vm_find_class(JNIEnv* env, const char* className) {");
         w.println("    uint32_t idx = ptr_hash(className) & (CLASS_CACHE_SIZE - 1);");
         w.println("    ClassCacheEntry* e = &classCache[idx];");
         w.println("    if (LIKELY(e->key == className && e->value != NULL)) {");
-        w.println("        return e->value;  // 缓存命中");
+        w.println("        return e->value;  // cache hit");
         w.println("    }");
         w.println("    jclass localCls = (*env)->FindClass(env, className);");
         w.println("    if (localCls) {");
@@ -233,13 +233,13 @@ public class VmInterpreterGenerator {
         w.println("    return localCls;");
         w.println("}");
         w.println();
-        
-        // 方法查找 - O(1) 哈希
+
+        // Method lookup - O(1) hash
         w.println("static jmethodID vm_get_method_id(JNIEnv* env, jclass cls, const char* owner, const char* name, const char* desc) {");
         w.println("    uint32_t idx = triple_hash(owner, name, desc) & (METHOD_CACHE_SIZE - 1);");
         w.println("    MethodCacheEntry* e = &methodCache[idx];");
         w.println("    if (LIKELY(e->owner == owner && e->name == name && e->desc == desc && e->mid != NULL)) {");
-        w.println("        return e->mid;  // 缓存命中");
+        w.println("        return e->mid;  // cache hit");
         w.println("    }");
         w.println("    jmethodID mid = (*env)->GetMethodID(env, cls, name, desc);");
         w.println("    if (mid) {");
@@ -251,12 +251,12 @@ public class VmInterpreterGenerator {
         w.println("    return mid;");
         w.println("}");
         w.println();
-        
+
         w.println("static jmethodID vm_get_static_method_id(JNIEnv* env, jclass cls, const char* owner, const char* name, const char* desc) {");
         w.println("    uint32_t idx = triple_hash(owner, name, desc) & (METHOD_CACHE_SIZE - 1);");
         w.println("    MethodCacheEntry* e = &methodCache[idx];");
         w.println("    if (LIKELY(e->owner == owner && e->name == name && e->desc == desc && e->mid != NULL)) {");
-        w.println("        return e->mid;  // 缓存命中");
+        w.println("        return e->mid;  // cache hit");
         w.println("    }");
         w.println("    jmethodID mid = (*env)->GetStaticMethodID(env, cls, name, desc);");
         w.println("    if (mid) {");
@@ -268,13 +268,13 @@ public class VmInterpreterGenerator {
         w.println("    return mid;");
         w.println("}");
         w.println();
-        
-        // 字段查找 - O(1) 哈希
+
+        // Field lookup - O(1) hash
         w.println("static jfieldID vm_get_field_id(JNIEnv* env, jclass cls, const char* owner, const char* name, const char* desc) {");
         w.println("    uint32_t idx = triple_hash(owner, name, desc) & (FIELD_CACHE_SIZE - 1);");
         w.println("    FieldCacheEntry* e = &fieldCache[idx];");
         w.println("    if (LIKELY(e->owner == owner && e->name == name && e->desc == desc && e->fid != NULL)) {");
-        w.println("        return e->fid;  // 缓存命中");
+        w.println("        return e->fid;  // cache hit");
         w.println("    }");
         w.println("    jfieldID fid = (*env)->GetFieldID(env, cls, name, desc);");
         w.println("    if (fid) {");
@@ -286,12 +286,12 @@ public class VmInterpreterGenerator {
         w.println("    return fid;");
         w.println("}");
         w.println();
-        
+
         w.println("static jfieldID vm_get_static_field_id(JNIEnv* env, jclass cls, const char* owner, const char* name, const char* desc) {");
         w.println("    uint32_t idx = triple_hash(owner, name, desc) & (FIELD_CACHE_SIZE - 1);");
         w.println("    FieldCacheEntry* e = &fieldCache[idx];");
         w.println("    if (LIKELY(e->owner == owner && e->name == name && e->desc == desc && e->fid != NULL)) {");
-        w.println("        return e->fid;  // 缓存命中");
+        w.println("        return e->fid;  // cache hit");
         w.println("    }");
         w.println("    jfieldID fid = (*env)->GetStaticFieldID(env, cls, name, desc);");
         w.println("    if (fid) {");
@@ -306,13 +306,13 @@ public class VmInterpreterGenerator {
     }
     
     private void emitExecuteCommon(PrintWriter w) {
-        w.println("// 执行结果结构（用于返回值和类型）");
+        w.println("// Execution result struct (for return value and type)");
         w.println("typedef struct {");
         w.println("    VMValue value;");
         w.println("    char returnType;  // 'V', 'I', 'J', 'F', 'D', 'L'");
         w.println("} ExecuteResult;");
         w.println();
-        
+
         w.println("static ExecuteResult vm_execute_common(JNIEnv* env, int methodId, jobject instance, jobjectArray args, jclass callerClass) {");
         w.println("    ExecuteResult execResult = { .returnType = 'V' };");
         w.println("    methodId ^= METHOD_ID_XOR_KEY;");
@@ -322,27 +322,27 @@ public class VmInterpreterGenerator {
         w.println("    }");
         w.println("    VMMethod* m = &vm_methods[methodId];");
         w.println();
-        
-        // 字节码直接使用（不再加密）
+
+        // Bytecode used directly (no longer encrypted)
         w.println("    uint8_t* bytecode = m->bytecode;");
         w.println();
-        
-        // 初始化帧（使用内存池）
+
+        // Initialize frame (using memory pool)
         w.println("    VMFrame frame = { .pc = 0, .sp = 0, .callerClass = callerClass };");
-        w.println("    frame.stack = frame_pool_push(m->maxStack);  // stack不需要清零，会被压栈覆盖");
+        w.println("    frame.stack = frame_pool_push(m->maxStack);  // stack doesn't need zeroing, will be overwritten");
         w.println("    frame.locals = frame_pool_push(m->maxLocals);");
-        w.println("    memset(frame.locals, 0, m->maxLocals * sizeof(VMValue));  // locals必须清零");
+        w.println("    memset(frame.locals, 0, m->maxLocals * sizeof(VMValue));  // locals must be zeroed");
         w.println();
-        
-        // 设置参数
+
+        // Set up arguments
         w.println("    frame.locals[0].l = instance;");
         w.println("    const char* methodDesc = (m->descIdx >= 0) ? vm_get_string(m->descIdx) : NULL;");
         w.println("    const char* argTypes = (m->argTypesIdx >= 0) ? vm_get_string(m->argTypesIdx) : NULL;");
         w.println("    vm_unbox_args_fast(env, &frame, args, argTypes, m->argCount, instance ? 1 : 0);");
         w.println();
-        
-        // 指令是否需要元数据的查找表（0=不需要，1=需要）
-        w.println("    // 元数据需求表：标记哪些指令需要查找元数据");
+
+        // Lookup table for whether instruction needs metadata (0=no, 1=yes)
+        w.println("    // Metadata requirement table: marks which instructions need metadata lookup");
         w.println("    static const uint8_t needs_meta[256] = {");
         StringBuilder metaTable = new StringBuilder();
         for (int i = 0; i < 256; i++) {
@@ -365,7 +365,7 @@ public class VmInterpreterGenerator {
         w.println("    };");
         w.println();
         
-        // Computed Goto 跳转表
+        // Computed Goto dispatch table
         w.println("    static const void* dispatch_table[256] = {");
         for (int i = 0; i < 256; i++) {
             final int op = i;
@@ -380,8 +380,8 @@ public class VmInterpreterGenerator {
         }
         w.println("    };");
         w.println();
-        
-        // 优化的 DISPATCH_NEXT：只有需要元数据的指令才查找
+
+        // Optimized DISPATCH_NEXT: only lookup metadata for instructions that need it
         w.println("    #define DISPATCH_NEXT \\");
         w.println("        do { \\");
         w.println("            if (UNLIKELY(frame.pc >= m->bytecodeLen)) goto method_exit; \\");
@@ -395,33 +395,33 @@ public class VmInterpreterGenerator {
         w.println("            goto *dispatch_table[_op]; \\");
         w.println("        } while(0)");
         w.println();
-        
+
         w.println("    MetaEntry* meta = NULL;");
         w.println("    DISPATCH_NEXT;");
         w.println();
-        
-        // 生成所有指令处理代码
+
+        // Generate all instruction handling code
         for (Instruction inst : instructions.getAllInstructions()) {
             inst.generateComputedGoto(w);
             w.println();
         }
-        
+
         w.println("        OP_DEFAULT:");
         w.println("            VM_LOG(\"Unknown opcode: 0x%02x at pc=%d\\n\", bytecode[frame.pc], frame.pc);");
         w.println("            frame.pc++;");
         w.println("            DISPATCH_NEXT;");
         w.println();
-        
-        // 退出时返回结果
+
+        // Return result on exit
         w.println("    method_exit:");
         w.println("    ;");
-        w.println("    // 从方法描述符获取返回类型");
+        w.println("    // Get return type from method descriptor");
         w.println("    if (methodDesc) {");
         w.println("        const char* p = methodDesc;");
         w.println("        while (*p && *p != ')') p++;");
         w.println("        if (*p == ')') execResult.returnType = *(p + 1);");
         w.println("    }");
-        w.println("    // 从栈顶获取返回值");
+        w.println("    // Get return value from top of stack");
         w.println("    if (frame.sp > 0) {");
         w.println("        execResult.value = frame.stack[frame.sp - 1];");
         w.println("    }");
@@ -431,12 +431,12 @@ public class VmInterpreterGenerator {
         w.println("}");
         w.println();
     }
-    
+
     private void emitExecuteWrappers(PrintWriter w) {
         // void
         w.println("void vm_execute_method_void(JNIEnv* env, int methodId, jobject instance, jobjectArray args, jclass callerClass) {");
         w.println("    ExecuteResult r = vm_execute_common(env, methodId, instance, args, callerClass);");
-        w.println("    (void)r;  // 忽略返回值");
+        w.println("    (void)r;  // ignore return value");
         w.println("}");
         w.println();
         

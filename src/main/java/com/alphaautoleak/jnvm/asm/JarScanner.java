@@ -12,22 +12,22 @@ import java.util.jar.JarEntry;
 import java.util.jar.JarFile;
 
 /**
- * 扫描输入 JAR，收集所有需要保护的方法元数据。
+ * Scans input JAR, collects all method metadata to be protected.
  */
 public class JarScanner {
 
     private final ProtectConfig config;
 
-    /** 全局方法 ID 计数器 */
+    /** Global method ID counter */
     private int nextMethodId = 0;
 
-    /** 收集到的所有需要保护的方法 */
+    /** All collected methods to be protected */
     private final List<MethodInfo> protectedMethods = new ArrayList<>();
 
-    /** 记录哪些类包含被保护方法（后续 patch 用） */
+    /** Records which classes contain protected methods (for patching) */
     private final Set<String> affectedClasses = new HashSet<>();
 
-    /** 注解规则的描述符列表 */
+    /** Annotation rule descriptor list */
     private final List<String> annotationDescs;
 
     public JarScanner(ProtectConfig config) {
@@ -36,7 +36,7 @@ public class JarScanner {
     }
 
     /**
-     * 扫描 JAR 文件，返回所有需要保护的方法信息
+     * Scans JAR file, returns all method info to be protected
      */
     public List<MethodInfo> scan(File jarFile) throws IOException {
         System.out.println("[SCAN] Opening JAR: " + jarFile.getAbsolutePath());
@@ -47,12 +47,12 @@ public class JarScanner {
             while (entries.hasMoreElements()) {
                 JarEntry entry = entries.nextElement();
 
-                // 只处理 .class 文件
+                // Only process .class files
                 if (!entry.getName().endsWith(".class")) {
                     continue;
                 }
 
-                // 跳过 module-info 和 package-info
+                // Skip module-info and package-info
                 String entryName = entry.getName();
                 if (entryName.equals("module-info.class") ||
                         entryName.endsWith("package-info.class")) {
@@ -73,22 +73,22 @@ public class JarScanner {
     }
 
     /**
-     * 处理单个 class 文件
+     * Process single class file
      */
     private void processClass(InputStream classBytes) throws IOException {
         ClassReader cr = new ClassReader(classBytes);
         ClassNode cn = new ClassNode(Opcodes.ASM9);
-        cr.accept(cn, 0); // 不跳过任何内容
+        cr.accept(cn, 0); // do not skip anything
 
-        String className = cn.name; // 内部格式
+        String className = cn.name; // internal format
 
-        // 跳过接口（没有方法体）和合成类
+        // Skip interfaces (no method body) and synthetic classes
         if ((cn.access & Opcodes.ACC_INTERFACE) != 0 &&
                 (cn.access & Opcodes.ACC_ABSTRACT) != 0) {
-            // 接口中可能有 default 方法，也需要检查
+            // Interfaces may have default methods, also need to check
         }
 
-        // 检查类级别注解
+        // Check class-level annotations
         boolean classAnnotated = false;
         if (!annotationDescs.isEmpty() && cn.visibleAnnotations != null) {
             for (AnnotationNode ann : cn.visibleAnnotations) {
@@ -100,36 +100,36 @@ public class JarScanner {
         }
 
         for (MethodNode mn : cn.methods) {
-            // 跳过抽象方法和 native 方法（没有字节码）
+            // Skip abstract and native methods (no bytecode)
             if ((mn.access & Opcodes.ACC_ABSTRACT) != 0 ||
                     (mn.access & Opcodes.ACC_NATIVE) != 0) {
                 continue;
             }
 
-            // 跳过没有指令的方法
+            // Skip methods without instructions
             if (mn.instructions == null || mn.instructions.size() == 0) {
                 continue;
             }
 
-            // 跳过构造函数 (<init>) - 它们需要正确的 this 引用初始化
+            // Skip constructors (<init>) - they need proper this reference initialization
             if (mn.name.equals("<init>")) {
                 continue;
             }
 
-            // 判断是否需要保护
+            // Determine if protection is needed
             boolean shouldProtect = false;
 
-            // 规则匹配
+            // Rule matching
             if (config.shouldProtect(className, mn.name)) {
                 shouldProtect = true;
             }
 
-            // 类级别注解
+            // Class-level annotation
             if (classAnnotated) {
                 shouldProtect = true;
             }
 
-            // 方法级别注解
+            // Method-level annotation
             if (!shouldProtect && !annotationDescs.isEmpty() && mn.visibleAnnotations != null) {
                 for (AnnotationNode ann : mn.visibleAnnotations) {
                     if (annotationDescs.contains(ann.desc)) {
@@ -143,7 +143,7 @@ public class JarScanner {
                 continue;
             }
 
-            // 收集方法信息
+            // Collect method info
             MethodInfo info = extractMethodInfo(cn, mn);
             if (info != null) {
                 protectedMethods.add(info);
@@ -154,7 +154,7 @@ public class JarScanner {
     }
 
     /**
-     * 从 ASM MethodNode 提取完整的方法元数据
+     * Extracts complete method metadata from ASM MethodNode
      */
     private MethodInfo extractMethodInfo(ClassNode cn, MethodNode mn) {
         MethodInfo info = new MethodInfo();
@@ -167,7 +167,7 @@ public class JarScanner {
         info.setMaxLocals(mn.maxLocals);
         info.setSignature(mn.signature);
 
-        // ===== 提取字节码 + 元数据（新格式） =====
+        // ===== Extract bytecode + metadata (new format) =====
         BytecodeExtractor extractor = new BytecodeExtractor(cn, mn);
         extractor.extract();
 

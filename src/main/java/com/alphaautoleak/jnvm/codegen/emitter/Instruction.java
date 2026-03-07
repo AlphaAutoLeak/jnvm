@@ -3,8 +3,8 @@ package com.alphaautoleak.jnvm.codegen.emitter;
 import java.io.PrintWriter;
 
 /**
- * JVM 指令基类
- * 每个指令负责生成自己的 C 代码实现
+ * Base class for JVM instructions
+ * Each instruction generates its own C code implementation
  */
 public abstract class Instruction {
     
@@ -25,7 +25,7 @@ public abstract class Instruction {
     }
     
     /**
-     * 生成 case 分支代码（传统 switch-case 方式）
+     * Generates case branch code (traditional switch-case)
      */
     public void generate(PrintWriter w) {
         w.printf("            case 0x%02x: /* %s */\n", opcode, comment);
@@ -34,8 +34,8 @@ public abstract class Instruction {
     }
     
     /**
-     * 生成 computed goto 标签和代码
-     * 默认实现：调用 generateBodyWithoutPcInc()，然后根据 needsPcIncrement() 决定是否 pc++
+     * Generates computed goto label and code
+     * Default: calls generateBodyWithoutPcInc(), then pc++ based on needsPcIncrement()
      */
     public void generateComputedGoto(PrintWriter w) {
         w.printf("        OP_%02x:  /* %s */\n", opcode, comment);
@@ -47,50 +47,50 @@ public abstract class Instruction {
     }
     
     /**
-     * 是否需要 pc++（默认 false，因为 generateBody 通常已经调用了 pcIncBreak）
+     * Whether pc++ is needed (default false, generateBody usually handles it)
      */
     protected boolean needsPcIncrement() {
         return false;
     }
     
     /**
-     * 生成指令体（子类实现）
+     * Generates instruction body (subclass implementation)
      */
     protected abstract void generateBody(PrintWriter w);
     
     /**
-     * 生成指令体（不含 pc++）
-     * 默认实现直接调用 generateBody，假设子类在 generateBody 中已经处理了 pc++
-     * 如果子类的 generateBody 调用了 pcIncBreak，应该覆盖此方法避免重复
+     * Generates instruction body (without pc++)
+     * Default: calls generateBody, assuming subclass handles pc++
+     * Override this if generateBody calls pcIncBreak to avoid duplication
      */
     protected void generateBodyWithoutPcInc(PrintWriter w) {
         generateBody(w);
     }
     
     /**
-     * 生成 pc++ （break 由 generate() 自动添加）
+     * Generates pc++ (break is auto-added by generate())
      */
     protected void pcIncBreak(PrintWriter w) {
         w.println("                frame.pc++;");
     }
     
     /**
-     * 获取 opcode
+     * Returns the opcode
      */
     public int getOpcode() {
         return opcode;
     }
     
     /**
-     * 获取指令名
+     * Returns the instruction name
      */
     public String getName() {
         return name;
     }
     
     /**
-     * 是否需要元数据（默认 false，只有带操作数的指令需要）
-     * 这是性能优化关键：避免对简单指令进行不必要的元数据查找
+     * Whether metadata is needed (default false, only instructions with operands need it)
+     * Performance optimization: avoid unnecessary metadata lookup for simple instructions
      */
     public boolean needsMeta() {
         return false;

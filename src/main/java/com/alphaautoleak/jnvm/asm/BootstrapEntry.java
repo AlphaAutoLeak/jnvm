@@ -11,27 +11,27 @@ public class BootstrapEntry {
     private String handleDescriptor;
 
     /**
-     * Bootstrap 参数 — 保持原始类型
-     * 每个元素是以下之一：
-     * - String (字符串常量或 recipe)
+     * Bootstrap argument - preserves original type
+     * Each element is one of:
+     * - String (string constant or recipe)
      * - Integer
      * - Long
      * - Float
      * - Double
-     * - org.objectweb.asm.Type (MethodType 描述符)
+     * - org.objectweb.asm.Type (MethodType descriptor)
      * - org.objectweb.asm.Handle (MethodHandle)
      */
     private List<Object> arguments = new ArrayList<>();
 
-    /** 参数的类型标记 */
+    /** Argument type marker */
     public enum ArgType {
-        STRING,      // 普通字符串
+        STRING,      // regular string
         INTEGER,     // int
         LONG,        // long
         FLOAT,       // float
         DOUBLE,      // double
-        METHOD_TYPE, // MethodType 描述符字符串
-        METHOD_HANDLE // MethodHandle 引用
+        METHOD_TYPE, // MethodType descriptor string
+        METHOD_HANDLE // MethodHandle reference
     }
 
     private List<ArgType> argumentTypes = new ArrayList<>();

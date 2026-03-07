@@ -6,7 +6,7 @@ import java.io.IOException;
 import java.io.PrintWriter;
 
 /**
- * 代码生成器基类 - 提供通用工具方法
+ * Base code generator - provides utility methods
  */
 public abstract class CodeEmitter {
     
@@ -17,113 +17,113 @@ public abstract class CodeEmitter {
         this.w = new PrintWriter(new FileWriter(file));
     }
     
-    /** 输出一行代码 */
+    /** Outputs a line of code */
     protected void emit(String line) {
         w.println(line);
     }
     
-    /** 输出空行 */
+    /** Outputs a blank line */
     protected void emit() {
         w.println();
     }
     
-    /** 输出格式化代码 */
+    /** Outputs formatted code */
     protected void emitf(String fmt, Object... args) {
         w.printf(fmt, args);
     }
     
-    /** 开始头文件保护 */
+    /** Begins header guard */
     protected void beginGuard(String name) {
         emit("#ifndef " + name);
         emit("#define " + name);
         emit();
     }
     
-    /** 结束头文件保护 */
+    /** Ends header guard */
     protected void endGuard() {
         emit("#endif");
     }
     
-    /** 输出注释块 */
+    /** Outputs comment block */
     protected void emitComment(String comment) {
         emit("/* " + comment + " */");
     }
     
-    /** 输出单行注释 */
+    /** Outputs single-line comment */
     protected void emitLineComment(String comment) {
         emit("// " + comment);
     }
     
-    /** 输出函数签名 */
+    /** Outputs function signature */
     protected void emitFunction(String returnType, String name, String params) {
         emit(returnType + " " + name + "(" + params + ") {");
     }
     
-    /** 结束函数 */
+    /** Ends function */
     protected void endFunction() {
         emit("}");
     }
     
-    /** 输出 return 语句 */
+    /** Outputs return statement */
     protected void emitReturn(String value) {
         emit("    return " + value + ";");
     }
     
-    /** 输出 return; */
+    /** Outputs return; */
     protected void emitReturn() {
         emit("    return;");
     }
     
-    /** 输出 if 语句 */
+    /** Outputs if statement */
     protected void emitIf(String condition) {
         emit("    if(" + condition + "){");
     }
     
-    /** 输出 else */
+    /** Outputs else */
     protected void emitElse() {
         emit("    } else {");
     }
     
-    /** 结束 if/else 块 */
+    /** Ends if/else block */
     protected void endIf() {
         emit("    }");
     }
     
-    /** 输出 for 循环 */
+    /** Outputs for loop */
     protected void emitFor(String init, String cond, String update) {
         emit("    for(" + init + "; " + cond + "; " + update + "){");
     }
     
-    /** 结束 for 循环 */
+    /** Ends for loop */
     protected void endFor() {
         emit("    }");
     }
     
-    /** 输出 switch 语句 */
+    /** Outputs switch statement */
     protected void emitSwitch(String expr) {
         emit("    switch(" + expr + "){");
     }
     
-    /** 输出 case */
+    /** Outputs case */
     protected void emitCase(String value) {
         emit("        case " + value + ":");
     }
     
-    /** 输出 break */
+    /** Outputs break */
     protected void emitBreak() {
         emit("            break;");
     }
     
-    /** 结束 switch */
+    /** Ends switch */
     protected void endSwitch() {
         emit("    }");
     }
     
-    /** 关闭写入器 */
+    /** Closes writer */
     public void close() {
         w.close();
     }
     
-    /** 生成代码 - 子类实现 */
+    /** Generates code - implemented by subclasses */
     public abstract void generate() throws IOException;
 }

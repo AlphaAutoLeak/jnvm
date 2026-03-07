@@ -20,7 +20,7 @@ public class ProtectConfig {
     private List<String> targets = new ArrayList<>();
     private boolean antiDebug = true;
     private File nativeDir;
-    private boolean encryptStrings = true;  // 是否使用 ChaCha20 加密字符串
+    private boolean encryptStrings = true;
 
     private boolean debug = false;
 
@@ -28,7 +28,7 @@ public class ProtectConfig {
     public void setDebug(boolean debug) { this.debug = debug; }
 
     /**
-     * 从 YAML 文件加载配置
+     * Loads config from YAML file
      */
     @SuppressWarnings("unchecked")
     public void loadFromYaml(File yamlFile) throws IOException {
@@ -65,7 +65,6 @@ public class ProtectConfig {
                 Object protectObj = config.get("protect");
                 if (protectObj instanceof List) {
                     List<String> yamlRules = (List<String>) protectObj;
-                    // 合并到现有规则（命令行优先）
                     for (String rule : yamlRules) {
                         if (!protectRules.contains(rule)) {
                             protectRules.add(rule);
@@ -111,22 +110,22 @@ public class ProtectConfig {
     }
 
     /**
-     * 校验 + 合并 configFile 中的规则
+     * Validates and merges rules from configFile
      */
     public void validate() throws IOException {
-        // 如果指定了 config 文件，先加载
+        // If config file specified, load it first
         if (configFile != null && configFile.exists()) {
             String fileName = configFile.getName().toLowerCase();
             if (fileName.endsWith(".yml") || fileName.endsWith(".yaml")) {
                 loadFromYaml(configFile);
             } else {
-                // 旧格式：逐行读取规则
+                // Old format: read rules line by line
                 System.out.println("[INFO] Loading protect rules from: " + configFile);
                 try (BufferedReader br = new BufferedReader(new FileReader(configFile))) {
                     String line;
                     while ((line = br.readLine()) != null) {
                         line = line.trim();
-                        // 跳过空行和注释
+                        // Skip empty lines and comments
                         if (line.isEmpty() || line.startsWith("#") || line.startsWith("//")) {
                             continue;
                         }
@@ -140,34 +139,33 @@ public class ProtectConfig {
             throw new IllegalArgumentException("Input JAR not found: " + inputJar);
         }
 
-        // 如果没有任何规则，默认保护全部
         if (protectRules.isEmpty()) {
             System.out.println("[WARN] No protect rules specified, protecting ALL methods.");
             protectRules.add("**");
         }
 
-        // 确保 native 目录存在
+        // Ensure native directory exists
         if (nativeDir != null && !nativeDir.exists()) {
             nativeDir.mkdirs();
         }
     }
 
     /**
-     * 判断一个类/方法是否应该被保护
-     * @param className  内部格式 e.g. "com/example/service/UserService"
-     * @param methodName 方法名 e.g. "getUser"，null 表示检查整个类
+     * Determines if a class/method should be protected
+     * @param className  internal format e.g. "com/example/service/UserService"
+     * @param methodName method name e.g. "getUser", null means check entire class
      */
     public boolean shouldProtect(String className, String methodName) {
-        // 转为点分格式
+        // Convert to dot format
         String dotClass = className.replace('/', '.');
 
         for (String rule : protectRules) {
-            // 规则1: 全部保护
+            // Rule 1: protect all
             if (rule.equals("**")) {
                 return true;
             }
 
-            // 规则2: com.example.** (包通配)
+            // Rule 2: com.example.** (package wildcard)
             if (rule.endsWith(".**")) {
                 String pkg = rule.substring(0, rule.length() - 3);
                 if (dotClass.startsWith(pkg)) {
@@ -175,14 +173,14 @@ public class ProtectConfig {
                 }
             }
 
-            // 规则3: com.example.MyClass (整个类)
+            // Rule 3: com.example.MyClass (entire class)
             else if (!rule.contains("#") && !rule.startsWith("@")) {
                 if (dotClass.equals(rule)) {
                     return true;
                 }
             }
 
-            // 规则4: com.example.MyClass#methodName (特定方法)
+            // Rule 4: com.example.MyClass#methodName (specific method)
             else if (rule.contains("#")) {
                 String[] parts = rule.split("#", 2);
                 if (dotClass.equals(parts[0]) && methodName != null && methodName.equals(parts[1])) {
@@ -190,9 +188,9 @@ public class ProtectConfig {
                 }
             }
 
-            // 规则5: @VMProtect (注解，后续步骤处理)
+            // Rule 5: @VMProtect (annotation, handled in subsequent steps)
             else if (rule.startsWith("@")) {
-                // 注解匹配在 ASM visitor 中处理
+                // Annotation matching handled in ASM visitor
             }
         }
 
@@ -200,7 +198,7 @@ public class ProtectConfig {
     }
 
     /**
-     * 检查规则中是否包含注解规则
+     * Checks if rules contain annotation rules
      */
     public List<String> getAnnotationRules() {
         List<String> result = new ArrayList<>();

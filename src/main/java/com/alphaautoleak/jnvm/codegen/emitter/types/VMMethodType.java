@@ -3,7 +3,7 @@ package com.alphaautoleak.jnvm.codegen.emitter.types;
 import java.io.PrintWriter;
 
 /**
- * 生成 VMMethod 和 VMExceptionEntry 类型定义
+ * Generates VMMethod and VMExceptionEntry type definitions
  */
 public class VMMethodType {
     
@@ -13,35 +13,35 @@ public class VMMethodType {
     }
     
     private static void emitExceptionEntry(PrintWriter w) {
-        w.println("/* 异常表条目 */");
+        w.println("/* Exception table entry */");
         w.println("typedef struct {");
-        w.println("    int startPc;             // try 块起始 PC（含）");
-        w.println("    int endPc;               // try 块结束 PC（不含）");
-        w.println("    int handlerPc;           // catch handler 起始 PC");
-        w.println("    int catchTypeIdx;        // 捕获的异常类型索引（-1 表示 catch-all/finally）");
+        w.println("    int startPc;             // try block start PC (inclusive)");
+        w.println("    int endPc;               // try block end PC (exclusive)");
+        w.println("    int handlerPc;           // catch handler start PC");
+        w.println("    int catchTypeIdx;        // caught exception type index (-1 for catch-all/finally)");
         w.println("} VMExceptionEntry;");
         w.println();
     }
-    
+
     private static void emitVMMethod(PrintWriter w) {
-        w.println("/* 方法定义 */");
+        w.println("/* Method definition */");
         w.println("typedef struct {");
         w.println("    int methodId;");
         w.println("    int maxStack;");
         w.println("    int maxLocals;");
-        w.println("    uint8_t* bytecode;       // 指令序列");
+        w.println("    uint8_t* bytecode;       // instruction sequence");
         w.println("    int bytecodeLen;");
-        w.println("    MetaEntry* metadata;     // 元数据数组");
+        w.println("    MetaEntry* metadata;     // metadata array");
         w.println("    int metadataCount;");
-        w.println("    int* pcToMetaIdx;        // PC -> 元数据索引映射");
-        w.println("    int descIdx;             // 方法描述符索引");
-        w.println("    int descLen;             // 方法描述符长度");
-        w.println("    int isStatic;            // 是否静态方法");
-        w.println("    VMExceptionEntry* exceptionTable;  // 异常表");
-        w.println("    int exceptionTableLength;         // 异常表长度");
-        w.println("    // 预解析的方法参数信息（性能优化）");
-        w.println("    int argCount;            // 参数个数");
-        w.println("    int argTypesIdx;         // 参数类型字符串索引（如 \"IJDL\"）");
+        w.println("    int* pcToMetaIdx;        // PC to metadata index mapping");
+        w.println("    int descIdx;             // method descriptor index");
+        w.println("    int descLen;             // method descriptor length");
+        w.println("    int isStatic;            // is static method");
+        w.println("    VMExceptionEntry* exceptionTable;  // exception table");
+        w.println("    int exceptionTableLength;         // exception table length");
+        w.println("    // pre-parsed method argument info (performance optimization)");
+        w.println("    int argCount;            // argument count");
+        w.println("    int argTypesIdx;         // argument types string index (e.g. \"IJDL\")");
         w.println("} VMMethod;");
         w.println();
     }

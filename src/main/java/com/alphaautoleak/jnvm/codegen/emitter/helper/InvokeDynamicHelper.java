@@ -3,7 +3,7 @@ package com.alphaautoleak.jnvm.codegen.emitter.helper;
 import java.io.PrintWriter;
 
 /**
- * InvokeDynamic 辅助函数（Lambda 支持）
+ * InvokeDynamic helper functions (Lambda support)
  */
 public class InvokeDynamicHelper extends VMHelper {
     
@@ -19,8 +19,8 @@ public class InvokeDynamicHelper extends VMHelper {
     
     @Override
     public void generateSource(PrintWriter w) {
-        // 静态缓存 - 类和方法ID
-        w.println("// === InvokeDynamic 静态缓存 ===");
+        // Static cache - classes and method IDs
+        w.println("// === InvokeDynamic static cache ===");
         w.println("static jclass id_mhClass = NULL;");
         w.println("static jmethodID id_lookupMid = NULL;");
         w.println("static jmethodID id_privateLookupInMid = NULL;");
@@ -63,7 +63,7 @@ public class InvokeDynamicHelper extends VMHelper {
         w.println("    VMBootstrapMethod* bsm = &vm_bootstrap_methods[meta->bsmIdx];");
         w.println("    const char* bsmClass = vm_get_string(bsm->ownerIdx);");
         w.println();
-        w.println("    // 初始化静态缓存");
+        w.println("    // Initialize static cache");
         w.println("    if (!id_mhClass) {");
         w.println("        id_mhClass = vm_find_class(env, \"java/lang/invoke/MethodHandles\");");
         w.println("        if (id_mhClass) id_lookupMid = (*env)->GetStaticMethodID(env, id_mhClass, \"lookup\", \"()Ljava/lang/invoke/MethodHandles$Lookup;\");");
@@ -179,7 +179,7 @@ public class InvokeDynamicHelper extends VMHelper {
         w.println();
         
         // ===== Step 6: Create Lookup with proper caller class =====
-        w.println("    // Get MethodHandles.Lookup for the caller class (使用缓存)");
+        w.println("    // Get MethodHandles.Lookup for the caller class (using cache)");
         w.println("    jobject publicLookup = (*env)->CallStaticObjectMethod(env, id_mhClass, id_lookupMid);");
         w.println();
         w.println("    // Use privateLookupIn to get lookup with correct caller class");
@@ -192,7 +192,7 @@ public class InvokeDynamicHelper extends VMHelper {
         w.println();
         
         // ===== Step 7: Create MethodType objects =====
-        w.println("    // Create MethodTypes from descriptor strings (使用缓存)");
+        w.println("    // Create MethodTypes from descriptor strings (using cache)");
         w.println("    jobject classLoader = (*env)->CallObjectMethod(env, ownerClass, id_getClassLoaderMid);");
         w.println();
         w.println("    jstring samDescJStr = (*env)->NewStringUTF(env, samMethodTypeStr);");
@@ -209,7 +209,7 @@ public class InvokeDynamicHelper extends VMHelper {
         w.println();
         
         // ===== Step 8: Find the implementation method handle =====
-        w.println("    // Find the implementation method handle (使用缓存)");
+        w.println("    // Find the implementation method handle (using cache)");
         w.println("    jobject implMethodHandle = NULL;");
         w.println("    jstring implNameJStr = (*env)->NewStringUTF(env, implName);");
         w.println();
@@ -240,7 +240,7 @@ public class InvokeDynamicHelper extends VMHelper {
         w.println();
         
         // ===== Step 10: Call LambdaMetafactory.metafactory =====
-        w.println("    // Call LambdaMetafactory.metafactory (使用缓存)");
+        w.println("    // Call LambdaMetafactory.metafactory (using cache)");
         w.println("    jstring methodNameJStr = (*env)->NewStringUTF(env, methodName);");
         w.println();
         w.println("    VM_LOG(\"INVOKEDYNAMIC: Calling metafactory: name=%s, invokedType=%s\\n\", methodName, methodDesc);");
@@ -255,7 +255,7 @@ public class InvokeDynamicHelper extends VMHelper {
         w.println();
         
         // ===== Step 11: Get target MethodHandle from CallSite =====
-        w.println("    // Get target MethodHandle from CallSite (使用缓存)");
+        w.println("    // Get target MethodHandle from CallSite (using cache)");
         w.println("    jobject targetHandle = (*env)->CallObjectMethod(env, callSite, id_getTargetMid);");
         w.println("    if (!targetHandle) { VM_LOG(\"INVOKEDYNAMIC: getTarget returned NULL\\n\"); (*env)->ExceptionClear(env); return NULL; }");
         w.println();
@@ -271,7 +271,7 @@ public class InvokeDynamicHelper extends VMHelper {
         w.println();
         
         // ===== Step 13: Collect captured arguments from stack =====
-        w.println("    // Collect captured arguments from stack (使用缓存的类和方法)");
+        w.println("    // Collect captured arguments from stack (using cached classes and methods)");
         w.println("    jobjectArray invokeArgs = (*env)->NewObjectArray(env, capturedCount, id_objectClass, NULL);");
         w.println("    if (!invokeArgs) { VM_LOG(\"INVOKEDYNAMIC: Failed to create args array\\n\"); (*env)->ExceptionClear(env); return NULL; }");
         w.println();
@@ -319,7 +319,7 @@ public class InvokeDynamicHelper extends VMHelper {
         w.println();
         
         // ===== Step 14: Invoke with captured arguments =====
-        w.println("    // Invoke the lambda factory with captured arguments (使用缓存)");
+        w.println("    // Invoke the lambda factory with captured arguments (using cache)");
         w.println("    jobject result = (*env)->CallObjectMethod(env, targetHandle, id_invokeWithArgsMid, invokeArgs);");
         w.println();
         w.println("    if ((*env)->ExceptionCheck(env)) {");

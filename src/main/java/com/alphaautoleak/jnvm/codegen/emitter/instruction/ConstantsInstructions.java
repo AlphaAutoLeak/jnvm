@@ -17,7 +17,7 @@ public class ConstantsInstructions {
         
         @Override
         public boolean needsMeta() {
-            return true;  // LDC 需要元数据
+            return true;
         }
         
         private void generateLdcBody(PrintWriter w, String indent) {

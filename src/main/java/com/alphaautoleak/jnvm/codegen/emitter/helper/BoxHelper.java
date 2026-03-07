@@ -3,7 +3,7 @@ package com.alphaautoleak.jnvm.codegen.emitter.helper;
 import java.io.PrintWriter;
 
 /**
- * 返回值装箱辅助函数 - 使用缓存的包装类和 methodID
+ * Return value boxing helper - uses cached wrapper classes and methodIDs
  */
 public class BoxHelper extends VMHelper {
     
@@ -20,7 +20,7 @@ public class BoxHelper extends VMHelper {
     @Override
     public void generateSource(PrintWriter w) {
         w.println("jobject vm_box_result(JNIEnv* env, VMValue result, char returnType) {");
-        w.println("    // 使用 vm_find_class 和静态 methodID 缓存");
+        w.println("    // Use vm_find_class and static methodID cache");
         w.println("    static jmethodID boolInitMid = NULL;");
         w.println("    static jmethodID byteInitMid = NULL;");
         w.println("    static jmethodID charInitMid = NULL;");

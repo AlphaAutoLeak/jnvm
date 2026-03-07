@@ -28,7 +28,7 @@ public class Converter {
     public void run() throws Exception {
         long startTime = System.currentTimeMillis();
 
-        // ===== STEP 1: 扫描 JAR =====
+        // ===== STEP 1: Scan JAR =====
         System.out.println("[STEP 1/7] Scanning JAR: " + config.getInputJar());
         JarScanner scanner = new JarScanner(config);
         protectedMethods = scanner.scan(config.getInputJar());
@@ -53,24 +53,24 @@ public class Converter {
         System.out.println("  Total metadata:     " + totalMetadata + " entries");
         System.out.println();
 
-        // ===== STEP 2: 封装字节码数据 =====
+        // ===== STEP 2: Package bytecode data =====
         System.out.println("[STEP 2/7] Encrypting bytecode...");
         BytecodeEncryptor encryptor = new BytecodeEncryptor();
         encryptedMethods = encryptor.encryptAll(protectedMethods);
         System.out.println();
 
-        // ===== STEP 3: 创建 JarPatcher 获取随机 bridge 包名和 XOR key =====
+        // ===== STEP 3: Create JarPatcher to get random bridge package name and XOR key =====
         JarPatcher patcher = new JarPatcher(protectedMethods, affectedClasses);
         String bridgeClass = patcher.getBridgeClass();
         int methodIdXorKey = patcher.getMethodIdXorKey();
 
-        // ===== STEP 4: 生成 C 源码 =====
+        // ===== STEP 4: Generate C source code =====
         System.out.println("[STEP 3/7] Generating native C sources...");
         NativeCodeGenerator codegen = new NativeCodeGenerator(config, encryptedMethods, bridgeClass, methodIdXorKey);
         codegen.generate();
         System.out.println();
 
-        // ===== STEP 5: Zig 编译 =====
+        // ===== STEP 5: Zig compilation =====
         System.out.println("[STEP 4/7] Compiling with Zig...");
         ZigCompiler compiler = new ZigCompiler(config);
         compiler.compileAll();
@@ -81,13 +81,13 @@ public class Converter {
         patcher.patch(config.getInputJar(), config.getOutputJar());
         System.out.println();
 
-        // ===== STEP 7: 嵌入 native 库 =====
+        // ===== STEP 6: Embed native library =====
         System.out.println("[STEP 6/7] Embedding native libraries...");
         OutputPackager packager = new OutputPackager();
         packager.embedNativeLibraries(config.getOutputJar(), compiler.getOutputLibraries());
         System.out.println();
 
-        // ===== STEP 7: 完成 =====
+        // ===== STEP 7: Done =====
         long elapsed = System.currentTimeMillis() - startTime;
         System.out.println("[STEP 7/7] Done!");
         System.out.println();

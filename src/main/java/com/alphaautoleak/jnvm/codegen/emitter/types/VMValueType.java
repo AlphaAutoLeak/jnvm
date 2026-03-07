@@ -3,8 +3,8 @@ package com.alphaautoleak.jnvm.codegen.emitter.types;
 import java.io.PrintWriter;
 
 /**
- * 生成 VMValue 和 VMFrame 类型定义
- * 64位专用 - 所有类型只占1个槽位，无需类型跟踪
+ * Generates VMValue and VMFrame type definitions
+ * 64-bit only - all types occupy 1 slot, no type tracking needed
  */
 public class VMValueType {
     
@@ -14,7 +14,7 @@ public class VMValueType {
     }
     
     private static void emitVMValue(PrintWriter w) {
-        w.println("/* 栈值 - 统一 64 位宽 (64-bit only) */");
+        w.println("/* Stack value - unified 64-bit width (64-bit only) */");
         w.println("typedef union {");
         w.println("    jint     i;");
         w.println("    jlong    j;");
@@ -25,15 +25,15 @@ public class VMValueType {
         w.println("} VMValue;");
         w.println();
     }
-    
+
     private static void emitVMFrame(PrintWriter w) {
-        w.println("/* 执行帧 (64-bit only - 无需类型跟踪) */");
+        w.println("/* Execution frame (64-bit only - no type tracking needed) */");
         w.println("typedef struct {");
-        w.println("    int pc;           // 程序计数器");
-        w.println("    int sp;           // 栈指针");
-        w.println("    VMValue* stack;   // 操作栈");
-        w.println("    VMValue* locals;  // 局部变量表");
-        w.println("    jclass callerClass;  // 调用者类（用于类加载器一致性）");
+        w.println("    int pc;           // program counter");
+        w.println("    int sp;           // stack pointer");
+        w.println("    VMValue* stack;   // operand stack");
+        w.println("    VMValue* locals;  // local variable table");
+        w.println("    jclass callerClass;  // caller class (for classloader consistency)");
         w.println("} VMFrame;");
         w.println();
     }

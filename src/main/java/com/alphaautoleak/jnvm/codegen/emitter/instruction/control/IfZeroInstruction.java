@@ -18,7 +18,7 @@ public class IfZeroInstruction extends Instruction {
     
     @Override
     public boolean needsMeta() {
-        return true;  // 需要跳转偏移量
+        return true;
     }
 
     @Override
@@ -32,7 +32,7 @@ public class IfZeroInstruction extends Instruction {
 
     @Override
     protected boolean needsPcIncrement() {
-        return false;  // 自己处理 pc
+        return false;
     }
 
     @Override

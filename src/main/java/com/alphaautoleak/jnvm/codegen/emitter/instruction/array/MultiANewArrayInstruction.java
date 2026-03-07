@@ -14,7 +14,7 @@ public class MultiANewArrayInstruction extends Instruction {
     
     @Override
     public boolean needsMeta() {
-        return true;  // 需要类信息和维度
+        return true;
     }
 
     @Override

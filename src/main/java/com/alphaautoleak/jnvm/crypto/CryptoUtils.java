@@ -3,17 +3,17 @@ package com.alphaautoleak.jnvm.crypto;
 import java.security.SecureRandom;
 
 /**
- * ChaCha20 加密工具。
+ * ChaCha20 encryption utility.
  *
- * 使用纯 Java 实现的 ChaCha20 流密码（RFC 7539）。
- * 不依赖 JCE Provider，确保所有 Java 版本兼容。
+ * Pure Java implementation of ChaCha20 stream cipher (RFC 7539).
+ * No JCE Provider dependency, ensures all Java version compatibility.
  */
 public class CryptoUtils {
 
     private static final SecureRandom SECURE_RANDOM = new SecureRandom();
 
     /**
-     * 生成随机密钥
+     * Generates random key
      * @return 32 bytes (256 bit)
      */
     public static byte[] generateKey() {
@@ -23,7 +23,7 @@ public class CryptoUtils {
     }
 
     /**
-     * 生成随机 nonce
+     * Generates random nonce
      * @return 12 bytes (96 bit)
      */
     public static byte[] generateNonce() {
@@ -33,13 +33,13 @@ public class CryptoUtils {
     }
 
     /**
-     * ChaCha20 加密（加密和解密相同操作）
+     * ChaCha20 encryption (encryption and decryption are same operation)
      *
      * @param key       32 bytes
      * @param nonce     12 bytes
-     * @param counter   初始 counter（通常为 0 或 1）
-     * @param input     明文/密文
-     * @return          密文/明文
+     * @param counter   initial counter (usually 0 or 1)
+     * @param input     plaintext/ciphertext
+     * @return          ciphertext/plaintext
      */
     public static byte[] chacha20(byte[] key, byte[] nonce, int counter, byte[] input) {
         if (key.length != 32) throw new IllegalArgumentException("Key must be 32 bytes");
@@ -67,18 +67,18 @@ public class CryptoUtils {
     }
 
     /**
-     * 初始化 ChaCha20 状态矩阵
+     * Initializes ChaCha20 state matrix
      */
     private static int[] initState(byte[] key, byte[] nonce, int counter) {
         int[] state = new int[16];
 
-        // 常量 "expand 32-byte k"
+        // Constant "expand 32-byte k"
         state[0] = 0x61707865;
         state[1] = 0x3320646e;
         state[2] = 0x79622d32;
         state[3] = 0x6b206574;
 
-        // Key (8 个 32-bit words)
+        // Key (8 32-bit words)
         for (int i = 0; i < 8; i++) {
             state[4 + i] = littleEndianToInt(key, i * 4);
         }
@@ -86,7 +86,7 @@ public class CryptoUtils {
         // Counter
         state[12] = counter;
 
-        // Nonce (3 个 32-bit words)
+        // Nonce (3 32-bit words)
         for (int i = 0; i < 3; i++) {
             state[13 + i] = littleEndianToInt(nonce, i * 4);
         }
@@ -95,7 +95,7 @@ public class CryptoUtils {
     }
 
     /**
-     * ChaCha20 块函数：20 轮（10 次 double-round）
+     * ChaCha20 block function: 20 rounds (10 double-rounds)
      */
     private static int[] chacha20Block(int[] input) {
         int[] state = input.clone();
@@ -114,7 +114,7 @@ public class CryptoUtils {
             quarterRound(state, 3, 4, 9, 14);
         }
 
-        // 加上初始状态
+        // Add initial state
         for (int i = 0; i < 16; i++) {
             state[i] += input[i];
         }
@@ -133,7 +133,7 @@ public class CryptoUtils {
     }
 
     /**
-     * 小端序字节 → int
+     * Little-endian bytes to int
      */
     private static int littleEndianToInt(byte[] buf, int offset) {
         return (buf[offset] & 0xFF)
@@ -143,7 +143,7 @@ public class CryptoUtils {
     }
 
     /**
-     * 将字节数组格式化为 C 数组字符串
+     * Formats byte array as C array string
      * e.g. {0x1a, 0x2b, 0x3c, ...}
      */
     public static String toCArrayLiteral(byte[] data) {
@@ -159,7 +159,7 @@ public class CryptoUtils {
     }
 
     /**
-     * 简单自检
+     * Simple self-test
      */
     public static boolean selfTest() {
         byte[] key = new byte[32];

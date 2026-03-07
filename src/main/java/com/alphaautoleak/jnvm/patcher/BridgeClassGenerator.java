@@ -9,7 +9,7 @@ import java.io.InputStream;
 import java.nio.file.Files;
 
 /**
- * 生成 VMBridge 类的字节码
+ * Generates VMBridge class bytecode
  */
 class BridgeClassGenerator {
 
@@ -29,8 +29,8 @@ class BridgeClassGenerator {
                 "java/lang/Object",
                 null);
 
-        // 声明 6 个类型特化的 native 方法
-        // 注意: 虽然声明为 native，但实际由 RegisterNatives 注册
+        // Declare 6 type-specialized native methods
+        // Note: declared as native but actually registered via RegisterNatives
 
         // static native void executeVoid(int, Object, Object[], Class)
         cw.visitMethod(

@@ -3,7 +3,7 @@ package com.alphaautoleak.jnvm.codegen.emitter.helper;
 import java.io.PrintWriter;
 
 /**
- * 方法描述符解析辅助函数
+ * Method descriptor parsing helper functions
  */
 public class MethodDescHelper extends VMHelper {
     

@@ -6,15 +6,15 @@ import org.objectweb.asm.Type;
 import org.objectweb.asm.tree.*;
 
 /**
- * 重写方法体为调用对应的 VMBridge.executeXxx() 方法
- * 根据返回类型选择不同的 native 函数，避免装箱/拆箱
+ * Rewrites method body to call corresponding VMBridge.executeXxx() method
+ * Selects different native functions based on return type, avoiding boxing/unboxing
  */
 public class MethodBodyRewriter {
 
     private final String bridgeClass;
     private final int methodIdXorKey;
 
-    // 各返回类型对应的 execute 方法描述符
+    // Execute method descriptors for each return type
     private static final String EXECUTE_VOID_DESC   = "(ILjava/lang/Object;[Ljava/lang/Object;Ljava/lang/Class;)V";
     private static final String EXECUTE_INT_DESC    = "(ILjava/lang/Object;[Ljava/lang/Object;Ljava/lang/Class;)I";
     private static final String EXECUTE_LONG_DESC   = "(ILjava/lang/Object;[Ljava/lang/Object;Ljava/lang/Class;)J";
@@ -34,18 +34,18 @@ public class MethodBodyRewriter {
 
         InsnList insns = new InsnList();
 
-        // 1. 压入 methodId (XOR 混淆)
+        // 1. Push methodId (XOR obfuscated)
         int obfuscatedMethodId = methodId ^ methodIdXorKey;
         insns.add(new LdcInsnNode(obfuscatedMethodId));
 
-        // 2. 压入 this 或 null
+        // 2. Push this or null
         if (isStatic) {
             insns.add(new InsnNode(Opcodes.ACONST_NULL));
         } else {
             insns.add(new VarInsnNode(Opcodes.ALOAD, 0));
         }
 
-        // 3. 创建参数数组 Object[]
+        // 3. Create parameter array Object[]
         insns.add(new LdcInsnNode(argTypes.length));
         insns.add(new TypeInsnNode(Opcodes.ANEWARRAY, "java/lang/Object"));
 
@@ -58,18 +58,18 @@ public class MethodBodyRewriter {
             localIdx += argTypes[i].getSize();
         }
 
-        // 4. 压入调用者类
+        // 4. Push caller class
         insns.add(new LdcInsnNode(org.objectweb.asm.Type.getType("L" + cn.name + ";")));
 
-        // 5. 根据返回类型调用对应的 native 方法
+        // 5. Call corresponding native method based on return type
         String executeMethod = getExecuteMethod(retType);
         String executeDesc = getExecuteDesc(retType);
         insns.add(new MethodInsnNode(Opcodes.INVOKESTATIC, bridgeClass, executeMethod, executeDesc, false));
 
-        // 6. 生成返回指令（不再需要拆箱）
+        // 6. Generate return instruction (no unboxing needed)
         generateDirectReturn(insns, retType);
 
-        // 替换方法体
+        // Replace method body
         mn.instructions.clear();
         mn.instructions.add(insns);
         mn.tryCatchBlocks.clear();
@@ -79,7 +79,7 @@ public class MethodBodyRewriter {
     }
 
     /**
-     * 根据返回类型获取对应的 execute 方法名
+     * Gets execute method name based on return type
      */
     private String getExecuteMethod(Type retType) {
         switch (retType.getSort()) {
@@ -103,7 +103,7 @@ public class MethodBodyRewriter {
     }
 
     /**
-     * 根据返回类型获取对应的方法描述符
+     * Gets method descriptor based on return type
      */
     private String getExecuteDesc(Type retType) {
         switch (retType.getSort()) {
@@ -127,7 +127,7 @@ public class MethodBodyRewriter {
     }
 
     /**
-     * 生成直接的返回指令（不再需要拆箱）
+     * Generates direct return instruction (no unboxing needed)
      */
     private void generateDirectReturn(InsnList insns, Type retType) {
         switch (retType.getSort()) {

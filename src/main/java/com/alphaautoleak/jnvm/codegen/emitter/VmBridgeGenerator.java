@@ -5,8 +5,8 @@ import java.io.IOException;
 import java.io.PrintWriter;
 
 /**
- * 生成 vm_bridge.c - JNI 桥接层
- * 为每种返回类型生成不同的 native 函数，避免装箱/拆箱
+ * Generates vm_bridge.c - JNI bridge layer
+ * Generates separate native functions for each return type to avoid boxing/unboxing
  */
 public class VmBridgeGenerator {
 
@@ -27,25 +27,25 @@ public class VmBridgeGenerator {
             w.println("#include \"vm_interpreter.h\"");
             w.println();
 
-            // 生成各种返回类型的 execute 函数
+            // Generate execute functions for each return type
             emitExecuteFunctions(w);
             w.println();
 
-            // 生成 RegisterNatives
+            // Generate RegisterNatives
             emitRegisterNatives(w);
             w.println();
 
-            // 生成 JNI_OnLoad
+            // Generate JNI_OnLoad
             emitJNIOnLoad(w);
         }
     }
 
     /**
-     * 生成各种返回类型的 execute 函数
+     * Generate execute functions for each return type
      */
     private void emitExecuteFunctions(PrintWriter w) {
         // void
-        w.println("/* void 返回类型 */");
+        w.println("/* void return type */");
         w.println("static void JNICALL native_execute_void(JNIEnv* env, jclass cls,");
         w.println("                                        jint methodId, jobject instance,");
         w.println("                                        jobjectArray args, jclass callerClass) {");
@@ -53,8 +53,8 @@ public class VmBridgeGenerator {
         w.println("}");
         w.println();
 
-        // int (包括 boolean, byte, char, short, int)
-        w.println("/* int 返回类型 (boolean/byte/char/short/int) */");
+        // int (including boolean, byte, char, short, int)
+        w.println("/* int return type (boolean/byte/char/short/int) */");
         w.println("static jint JNICALL native_execute_int(JNIEnv* env, jclass cls,");
         w.println("                                         jint methodId, jobject instance,");
         w.println("                                         jobjectArray args, jclass callerClass) {");
@@ -63,7 +63,7 @@ public class VmBridgeGenerator {
         w.println();
 
         // long
-        w.println("/* long 返回类型 */");
+        w.println("/* long return type */");
         w.println("static jlong JNICALL native_execute_long(JNIEnv* env, jclass cls,");
         w.println("                                           jint methodId, jobject instance,");
         w.println("                                           jobjectArray args, jclass callerClass) {");
@@ -72,7 +72,7 @@ public class VmBridgeGenerator {
         w.println();
 
         // float
-        w.println("/* float 返回类型 */");
+        w.println("/* float return type */");
         w.println("static jfloat JNICALL native_execute_float(JNIEnv* env, jclass cls,");
         w.println("                                             jint methodId, jobject instance,");
         w.println("                                             jobjectArray args, jclass callerClass) {");
@@ -81,7 +81,7 @@ public class VmBridgeGenerator {
         w.println();
 
         // double
-        w.println("/* double 返回类型 */");
+        w.println("/* double return type */");
         w.println("static jdouble JNICALL native_execute_double(JNIEnv* env, jclass cls,");
         w.println("                                              jint methodId, jobject instance,");
         w.println("                                              jobjectArray args, jclass callerClass) {");
@@ -90,7 +90,7 @@ public class VmBridgeGenerator {
         w.println();
 
         // object
-        w.println("/* object 返回类型 */");
+        w.println("/* object return type */");
         w.println("static jobject JNICALL native_execute_object(JNIEnv* env, jclass cls,");
         w.println("                                               jint methodId, jobject instance,");
         w.println("                                               jobjectArray args, jclass callerClass) {");
@@ -99,10 +99,10 @@ public class VmBridgeGenerator {
     }
 
     /**
-     * 生成 RegisterNatives 表
+     * Generates RegisterNatives table
      */
     private void emitRegisterNatives(PrintWriter w) {
-        w.println("/* JNI 方法注册表 */");
+        w.println("/* JNI method registration table */");
         w.println("static JNINativeMethod native_methods[] = {");
         w.println("    { \"executeVoid\",   \"(ILjava/lang/Object;[Ljava/lang/Object;Ljava/lang/Class;)V\",       (void*)native_execute_void },");
         w.println("    { \"executeInt\",    \"(ILjava/lang/Object;[Ljava/lang/Object;Ljava/lang/Class;)I\",       (void*)native_execute_int },");
@@ -113,7 +113,7 @@ public class VmBridgeGenerator {
         w.println("};");
         w.println();
 
-        w.println("/* 注册本地方法 */");
+        w.println("/* Register native methods */");
         w.println("static int register_native_methods(JNIEnv* env) {");
         w.println("    jclass cls = (*env)->FindClass(env, \"" + bridgeClass + "\");");
         w.println("    if (cls == NULL) {");
@@ -130,21 +130,21 @@ public class VmBridgeGenerator {
     }
 
     /**
-     * 生成 JNI_OnLoad
+     * Generates JNI_OnLoad
      */
     private void emitJNIOnLoad(PrintWriter w) {
-        w.println("/* JNI_OnLoad - 库加载时初始化 */");
+        w.println("/* JNI_OnLoad - initialize on library load */");
         w.println("JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM* vm, void* reserved) {");
         w.println("    JNIEnv* env = NULL;");
         w.println("    if ((*vm)->GetEnv(vm, (void**)&env, JNI_VERSION_1_8) != JNI_OK) {");
         w.println("        return JNI_ERR;");
         w.println("    }");
         w.println();
-        w.println("    // 初始化帧内存池");
+        w.println("    // Initialize frame memory pool");
         w.println("    frame_pool_init();");
         w.println();
         if (encryptStrings) {
-            w.println("    // 初始化字符串池（解密所有字符串）");
+            w.println("    // Initialize string pool (decrypt all strings)");
             w.println("    vm_init_strings();");
             w.println();
         }

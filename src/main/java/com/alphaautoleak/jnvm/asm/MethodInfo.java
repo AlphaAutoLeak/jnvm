@@ -6,27 +6,27 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * 一个被保护方法的完整元数据。
- * 转换器从 ASM 中提取，后续传给 C 代码生成器。
+ * Complete metadata for a protected method.
+ * Extracted from ASM by converter, passed to C code generator.
  */
 public class MethodInfo {
 
-    /** 全局唯一方法编号（构建时分配） */
+    /** Globally unique method ID (assigned at build time) */
     private int methodId;
 
-    /** 所属类的内部名 e.g. "com/example/service/UserService" */
+    /** Owner class internal name e.g. "com/example/service/UserService" */
     private String owner;
 
-    /** 方法名 */
+    /** Method name */
     private String name;
 
-    /** 方法描述符 e.g. "(Ljava/lang/String;I)V" */
+    /** Method descriptor e.g. "(Ljava/lang/String;I)V" */
     private String descriptor;
 
-    /** 访问标志 (ACC_PUBLIC, ACC_STATIC, ...) */
+    /** Access flags (ACC_PUBLIC, ACC_STATIC, ...) */
     private int access;
 
-    /** 原始字节码（instruction bytes from Code attribute） */
+    /** Raw bytecode (instruction bytes from Code attribute) */
     private byte[] bytecode;
 
     /** max_stack */
@@ -35,46 +35,46 @@ public class MethodInfo {
     /** max_locals */
     private int maxLocals;
 
-    /** 异常表 */
+    /** Exception table */
     private List<ExceptionEntry> exceptionTable = new ArrayList<>();
 
-    /** 元数据列表（新格式：每条指令的操作数） */
+    /** Metadata list (new format: operands for each instruction) */
     private List<MetaEntry> metadata = new ArrayList<>();
 
-    /** PC -> 元数据索引映射 */
+    /** PC to metadata index mapping */
     private int[] pcToMetaIdx;
 
-    /** 字符串池 */
+    /** String pool */
     private List<String> stringPool = new ArrayList<>();
 
-    /** Bootstrap 方法表（invokedynamic 用） */
+    /** Bootstrap method table (for invokedynamic) */
     private List<BootstrapEntry> bootstrapMethods = new ArrayList<>();
 
-    /** 方法签名（泛型，可选） */
+    /** Method signature (generic, optional) */
     private String signature;
 
-    /** 是否为静态方法 */
+    /** Whether this is a static method */
     public boolean isStatic() {
         return (access & 0x0008) != 0;
     }
 
-    /** 是否为同步方法 */
+    /** Whether this is a synchronized method */
     public boolean isSynchronized() {
         return (access & 0x0020) != 0;
     }
 
-    /** 是否为构造方法 */
+    /** Whether this is a constructor */
     public boolean isConstructor() {
         return "<init>".equals(name);
     }
 
-    /** 是否为类初始化 */
+    /** Whether this is a class initializer */
     public boolean isClassInit() {
         return "<clinit>".equals(name);
     }
 
     /**
-     * 解析描述符，返回参数类型列表
+     * Parses descriptor, returns parameter type list
      */
     public List<String> getParameterTypes() {
         List<String> params = new ArrayList<>();
@@ -112,7 +112,7 @@ public class MethodInfo {
     }
 
     /**
-     * 返回值类型描述符
+     * Return type descriptor
      */
     public String getReturnType() {
         int idx = descriptor.indexOf(')');

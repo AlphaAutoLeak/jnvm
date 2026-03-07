@@ -4,8 +4,8 @@ import java.io.*;
 import java.nio.file.*;
 
 /**
- * 运行时桥接类 — 嵌入到 protected JAR 中。
- * 自动检测系统架构，从 JAR 中提取 native 库到临时目录，然后 System.load。
+ * Runtime bridge class - embedded in protected JAR.
+ * Auto-detects system architecture, extracts native library from JAR to temp dir, then System.load.
  */
 public final class VMBridge {
 
@@ -17,7 +17,7 @@ public final class VMBridge {
     }
 
     /**
-     * 全局单一 native 入口
+     * Global single native entry point
      */
     public static native Object execute(int methodId, Object instance, Object[] args);
 
@@ -26,23 +26,23 @@ public final class VMBridge {
     }
 
     /**
-     * 加载 native 库：
-     * 1. 先尝试 System.loadLibrary（如果用户自己放了 dll/so）
-     * 2. 失败则从 JAR 中 META-INF/native/<target>/ 提取到临时目录
+     * Loads native library:
+     * 1. First try System.loadLibrary (if user placed dll/so)
+     * 2. If failed, extract from JAR META-INF/native/<target>/ to temp dir
      */
     private static synchronized void loadNativeLibrary() {
         if (loaded) return;
 
-        // 方式1: 直接 loadLibrary
+        // Method 1: direct loadLibrary
         try {
             System.loadLibrary(LIB_NAME);
             loaded = true;
             return;
         } catch (UnsatisfiedLinkError e) {
-            // 继续尝试从 JAR 提取
+            // Continue to try extracting from JAR
         }
 
-        // 方式2: 从 JAR 提取
+        // Method 2: extract from JAR
         try {
             String resourcePath = getNativeResourcePath();
             if (resourcePath == null) {
@@ -56,11 +56,11 @@ public final class VMBridge {
                         "Native library not found in JAR: " + resourcePath);
             }
 
-            // 创建临时目录
+            // Create temp directory
             Path tempDir = Files.createTempDirectory("jnvm-native-");
             tempDir.toFile().deleteOnExit();
 
-            // 提取到临时文件
+            // Extract to temp file
             String fileName = getLibFileName();
             Path tempLib = tempDir.resolve(fileName);
             tempLib.toFile().deleteOnExit();
@@ -74,7 +74,7 @@ public final class VMBridge {
             }
             is.close();
 
-            // System.load 绝对路径
+            // System.load absolute path
             System.load(tempLib.toAbsolutePath().toString());
             loaded = true;
 
@@ -85,19 +85,19 @@ public final class VMBridge {
     }
 
     /**
-     * 获取当前平台对应的 JAR 内资源路径
+     * Gets JAR resource path for current platform
      */
     private static String getNativeResourcePath() {
         String target = getTargetTriple();
         String fileName = getLibFileName();
 
-        // 精确匹配
+        // Exact match
         String path = "META-INF/native/" + target + "/" + fileName;
         if (VMBridge.class.getClassLoader().getResource(path) != null) {
             return path;
         }
 
-        // 模糊匹配：尝试不同的 target 变体
+        // Fuzzy match: try different target variants
         String[] variants = getPlatformVariants();
         for (String variant : variants) {
             path = "META-INF/native/" + variant + "/" + fileName;
@@ -106,7 +106,7 @@ public final class VMBridge {
             }
         }
 
-        // 默认目录
+        // Default directory
         path = "META-INF/native/default/" + fileName;
         if (VMBridge.class.getClassLoader().getResource(path) != null) {
             return path;
