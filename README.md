@@ -5,24 +5,21 @@ A powerful Java bytecode protection tool that converts Java methods into native 
 ## Features
 
 - **Native VM Execution**: Converts Java bytecode to native code executed by a custom VM interpreter
+- **Opcode Obfuscation**: Each bytecode instruction is mapped to a random opcode value, preventing easy reconstruction
 - **ChaCha20 Encryption**: All bytecode and strings are encrypted using ChaCha20 stream cipher
 - **Cross-Platform**: Supports multiple targets via Zig compiler (Windows, Linux, macOS, Android)
 - **Anti-Debug**: Built-in anti-debugging protections
-- **INVOKEDYNAMIC Support**: Full support for lambda expressions and dynamic method invocation
+- **INVOKEDYNAMIC Support**: Support for lambda expressions and dynamic method invocation (experimental)
+
+> **Warning**: INVOKEDYNAMIC implementation is experimental and may contain bugs. Use with caution in production environments.
 
 ## Requirements
 
-- Java 17+
+- Java 8+
 - [Zig](https://ziglang.org/) 0.11+ (for native compilation)
 - Gradle 8+
 
 ## Usage
-
-### Command Line
-
-```bash
-java -jar jnvm.jar --jar input.jar --out output-obf.jar
-```
 
 ### Configuration File
 
@@ -49,25 +46,11 @@ debug: false
 native-dir: native
 ```
 
-Then run:
+### Run
 
 ```bash
-java -jar jnvm.jar --config config.yml
+java -jar jnvm.jar config.yml
 ```
-
-### Command Line Options
-
-| Option | Description | Default |
-|--------|-------------|---------|
-| `--jar <FILE>` | Input JAR file path | (required if no --config) |
-| `--out <FILE>` | Output JAR file path | `<input>-protected.jar` |
-| `--config <FILE>` | Load configuration from YAML file | - |
-| `--protect <RULE>` | Protection rule (repeatable) | Protect all methods |
-| `--target <TARGETS>` | Comma-separated Zig targets | Current platform |
-| `--anti-debug <BOOL>` | Enable anti-debug protections | true |
-| `--encrypt-strings <BOOL>` | Enable ChaCha20 string encryption | true |
-| `--debug <BOOL>` | Enable debug logging | false |
-| `--native-dir <DIR>` | Output directory for native sources | `./native` |
 
 ### Protection Rules
 
@@ -77,25 +60,6 @@ java -jar jnvm.jar --config config.yml
 | `ClassName` | Protect all methods in class |
 | `ClassName#methodName` | Protect specific method |
 | `@annotation` | Protect methods with annotation |
-
-### Examples
-
-```bash
-# Basic usage
-java -jar jnvm.jar --jar app.jar --out app-obf.jar
-
-# Protect with specific target
-java -jar jnvm.jar --jar app.jar --target x86_64-linux-gnu
-
-# Protect specific packages
-java -jar jnvm.jar --jar app.jar --protect "com.example.core.**" --protect "com.example.security.**"
-
-# Multi-platform build
-java -jar jnvm.jar --jar app.jar --target x86_64-windows-gnu,x86_64-linux-gnu,aarch64-linux-android29
-
-# Using config file
-java -jar jnvm.jar --config config.yml
-```
 
 ## How It Works
 
