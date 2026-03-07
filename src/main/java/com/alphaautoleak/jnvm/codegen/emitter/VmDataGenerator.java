@@ -5,7 +5,6 @@ import com.alphaautoleak.jnvm.asm.BytecodeExtractor.MetaEntry;
 import com.alphaautoleak.jnvm.asm.BytecodeExtractor.MetaType;
 import com.alphaautoleak.jnvm.crypto.CryptoUtils;
 import com.alphaautoleak.jnvm.crypto.EncryptedMethodData;
-import com.alphaautoleak.jnvm.crypto.StringEncryptor;
 
 import java.io.File;
 import java.io.IOException;
@@ -489,7 +488,6 @@ public class VmDataGenerator {
      */
     private int mapBsmIndex(List<BootstrapEntry> localBsmList, int localIdx) {
         if (localBsmList == null || localIdx < 0 || localIdx >= localBsmList.size()) {
-            System.out.println("[DEBUG] mapBsmIndex: invalid input, localBsmList=" + localBsmList + ", localIdx=" + localIdx);
             return localIdx;
         }
         BootstrapEntry bsm = localBsmList.get(localIdx);
@@ -505,42 +503,12 @@ public class VmDataGenerator {
         String key = keyBuilder.toString();
         
         Integer globalIdx = bootstrapIndexMap.get(key);
-        if (globalIdx == null) {
-            System.out.println("[DEBUG] mapBsmIndex: key not found: " + key);
-            System.out.println("[DEBUG] Available keys: " + bootstrapIndexMap.keySet());
-            return localIdx;
-        }
-        return globalIdx;
+        return globalIdx != null ? globalIdx : localIdx;
     }
     
     private void emitMethodData(PrintWriter w, EncryptedMethodData method) {
         int id = method.getMethodId();
         List<String> localPool = method.getStringPool();
-        
-        // Debug: print BSM info
-        if (id == 111) {
-            System.out.println("[DEBUG] Method 111 (Calculations.run) BSM info:");
-            List<BootstrapEntry> bsmList = method.getBootstrapMethods();
-            if (bsmList != null) {
-                System.out.println("  BSM count: " + bsmList.size());
-                for (int i = 0; i < bsmList.size(); i++) {
-                    BootstrapEntry bsm = bsmList.get(i);
-                    System.out.println("  Local BSM[" + i + "]: " + bsm.getHandleOwner() + "." + bsm.getHandleName());
-                    List<Object> args = bsm.getArguments();
-                    List<BootstrapEntry.ArgType> argTypes = bsm.getArgumentTypes();
-                    if (args != null) {
-                        System.out.println("    args count: " + args.size());
-                        for (int j = 0; j < args.size(); j++) {
-                            Object arg = args.get(j);
-                            BootstrapEntry.ArgType argType = argTypes != null && j < argTypes.size() ? argTypes.get(j) : null;
-                            System.out.println("    arg[" + j + "] type=" + argType + " value=" + arg);
-                        }
-                    }
-                }
-            } else {
-                System.out.println("  BSM list is null!");
-            }
-        }
         
         // Bytecode
         w.printf("static const uint8_t m%d_bc[] = {", id);
@@ -611,9 +579,6 @@ public class VmDataGenerator {
                     case META_INVOKE_DYNAMIC:
                         // Map local bsmIdx to global index
                         int globalBsmIdx = mapBsmIndex(method.getBootstrapMethods(), m.bsmIdx);
-                        if (id == 111) {
-                            System.out.println("[DEBUG] Method 111 INVOKEDYNAMIC: localIdx=" + m.bsmIdx + " -> globalIdx=" + globalBsmIdx);
-                        }
                         w.printf(".bsmIdx=%d, ", globalBsmIdx);
                         w.printf(".nameIdx=%d, .nameLen=%d, ",
                             mapStringIndex(localPool, m.nameIdx), m.nameLen);

@@ -23,8 +23,4 @@ public class InstructionRegistry {
     public List<Instruction> getAllInstructions() {
         return instructionList;
     }
-    
-    public Instruction getInstruction(int opcode) {
-        return instructions.get(opcode);
-    }
 }

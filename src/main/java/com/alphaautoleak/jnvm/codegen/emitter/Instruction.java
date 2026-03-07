@@ -25,7 +25,7 @@ public abstract class Instruction {
     }
     
     /**
-     * Generates case branch code (traditional switch-case)
+     * Generates case branch code (switch-case mode)
      */
     public void generate(PrintWriter w) {
         w.printf("            case 0x%02x: /* %s */\n", opcode, comment);
@@ -35,22 +35,14 @@ public abstract class Instruction {
     
     /**
      * Generates computed goto label and code
-     * Default: calls generateBodyWithoutPcInc(), then pc++ based on needsPcIncrement()
      */
     public void generateComputedGoto(PrintWriter w) {
         w.printf("        OP_%02x:  /* %s */\n", opcode, comment);
-        generateBodyWithoutPcInc(w);
+        generateBody(w);
         if (needsPcIncrement()) {
             w.println("            frame.pc++;");
         }
         w.println("            DISPATCH_NEXT;");
-    }
-    
-    /**
-     * Whether pc++ is needed (default false, generateBody usually handles it)
-     */
-    protected boolean needsPcIncrement() {
-        return false;
     }
     
     /**
@@ -59,38 +51,29 @@ public abstract class Instruction {
     protected abstract void generateBody(PrintWriter w);
     
     /**
-     * Generates instruction body (without pc++)
-     * Default: calls generateBody, assuming subclass handles pc++
-     * Override this if generateBody calls pcIncBreak to avoid duplication
-     */
-    protected void generateBodyWithoutPcInc(PrintWriter w) {
-        generateBody(w);
-    }
-    
-    /**
-     * Generates pc++ (break is auto-added by generate())
+     * Generates pc++ instruction
      */
     protected void pcIncBreak(PrintWriter w) {
-        w.println("                frame.pc++;");
+        w.println("            frame.pc++;");
     }
     
     /**
-     * Returns the opcode
+     * Whether pc++ is needed after generateBody (default false)
      */
+    protected boolean needsPcIncrement() {
+        return false;
+    }
+    
     public int getOpcode() {
         return opcode;
     }
     
-    /**
-     * Returns the instruction name
-     */
     public String getName() {
         return name;
     }
     
     /**
-     * Whether metadata is needed (default false, only instructions with operands need it)
-     * Performance optimization: avoid unnecessary metadata lookup for simple instructions
+     * Whether metadata is needed (default false)
      */
     public boolean needsMeta() {
         return false;

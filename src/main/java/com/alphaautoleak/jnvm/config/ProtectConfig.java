@@ -187,13 +187,7 @@ public class ProtectConfig {
                     return true;
                 }
             }
-
-            // Rule 5: @VMProtect (annotation, handled in subsequent steps)
-            else if (rule.startsWith("@")) {
-                // Annotation matching handled in ASM visitor
-            }
         }
-
         return false;
     }
 

@@ -21,9 +21,6 @@ public class ExceptionEntry {
      */
     private String catchType;
 
-    /** Index in custom constant pool (catchType class ref) */
-    private int catchTypeCpIndex;
-
     public ExceptionEntry() {}
 
     public ExceptionEntry(int startPc, int endPc, int handlerPc, String catchType) {
@@ -31,7 +28,6 @@ public class ExceptionEntry {
         this.endPc = endPc;
         this.handlerPc = handlerPc;
         this.catchType = catchType;
-        this.catchTypeCpIndex = -1;
     }
 
     public int getStartPc() { return startPc; }
@@ -45,9 +41,6 @@ public class ExceptionEntry {
 
     public String getCatchType() { return catchType; }
     public void setCatchType(String catchType) { this.catchType = catchType; }
-
-    public int getCatchTypeCpIndex() { return catchTypeCpIndex; }
-    public void setCatchTypeCpIndex(int catchTypeCpIndex) { this.catchTypeCpIndex = catchTypeCpIndex; }
 
     @Override
     public String toString() {

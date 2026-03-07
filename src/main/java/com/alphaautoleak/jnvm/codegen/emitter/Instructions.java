@@ -78,8 +78,4 @@ public class Instructions {
     public List<Instruction> getAllInstructions() {
         return registry.getAllInstructions();
     }
-    
-    public Instruction getInstruction(int opcode) {
-        return registry.getInstruction(opcode);
-    }
 }
