@@ -4,12 +4,7 @@ public class TestZKM {
 
     public static void main(String[] args) {
         Main.main(new String[]{
-                "--jar", "test/SnakeGame-zkm.jar",
-                "--out", "test/SnakeGame-zkm-obf.jar",
-                "--target", "x86_64-windows-gnu",
-                "--anti-debug", "true",
-                "--native-dir", "native",
-                "--debug", "false"
+                "samples/snake-zkm-config.yml"
         });
     }
 

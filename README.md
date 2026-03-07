@@ -70,7 +70,6 @@ java -jar jnvm.jar config.yml
    - `vm_data.c` - Encrypted method data and string pool
    - `vm_interpreter.c` - Custom bytecode interpreter
    - `vm_bridge.c` - JNI bridge with RegisterNatives
-   - `build.zig` - Zig build configuration
 4. **Compilation**: Compiles native code using Zig for specified targets
 5. **Patching**: Rewrites protected methods to call the native VM
 6. **Packaging**: Embeds native libraries into the output JAR

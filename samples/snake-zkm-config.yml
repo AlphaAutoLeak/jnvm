@@ -1,0 +1,7 @@
+jar: samples/SnakeGame-zkm.jar
+out: samples/SnakeGame-zkm-obf.jar
+protect:
+  - "**"
+encrypt-bytecode: false
+encrypt-strings: false
+debug: false
