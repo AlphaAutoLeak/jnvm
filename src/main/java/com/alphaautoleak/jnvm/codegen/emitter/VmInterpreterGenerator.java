@@ -122,8 +122,8 @@ public class VmInterpreterGenerator {
     private void emitCachingSystem(PrintWriter w) {
         // === 帧内存池 ===
         w.println("// === 帧内存池 (避免每次 calloc/free) ===");
-        w.println("#define FRAME_POOL_SIZE (2 * 1024 * 1024)  // 2MB 池");
-        w.println("#define MAX_FRAME_DEPTH 64                  // 最大调用嵌套深度");
+        w.println("#define FRAME_POOL_SIZE (4 * 1024 * 1024)  // 4MB 池");
+        w.println("#define MAX_FRAME_DEPTH 256                 // 最大调用嵌套深度");
         w.println();
         w.println("typedef struct {");
         w.println("    uint8_t* base;                         // 池基址");
