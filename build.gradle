@@ -23,9 +23,6 @@ dependencies {
     implementation 'org.ow2.asm:asm-commons:9.7.1'
     implementation 'org.ow2.asm:asm-util:9.7.1'
 
-    // CLI 参数解析
-    implementation 'commons-cli:commons-cli:1.9.0'
-
     // YAML 解析
     implementation 'org.yaml:snakeyaml:2.3'
 }

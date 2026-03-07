@@ -1,42 +1,34 @@
 package com.alphaautoleak.jnvm;
 
-import com.alphaautoleak.jnvm.cli.CliOptions;
 import com.alphaautoleak.jnvm.cli.ConfigBuilder;
 import com.alphaautoleak.jnvm.config.ProtectConfig;
 import com.alphaautoleak.jnvm.converter.Converter;
-import org.apache.commons.cli.*;
 
 public class Main {
 
+    private static final String BANNER =
+            "╔══════════════════════════════════════╗\n" +
+            "║   JNVM - Java Native VM Protector   ║\n" +
+            "║   v1.0.0                            ║\n" +
+            "╚══════════════════════════════════════╝";
+
     public static void main(String[] args) {
-        System.out.println(CliOptions.getBanner());
+        System.out.println(BANNER);
         System.out.println();
 
-        Options options = CliOptions.build();
-        CommandLineParser parser = new DefaultParser();
+        if (args.length == 0) {
+            System.err.println("[ERROR] Config file is required");
+            System.out.println("Usage: jnvm <config.yml>");
+            System.exit(1);
+        }
 
         try {
-            CommandLine cmd = parser.parse(options, args);
-
-            if (cmd.hasOption("help")) {
-                CliOptions.printHelp(options);
-                return;
-            }
-
-            // Either jar or config must be specified
-            if (!cmd.hasOption("jar") && !cmd.hasOption("config")) {
-                System.err.println("[ERROR] Either --jar or --config is required");
-                CliOptions.printHelp(options);
-                System.exit(1);
-            }
-
-            ProtectConfig config = ConfigBuilder.build(cmd);
+            ProtectConfig config = ConfigBuilder.build(args[0]);
             config.validate();
 
-            // If output not specified, generate default output based on input
             if (config.getOutputJar() == null && config.getInputJar() != null) {
                 String input = config.getInputJar().getAbsolutePath();
-                String out = input.replaceAll("\\.jar$", "-protected.jar");
+                String out = input.replaceAll("\\.jar$", "-obf.jar");
                 config.setOutputJar(new java.io.File(out));
             }
 
@@ -48,10 +40,6 @@ public class Main {
             System.out.println();
             System.out.println("[SUCCESS] Protection complete.");
 
-        } catch (ParseException e) {
-            System.err.println("[ERROR] " + e.getMessage());
-            CliOptions.printHelp(options);
-            System.exit(1);
         } catch (Exception e) {
             System.err.println("[FATAL] " + e.getMessage());
             e.printStackTrace();

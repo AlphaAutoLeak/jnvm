@@ -1,7 +1,7 @@
 package com.alphaautoleak.jnvm.crypto;
 
 import com.alphaautoleak.jnvm.asm.BootstrapEntry;
-import com.alphaautoleak.jnvm.asm.BytecodeExtractor.MetaEntry;
+import com.alphaautoleak.jnvm.asm.MetaEntry;
 import com.alphaautoleak.jnvm.asm.ExceptionEntry;
 import com.alphaautoleak.jnvm.asm.MethodInfo;
 

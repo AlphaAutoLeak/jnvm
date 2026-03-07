@@ -23,17 +23,6 @@ public class BootstrapEntry {
      */
     private List<Object> arguments = new ArrayList<>();
 
-    /** Argument type marker */
-    public enum ArgType {
-        STRING,      // regular string
-        INTEGER,     // int
-        LONG,        // long
-        FLOAT,       // float
-        DOUBLE,      // double
-        METHOD_TYPE, // MethodType descriptor string
-        METHOD_HANDLE // MethodHandle reference
-    }
-
     private List<ArgType> argumentTypes = new ArrayList<>();
 
     public BootstrapEntry() {}

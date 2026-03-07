@@ -1,8 +1,10 @@
 package com.alphaautoleak.jnvm.codegen.emitter;
 
-import com.alphaautoleak.jnvm.asm.*;
-import com.alphaautoleak.jnvm.asm.BytecodeExtractor.MetaEntry;
-import com.alphaautoleak.jnvm.asm.BytecodeExtractor.MetaType;
+import com.alphaautoleak.jnvm.asm.ArgType;
+import com.alphaautoleak.jnvm.asm.BootstrapEntry;
+import com.alphaautoleak.jnvm.asm.ExceptionEntry;
+import com.alphaautoleak.jnvm.asm.MetaEntry;
+import com.alphaautoleak.jnvm.asm.MetaType;
 import com.alphaautoleak.jnvm.crypto.CryptoUtils;
 import com.alphaautoleak.jnvm.crypto.EncryptedMethodData;
 
@@ -189,11 +191,11 @@ public class VmDataGenerator {
                 
                 // Add strings from BSM arguments
                 List<Object> args = bsm.getArguments();
-                List<BootstrapEntry.ArgType> argTypes = bsm.getArgumentTypes();
+                List<ArgType> argTypes = bsm.getArgumentTypes();
                 if (args != null && argTypes != null) {
                     for (int j = 0; j < args.size(); j++) {
                         Object arg = args.get(j);
-                        BootstrapEntry.ArgType argType = argTypes.get(j);
+                        ArgType argType = argTypes.get(j);
                         switch (argType) {
                             case STRING:
                             case METHOD_TYPE:
@@ -354,13 +356,13 @@ public class VmDataGenerator {
         for (int i = 0; i < globalBootstrapMethods.size(); i++) {
             BootstrapEntry bsm = globalBootstrapMethods.get(i);
             List<Object> args = bsm.getArguments();
-            List<BootstrapEntry.ArgType> argTypes = bsm.getArgumentTypes();
+            List<ArgType> argTypes = bsm.getArgumentTypes();
             
             if (args != null && !args.isEmpty()) {
                 w.printf("static BsmArg bsm%d_args[] = {", i);
                 for (int j = 0; j < args.size(); j++) {
                     Object arg = args.get(j);
-                    BootstrapEntry.ArgType argType = argTypes.get(j);
+                    ArgType argType = argTypes.get(j);
                     
                     w.printf("\n    { .type=%s, ", bsmArgTypeToString(argType));
                     
@@ -430,7 +432,7 @@ public class VmDataGenerator {
         return 0;
     }
     
-    private String bsmArgTypeToString(BootstrapEntry.ArgType type) {
+    private String bsmArgTypeToString(ArgType type) {
         switch (type) {
             case STRING: return "BSM_ARG_STRING";
             case INTEGER: return "BSM_ARG_INTEGER";

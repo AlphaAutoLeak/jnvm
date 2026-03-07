@@ -1,6 +1,6 @@
 package com.alphaautoleak.jnvm.asm;
 
-import com.alphaautoleak.jnvm.asm.BytecodeExtractor.MetaEntry;
+import com.alphaautoleak.jnvm.asm.MetaEntry;
 
 import java.util.ArrayList;
 import java.util.List;

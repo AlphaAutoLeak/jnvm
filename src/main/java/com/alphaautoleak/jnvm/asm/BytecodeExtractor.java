@@ -472,38 +472,38 @@ public class BytecodeExtractor {
         entry.setHandleDescriptor(bsm.getDesc());
         
         List<Object> args = new ArrayList<>();
-        List<BootstrapEntry.ArgType> argTypes = new ArrayList<>();
+        List<ArgType> argTypes = new ArrayList<>();
         
         if (bsmArgs != null) {
             for (Object arg : bsmArgs) {
                 if (arg instanceof Integer) {
                     args.add(arg);
-                    argTypes.add(BootstrapEntry.ArgType.INTEGER);
+                    argTypes.add(ArgType.INTEGER);
                 } else if (arg instanceof Long) {
                     args.add(arg);
-                    argTypes.add(BootstrapEntry.ArgType.LONG);
+                    argTypes.add(ArgType.LONG);
                 } else if (arg instanceof Float) {
                     args.add(arg);
-                    argTypes.add(BootstrapEntry.ArgType.FLOAT);
+                    argTypes.add(ArgType.FLOAT);
                 } else if (arg instanceof Double) {
                     args.add(arg);
-                    argTypes.add(BootstrapEntry.ArgType.DOUBLE);
+                    argTypes.add(ArgType.DOUBLE);
                 } else if (arg instanceof String) {
                     args.add(arg);
-                    argTypes.add(BootstrapEntry.ArgType.STRING);
+                    argTypes.add(ArgType.STRING);
                 } else if (arg instanceof Type) {
                     Type t = (Type) arg;
                     args.add(t.getDescriptor());
-                    argTypes.add(BootstrapEntry.ArgType.METHOD_TYPE);
+                    argTypes.add(ArgType.METHOD_TYPE);
                 } else if (arg instanceof Handle) {
                     Handle h = (Handle) arg;
                     String serialized = h.getTag() + ":" + h.getOwner() + ":" +
                             h.getName() + ":" + h.getDesc();
                     args.add(serialized);
-                    argTypes.add(BootstrapEntry.ArgType.METHOD_HANDLE);
+                    argTypes.add(ArgType.METHOD_HANDLE);
                 } else {
                     args.add(arg.toString());
-                    argTypes.add(BootstrapEntry.ArgType.STRING);
+                    argTypes.add(ArgType.STRING);
                 }
             }
         }
@@ -587,80 +587,5 @@ public class BytecodeExtractor {
 
     public List<BootstrapEntry> getBootstrapMethods() {
         return bootstrapMethods;
-    }
-
-    // ===== Internal types =====
-
-    public enum MetaType {
-        META_NONE(0),
-        META_INT(1),
-        META_LONG(2),
-        META_FLOAT(3),
-        META_DOUBLE(4),
-        META_STRING(5),
-        META_CLASS(6),
-        META_FIELD(7),
-        META_METHOD(8),
-        META_INVOKE_DYNAMIC(9),
-        META_JUMP(10),
-        META_SWITCH(11),
-        META_LOCAL(12),
-        META_IINC(13),
-        META_NEWARRAY(14),
-        META_TYPE(15);
-
-        public final int value;
-        MetaType(int v) { this.value = v; }
-    }
-
-    public static class MetaEntry {
-        public MetaType type = MetaType.META_NONE;
-        
-        // META_INT, META_LOCAL, META_NEWARRAY
-        public int intVal;
-        
-        // META_LONG
-        public long longVal;
-        
-        // META_FLOAT
-        public float floatVal;
-        
-        // META_DOUBLE
-        public double doubleVal;
-        
-        // META_STRING
-        public int strIdx;
-        public int strLen;
-        
-        // META_CLASS
-        public int classIdx;
-        public int classLen;
-        
-        // META_FIELD, META_METHOD
-        public int ownerIdx;
-        public int ownerLen;
-        public int nameIdx;
-        public int nameLen;
-        public int descIdx;
-        public int descLen;
-        
-        // META_INVOKE_DYNAMIC
-        public int bsmIdx;
-        
-        // META_JUMP
-        public int jumpOffset;
-        
-        // META_IINC
-        public int iincIndex;
-        public int iincConst;
-        
-        // META_SWITCH
-        public int switchLow;
-        public int switchHigh;
-        public int[] switchKeys;
-        public int[] switchOffsets;
-        
-        // META_TYPE (multianewarray)
-        public int dims;
     }
 }

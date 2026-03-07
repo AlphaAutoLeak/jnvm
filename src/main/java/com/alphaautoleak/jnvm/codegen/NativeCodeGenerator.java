@@ -47,23 +47,23 @@ public class NativeCodeGenerator {
 
         boolean encryptStrings = config.isEncryptStrings();
 
-        // 1. vm_types.h (includes opcode decode table)
+        // vm_types.h (includes opcode decode table)
         new VmTypesGenerator(dir, encryptStrings, opcodeObfuscator).generate();
         System.out.println("  [+] vm_types.h");
 
-        // 2. chacha20.h / chacha20.c
+        // chacha20.h / chacha20.c
         new ChaCha20Generator(dir).generate();
         System.out.println("  [+] chacha20.h / chacha20.c");
 
-        // 3. vm_data.h / vm_data.c
+        // vm_data.h / vm_data.c
         new VmDataGenerator(dir, methods, stringKey, encryptStrings).generate();
         System.out.println("  [+] vm_data.h / vm_data.c");
 
-        // 4. vm_interpreter.h / vm_interpreter.c
+        // vm_interpreter.h / vm_interpreter.c
         new VmInterpreterGenerator(dir, config.isDebug(), encryptStrings, methodIdXorKey, opcodeObfuscator).generate();
         System.out.println("  [+] vm_interpreter.h / vm_interpreter.c");
 
-        // 5. vm_bridge.c
+        // vm_bridge.c
         new VmBridgeGenerator(dir, bridgeClass, encryptStrings).generate();
         System.out.println("  [+] vm_bridge.c");
 
