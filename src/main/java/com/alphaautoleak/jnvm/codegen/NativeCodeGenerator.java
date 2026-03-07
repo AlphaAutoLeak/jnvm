@@ -60,7 +60,7 @@ public class NativeCodeGenerator {
         System.out.println("  [+] vm_data.h / vm_data.c");
 
         // 4. vm_interpreter.h / vm_interpreter.c
-        new VmInterpreterGenerator(dir, config.isDebug(), encryptStrings, methodIdXorKey).generate();
+        new VmInterpreterGenerator(dir, config.isDebug(), encryptStrings, methodIdXorKey, opcodeObfuscator).generate();
         System.out.println("  [+] vm_interpreter.h / vm_interpreter.c");
 
         // 5. vm_bridge.c

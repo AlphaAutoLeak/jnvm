@@ -2,6 +2,7 @@ package com.alphaautoleak.jnvm.codegen.emitter;
 
 import com.alphaautoleak.jnvm.codegen.emitter.helper.VMHelper;
 import com.alphaautoleak.jnvm.codegen.emitter.helper.VMHelpers;
+import com.alphaautoleak.jnvm.crypto.OpcodeObfuscator;
 
 import java.io.File;
 import java.io.IOException;
@@ -19,14 +20,17 @@ public class VmInterpreterGenerator {
     private final Instructions instructions;
     private final VMHelpers helpers;
     private final int methodIdXorKey;
+    private final OpcodeObfuscator opcodeObfuscator;
     
-    public VmInterpreterGenerator(File dir, boolean debug, boolean encryptStrings, int methodIdXorKey) {
+    public VmInterpreterGenerator(File dir, boolean debug, boolean encryptStrings, 
+                                  int methodIdXorKey, OpcodeObfuscator opcodeObfuscator) {
         this.dir = dir;
         this.debug = debug;
         this.encryptStrings = encryptStrings;
         this.instructions = new Instructions();
         this.helpers = new VMHelpers(encryptStrings);
         this.methodIdXorKey = methodIdXorKey;
+        this.opcodeObfuscator = opcodeObfuscator;
     }
     
     public void generate() throws IOException {
@@ -341,14 +345,15 @@ public class VmInterpreterGenerator {
         w.println("    vm_unbox_args_fast(env, &frame, args, argTypes, m->argCount, instance ? 1 : 0);");
         w.println();
 
-        // Lookup table for whether instruction needs metadata (0=no, 1=yes)
-        w.println("    // Metadata requirement table: marks which instructions need metadata lookup");
+        // Lookup table for whether instruction needs metadata (indexed by OBFUSCATED opcode)
+        w.println("    // Metadata requirement table (indexed by obfuscated opcode)");
         w.println("    static const uint8_t needs_meta[256] = {");
         StringBuilder metaTable = new StringBuilder();
         for (int i = 0; i < 256; i++) {
-            final int op = i;
+            // i is the OBFUSCATED opcode, decode to get original
+            int originalOp = opcodeObfuscator.decode(i);
             Instruction inst = instructions.getAllInstructions().stream()
-                .filter(ins -> ins.getOpcode() == op)
+                .filter(ins -> ins.getOpcode() == originalOp)
                 .findFirst().orElse(null);
             boolean needsMeta = inst != null && inst.needsMeta();
             if (i % 32 == 0) metaTable.append("        ");
@@ -365,28 +370,30 @@ public class VmInterpreterGenerator {
         w.println("    };");
         w.println();
         
-        // Computed Goto dispatch table
+        // Computed Goto dispatch table (indexed by OBFUSCATED opcode)
+        w.println("    // Dispatch table (indexed by obfuscated opcode)");
         w.println("    static const void* dispatch_table[256] = {");
         for (int i = 0; i < 256; i++) {
-            final int op = i;
+            // i is the OBFUSCATED opcode, decode to get original
+            int originalOp = opcodeObfuscator.decode(i);
             Instruction inst = instructions.getAllInstructions().stream()
-                .filter(ins -> ins.getOpcode() == op)
+                .filter(ins -> ins.getOpcode() == originalOp)
                 .findFirst().orElse(null);
             if (inst != null) {
-                w.printf("        &&OP_%02x,  // 0x%02x %s%n", i, i, inst.getName());
+                // Label uses original opcode, but table is indexed by obfuscated opcode
+                w.printf("        &&OP_%02x,%n", originalOp);
             } else {
-                w.printf("        &&OP_DEFAULT,  // 0x%02x%n", i);
+                w.printf("        &&OP_DEFAULT,%n");
             }
         }
         w.println("    };");
         w.println();
 
-        // Optimized DISPATCH_NEXT: decode obfuscated opcode, then dispatch
+        // DISPATCH_NEXT: directly use obfuscated opcode as index (NO decoding!)
         w.println("    #define DISPATCH_NEXT \\");
         w.println("        do { \\");
         w.println("            if (UNLIKELY(frame.pc >= m->bytecodeLen)) goto method_exit; \\");
-        w.println("            uint8_t _obfuscated = bytecode[frame.pc]; \\");
-        w.println("            uint8_t _op = DECODE_OPCODE(_obfuscated); \\");
+        w.println("            uint8_t _op = bytecode[frame.pc]; \\");
         w.println("            if (needs_meta[_op]) { \\");
         w.println("                int _metaIdx = m->pcToMetaIdx[frame.pc]; \\");
         w.println("                meta = (_metaIdx >= 0) ? &m->metadata[_metaIdx] : NULL; \\");
@@ -401,10 +408,18 @@ public class VmInterpreterGenerator {
         w.println("    DISPATCH_NEXT;");
         w.println();
 
-        // Generate all instruction handling code
-        for (Instruction inst : instructions.getAllInstructions()) {
-            inst.generateComputedGoto(w);
-            w.println();
+        // Generate instruction handling code in RANDOM order (obfuscated)
+        // The order is determined by the obfuscator's shuffle
+        for (int i = 0; i < 256; i++) {
+            // Get original opcode at this position in the shuffled order
+            int originalOp = opcodeObfuscator.decode(i);
+            Instruction inst = instructions.getAllInstructions().stream()
+                .filter(ins -> ins.getOpcode() == originalOp)
+                .findFirst().orElse(null);
+            if (inst != null) {
+                inst.generateComputedGoto(w);
+                w.println();
+            }
         }
 
         
