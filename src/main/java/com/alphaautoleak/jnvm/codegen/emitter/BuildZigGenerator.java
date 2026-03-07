@@ -49,7 +49,7 @@ public class BuildZigGenerator {
             w.println("    lib.addCSourceFiles(.{");
             w.println("        .files = &.{ \"vm_data.c\", \"vm_interpreter.c\", \"vm_bridge.c\", \"chacha20.c\" },");
             // 添加调试标志
-            w.println("        .flags = &.{ \"-O0\", \"-g\", \"-std=c11\", \"-DVM_DEBUG\" },");
+            w.println("        .flags = &.{ \"-O2\", \"-g\", \"-std=c11\", \"-DVM_DEBUG\" },");
             w.println("    });");
             w.println();
             w.println("    b.installArtifact(lib);");

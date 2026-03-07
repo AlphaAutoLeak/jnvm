@@ -14,7 +14,7 @@ public class VMHelpers {
         // 注册所有辅助函数
         helpers.add(new StringHelper(encryptStrings));
         helpers.add(new MetaHelper());
-        helpers.add(new MethodDescHelper());
+        // MethodDescHelper 已移除 - 使用预解析的 argTypes 替代运行时解析
         helpers.add(new UnboxHelper());
         helpers.add(new InvokeDynamicHelper());
         helpers.add(new ExceptionHelper());
