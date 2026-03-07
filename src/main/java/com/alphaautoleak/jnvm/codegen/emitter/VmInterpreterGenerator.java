@@ -130,16 +130,23 @@ public class VmInterpreterGenerator {
     }
     
     private void emitCachingSystem(PrintWriter w) {
-        // === Frame memory pool (ultra-fast bump allocator) ===
-        w.println("// === Frame memory pool (ultra-fast bump allocator) ===");
-        w.println("#define FRAME_POOL_SIZE (4 * 1024 * 1024)  // 4MB pool");
+        // === Frame memory pool (thread-local bump allocator) ===
+        w.println("// === Frame memory pool (thread-local bump allocator) ===");
+        w.println("#define FRAME_POOL_SIZE (4 * 1024 * 1024)  // 4MB per thread");
         w.println();
-        w.println("static VMValue* _frameBase;");
-        w.println("static int _frameOffset;  // offset in VMValue units");
+        w.println("static __thread VMValue* _frameBase;");
+        w.println("static __thread int _frameOffset;  // offset in VMValue units");
         w.println();
         w.println("void frame_pool_init(void) {");
         w.println("    _frameBase = (VMValue*)malloc(FRAME_POOL_SIZE);");
         w.println("    _frameOffset = 0;");
+        w.println("}");
+        w.println();
+        w.println("static inline void frame_pool_ensure_init(void) {");
+        w.println("    if (UNLIKELY(_frameBase == NULL)) {");
+        w.println("        _frameBase = (VMValue*)malloc(FRAME_POOL_SIZE);");
+        w.println("        _frameOffset = 0;");
+        w.println("    }");
         w.println("}");
         w.println();
         w.println("static inline VMValue* frame_pool_push(int count) {");
@@ -362,6 +369,7 @@ public class VmInterpreterGenerator {
 
         w.println("__attribute__((hot))");
         w.println("static ExecuteResult vm_execute_common(JNIEnv* env, int methodId, jobject instance, jobjectArray args, jclass callerClass, VMValue* directLocals, int directLocalSlots) {");
+        w.println("    frame_pool_ensure_init();");
         w.println("    ExecuteResult execResult = { .returnType = 'V' };");
         w.println("    methodId ^= METHOD_ID_XOR_KEY;");
         w.println("    if (methodId < 0 || methodId >= vm_method_count) {");

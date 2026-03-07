@@ -16,6 +16,7 @@ public class ProtectConfig {
     private File inputJar;
     private File outputJar;
     private List<String> protectRules = new ArrayList<>();
+    private List<String> excludeRules = new ArrayList<>();
     private File configFile;       // protect.conf or config.yml
     private List<String> targets = new ArrayList<>();
     private boolean antiDebug = true;
@@ -68,6 +69,19 @@ public class ProtectConfig {
                     for (String rule : yamlRules) {
                         if (!protectRules.contains(rule)) {
                             protectRules.add(rule);
+                        }
+                    }
+                }
+            }
+
+            // exclude (List<String>)
+            if (config.containsKey("exclude")) {
+                Object excludeObj = config.get("exclude");
+                if (excludeObj instanceof List) {
+                    List<String> yamlExcludes = (List<String>) excludeObj;
+                    for (String rule : yamlExcludes) {
+                        if (!excludeRules.contains(rule)) {
+                            excludeRules.add(rule);
                         }
                     }
                 }
@@ -156,34 +170,31 @@ public class ProtectConfig {
      * @param methodName method name e.g. "getUser", null means check entire class
      */
     public boolean shouldProtect(String className, String methodName) {
-        // Convert to dot format
         String dotClass = className.replace('/', '.');
 
-        for (String rule : protectRules) {
-            // Rule 1: protect all
+        if (matchesAnyRule(excludeRules, dotClass, methodName)) {
+            return false;
+        }
+        return matchesAnyRule(protectRules, dotClass, methodName);
+    }
+
+    private boolean matchesAnyRule(List<String> rules, String dotClass, String methodName) {
+        for (String rule : rules) {
             if (rule.equals("**")) {
                 return true;
             }
-
-            // Rule 2: com.example.** (package wildcard)
             if (rule.endsWith(".**")) {
                 String pkg = rule.substring(0, rule.length() - 3);
                 if (dotClass.startsWith(pkg)) {
                     return true;
                 }
-            }
-
-            // Rule 3: com.example.MyClass (entire class)
-            else if (!rule.contains("#") && !rule.startsWith("@")) {
-                if (dotClass.equals(rule)) {
-                    return true;
-                }
-            }
-
-            // Rule 4: com.example.MyClass#methodName (specific method)
-            else if (rule.contains("#")) {
+            } else if (rule.contains("#")) {
                 String[] parts = rule.split("#", 2);
                 if (dotClass.equals(parts[0]) && methodName != null && methodName.equals(parts[1])) {
+                    return true;
+                }
+            } else if (!rule.startsWith("@")) {
+                if (dotClass.equals(rule)) {
                     return true;
                 }
             }

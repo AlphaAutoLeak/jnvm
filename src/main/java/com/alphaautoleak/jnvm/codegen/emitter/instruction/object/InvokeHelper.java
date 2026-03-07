@@ -9,6 +9,10 @@ import java.io.PrintWriter;
 public class InvokeHelper {
 
     public static void generate(PrintWriter w, boolean isStatic) {
+        generate(w, isStatic, true);
+    }
+
+    public static void generate(PrintWriter w, boolean isStatic, boolean directCallEnabled) {
         w.println("                { int invokePc = frame.pc;");
         w.println("                  if (!meta) { VM_LOG(\"INVOKE: meta is NULL at pc=%d\\n\", frame.pc); frame.pc++; break; }");
         w.println("                  const char* owner = vm_get_string(meta->ownerIdx);");
@@ -19,11 +23,13 @@ public class InvokeHelper {
         w.println("                  char returnType = meta->returnTypeChar;");
         w.println("                  const char* argTypes = (meta->argTypesIdx >= 0) ? vm_get_string(meta->argTypesIdx) : NULL;");
 
-        // Direct VM-to-VM call path
-        w.println("                  int vmTargetId = meta->vmTargetId;");
-        w.println("                  if (vmTargetId >= 0) {");
-        emitDirectCallBody(w, isStatic, false);
-        w.println("                  } else {");
+        if (directCallEnabled) {
+            // Direct VM-to-VM call path
+            w.println("                  int vmTargetId = meta->vmTargetId;");
+            w.println("                  if (vmTargetId >= 0) {");
+            emitDirectCallBody(w, isStatic, false);
+            w.println("                  } else {");
+        }
 
         // Original JNI path (with lazy cached method ID)
         w.println("                  jclass cls; jmethodID mid;");
@@ -117,7 +123,9 @@ public class InvokeHelper {
         w.println("                      (*env)->Throw(env, exc);");
         w.println("                      _hasException = 1; goto method_exit;");
         w.println("                  }");
-        w.println("                  }"); // end else (JNI path)
+        if (directCallEnabled) {
+            w.println("                  }"); // end else (JNI path)
+        }
         w.println("                }");
         w.println("                frame.pc++;");
     }
@@ -126,6 +134,10 @@ public class InvokeHelper {
      * Generate computed goto version
      */
     public static void generateComputedGoto(PrintWriter w, boolean isStatic, int opcode, String comment) {
+        generateComputedGoto(w, isStatic, opcode, comment, true);
+    }
+
+    public static void generateComputedGoto(PrintWriter w, boolean isStatic, int opcode, String comment, boolean directCallEnabled) {
         w.printf("        OP_%02x:  /* %s */\n", opcode, comment);
         w.println("            { int invokePc = frame.pc;");
         w.println("              if (UNLIKELY(!meta)) { VM_LOG(\"INVOKE: meta is NULL at pc=%d\\n\", frame.pc); frame.pc++; DISPATCH_NEXT; }");
@@ -137,11 +149,13 @@ public class InvokeHelper {
         w.println("              char returnType = meta->returnTypeChar;");
         w.println("              const char* argTypes = (meta->argTypesIdx >= 0) ? vm_get_string(meta->argTypesIdx) : NULL;");
 
-        // Direct VM-to-VM call path
-        w.println("              int vmTargetId = meta->vmTargetId;");
-        w.println("              if (vmTargetId >= 0) {");
-        emitDirectCallBody(w, isStatic, true);
-        w.println("              } else {");
+        if (directCallEnabled) {
+            // Direct VM-to-VM call path
+            w.println("              int vmTargetId = meta->vmTargetId;");
+            w.println("              if (vmTargetId >= 0) {");
+            emitDirectCallBody(w, isStatic, true);
+            w.println("              } else {");
+        }
 
         // Original JNI path (with lazy cached method ID)
         w.println("              jclass cls; jmethodID mid;");
@@ -235,7 +249,9 @@ public class InvokeHelper {
         w.println("                  (*env)->Throw(env, exc);");
         w.println("                  _hasException = 1; goto method_exit;");
         w.println("              }");
-        w.println("              }"); // end else (JNI path)
+        if (directCallEnabled) {
+            w.println("              }"); // end else (JNI path)
+        }
         w.println("            }");
         w.println("            frame.pc++;");
         w.println("            DISPATCH_NEXT;");

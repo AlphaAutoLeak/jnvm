@@ -72,6 +72,7 @@ public class MetaType {
         w.println("    jfieldID cachedFid;     // lazily cached field ID for JNI field access");
         w.println("    // META_INVOKE_DYNAMIC");
         w.println("    int bsmIdx;");
+        w.println("    jobject cachedIndyResult;  // cached invokedynamic CallSite target result (MethodHandle)");
         w.println("    // META_IINC");
         w.println("    int iincIndex;");
         w.println("    int iincConst;");

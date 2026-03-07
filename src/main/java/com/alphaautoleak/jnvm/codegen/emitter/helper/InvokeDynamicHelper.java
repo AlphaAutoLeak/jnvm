@@ -3,332 +3,454 @@ package com.alphaautoleak.jnvm.codegen.emitter.helper;
 import java.io.PrintWriter;
 
 /**
- * InvokeDynamic helper functions (Lambda support)
+ * InvokeDynamic helper functions
+ * Supports: LambdaMetafactory, StringConcatFactory, generic BSM fallback
  */
 public class InvokeDynamicHelper extends VMHelper {
-    
+
     @Override
     public String[] getIncludes() {
-        return new String[] { "vm_types.h", "vm_data.h", "<jni.h>", "<string.h>", "<stdio.h>" };
+        return new String[] { "vm_types.h", "vm_data.h", "<jni.h>", "<string.h>", "<stdio.h>", "<stdlib.h>" };
     }
-    
+
     @Override
     public void generateHeader(PrintWriter w) {
         w.println("jobject vm_invoke_dynamic(JNIEnv* env, VMFrame* frame, MetaEntry* meta);");
     }
-    
+
     @Override
     public void generateSource(PrintWriter w) {
-        // Static cache - classes and method IDs
+        emitStaticCache(w);
+        emitHelperFunctions(w);
+        emitMainFunction(w);
+    }
+
+    private void emitStaticCache(PrintWriter w) {
         w.println("// === InvokeDynamic static cache ===");
+        // MethodHandles / Lookup
         w.println("static jclass id_mhClass = NULL;");
         w.println("static jmethodID id_lookupMid = NULL;");
         w.println("static jmethodID id_privateLookupInMid = NULL;");
+        // MethodType
         w.println("static jclass id_mtClass = NULL;");
         w.println("static jmethodID id_fromDescMid = NULL;");
+        // Class
         w.println("static jclass id_classClass = NULL;");
         w.println("static jmethodID id_getClassLoaderMid = NULL;");
         w.println("static jmethodID id_forNameMid = NULL;");
+        // Lookup
         w.println("static jclass id_lookupClass = NULL;");
         w.println("static jmethodID id_findStaticMid = NULL;");
         w.println("static jmethodID id_findVirtualMid = NULL;");
         w.println("static jmethodID id_findSpecialMid = NULL;");
+        w.println("static jmethodID id_findConstructorMid = NULL;");
+        // LambdaMetafactory
         w.println("static jclass id_lmfClass = NULL;");
         w.println("static jmethodID id_metafactoryMid = NULL;");
+        w.println("static jmethodID id_altMetafactoryMid = NULL;");
+        // StringConcatFactory
+        w.println("static jclass id_scfClass = NULL;");
+        w.println("static jmethodID id_makeConcatMid = NULL;");
+        w.println("static jmethodID id_makeConcatConstantsMid = NULL;");
+        // CallSite / MethodHandle
         w.println("static jclass id_callSiteClass = NULL;");
         w.println("static jmethodID id_getTargetMid = NULL;");
         w.println("static jmethodID id_invokeWithArgsMid = NULL;");
+        // Boxing
         w.println("static jclass id_objectClass = NULL;");
         w.println("static jclass id_intClass = NULL;");
         w.println("static jclass id_longClass = NULL;");
         w.println("static jclass id_floatClass = NULL;");
         w.println("static jclass id_doubleClass = NULL;");
         w.println("static jclass id_boolClass = NULL;");
+        w.println("static jclass id_byteClass = NULL;");
+        w.println("static jclass id_shortClass = NULL;");
+        w.println("static jclass id_charClass = NULL;");
         w.println("static jmethodID id_intValueOfMid = NULL;");
         w.println("static jmethodID id_longValueOfMid = NULL;");
         w.println("static jmethodID id_floatValueOfMid = NULL;");
         w.println("static jmethodID id_doubleValueOfMid = NULL;");
         w.println("static jmethodID id_boolValueOfMid = NULL;");
+        w.println("static jmethodID id_byteValueOfMid = NULL;");
+        w.println("static jmethodID id_shortValueOfMid = NULL;");
+        w.println("static jmethodID id_charValueOfMid = NULL;");
+        // String
+        w.println("static jclass id_stringClass = NULL;");
+        w.println("static int id_indy_initialized = 0;");
         w.println();
-        
+    }
+
+    private void emitHelperFunctions(PrintWriter w) {
+        // Cache initialization
+        w.println("static void vm_indy_init_cache(JNIEnv* env) {");
+        w.println("    if (id_indy_initialized) return;");
+        w.println("    id_indy_initialized = 1;");
+        w.println();
+        w.println("    id_mhClass = vm_find_class(env, \"java/lang/invoke/MethodHandles\");");
+        w.println("    if (id_mhClass) {");
+        w.println("        id_lookupMid = (*env)->GetStaticMethodID(env, id_mhClass, \"lookup\", \"()Ljava/lang/invoke/MethodHandles$Lookup;\");");
+        w.println("        id_privateLookupInMid = (*env)->GetStaticMethodID(env, id_mhClass, \"privateLookupIn\",");
+        w.println("            \"(Ljava/lang/Class;Ljava/lang/invoke/MethodHandles$Lookup;)Ljava/lang/invoke/MethodHandles$Lookup;\");");
+        w.println("    }");
+        w.println("    id_mtClass = vm_find_class(env, \"java/lang/invoke/MethodType\");");
+        w.println("    if (id_mtClass) id_fromDescMid = (*env)->GetStaticMethodID(env, id_mtClass, \"fromMethodDescriptorString\",");
+        w.println("        \"(Ljava/lang/String;Ljava/lang/ClassLoader;)Ljava/lang/invoke/MethodType;\");");
+        w.println("    id_classClass = vm_find_class(env, \"java/lang/Class\");");
+        w.println("    if (id_classClass) {");
+        w.println("        id_getClassLoaderMid = (*env)->GetMethodID(env, id_classClass, \"getClassLoader\", \"()Ljava/lang/ClassLoader;\");");
+        w.println("        id_forNameMid = (*env)->GetStaticMethodID(env, id_classClass, \"forName\", \"(Ljava/lang/String;ZLjava/lang/ClassLoader;)Ljava/lang/Class;\");");
+        w.println("    }");
+        w.println("    id_lookupClass = vm_find_class(env, \"java/lang/invoke/MethodHandles$Lookup\");");
+        w.println("    if (id_lookupClass) {");
+        w.println("        id_findStaticMid = (*env)->GetMethodID(env, id_lookupClass, \"findStatic\",");
+        w.println("            \"(Ljava/lang/Class;Ljava/lang/String;Ljava/lang/invoke/MethodType;)Ljava/lang/invoke/MethodHandle;\");");
+        w.println("        id_findVirtualMid = (*env)->GetMethodID(env, id_lookupClass, \"findVirtual\",");
+        w.println("            \"(Ljava/lang/Class;Ljava/lang/String;Ljava/lang/invoke/MethodType;)Ljava/lang/invoke/MethodHandle;\");");
+        w.println("        id_findSpecialMid = (*env)->GetMethodID(env, id_lookupClass, \"findSpecial\",");
+        w.println("            \"(Ljava/lang/Class;Ljava/lang/String;Ljava/lang/invoke/MethodType;Ljava/lang/Class;)Ljava/lang/invoke/MethodHandle;\");");
+        w.println("        id_findConstructorMid = (*env)->GetMethodID(env, id_lookupClass, \"findConstructor\",");
+        w.println("            \"(Ljava/lang/Class;Ljava/lang/invoke/MethodType;)Ljava/lang/invoke/MethodHandle;\");");
+        w.println("    }");
+        w.println("    id_lmfClass = vm_find_class(env, \"java/lang/invoke/LambdaMetafactory\");");
+        w.println("    if (id_lmfClass) {");
+        w.println("        id_metafactoryMid = (*env)->GetStaticMethodID(env, id_lmfClass, \"metafactory\",");
+        w.println("            \"(Ljava/lang/invoke/MethodHandles$Lookup;Ljava/lang/String;Ljava/lang/invoke/MethodType;Ljava/lang/invoke/MethodType;Ljava/lang/invoke/MethodHandle;Ljava/lang/invoke/MethodType;)Ljava/lang/invoke/CallSite;\");");
+        w.println("        id_altMetafactoryMid = (*env)->GetStaticMethodID(env, id_lmfClass, \"altMetafactory\",");
+        w.println("            \"(Ljava/lang/invoke/MethodHandles$Lookup;Ljava/lang/String;Ljava/lang/invoke/MethodType;[Ljava/lang/Object;)Ljava/lang/invoke/CallSite;\");");
+        w.println("    }");
+        // StringConcatFactory - may not exist on Java 8
+        w.println("    id_scfClass = (*env)->FindClass(env, \"java/lang/invoke/StringConcatFactory\");");
+        w.println("    if ((*env)->ExceptionCheck(env)) { (*env)->ExceptionClear(env); id_scfClass = NULL; }");
+        w.println("    if (id_scfClass) {");
+        w.println("        id_scfClass = (jclass)(*env)->NewGlobalRef(env, id_scfClass);");
+        w.println("        id_makeConcatMid = (*env)->GetStaticMethodID(env, id_scfClass, \"makeConcat\",");
+        w.println("            \"(Ljava/lang/invoke/MethodHandles$Lookup;Ljava/lang/String;Ljava/lang/invoke/MethodType;)Ljava/lang/invoke/CallSite;\");");
+        w.println("        if ((*env)->ExceptionCheck(env)) { (*env)->ExceptionClear(env); id_makeConcatMid = NULL; }");
+        w.println("        id_makeConcatConstantsMid = (*env)->GetStaticMethodID(env, id_scfClass, \"makeConcatWithConstants\",");
+        w.println("            \"(Ljava/lang/invoke/MethodHandles$Lookup;Ljava/lang/String;Ljava/lang/invoke/MethodType;Ljava/lang/String;[Ljava/lang/Object;)Ljava/lang/invoke/CallSite;\");");
+        w.println("        if ((*env)->ExceptionCheck(env)) { (*env)->ExceptionClear(env); id_makeConcatConstantsMid = NULL; }");
+        w.println("    }");
+        w.println("    id_callSiteClass = vm_find_class(env, \"java/lang/invoke/CallSite\");");
+        w.println("    if (id_callSiteClass) id_getTargetMid = (*env)->GetMethodID(env, id_callSiteClass, \"getTarget\", \"()Ljava/lang/invoke/MethodHandle;\");");
+        w.println("    jclass mhHandleClass = vm_find_class(env, \"java/lang/invoke/MethodHandle\");");
+        w.println("    if (mhHandleClass) id_invokeWithArgsMid = (*env)->GetMethodID(env, mhHandleClass, \"invokeWithArguments\", \"([Ljava/lang/Object;)Ljava/lang/Object;\");");
+        w.println("    id_objectClass = vm_find_class(env, \"java/lang/Object\");");
+        w.println("    id_stringClass = vm_find_class(env, \"java/lang/String\");");
+        w.println("    id_intClass = vm_find_class(env, \"java/lang/Integer\");");
+        w.println("    id_longClass = vm_find_class(env, \"java/lang/Long\");");
+        w.println("    id_floatClass = vm_find_class(env, \"java/lang/Float\");");
+        w.println("    id_doubleClass = vm_find_class(env, \"java/lang/Double\");");
+        w.println("    id_boolClass = vm_find_class(env, \"java/lang/Boolean\");");
+        w.println("    id_byteClass = vm_find_class(env, \"java/lang/Byte\");");
+        w.println("    id_shortClass = vm_find_class(env, \"java/lang/Short\");");
+        w.println("    id_charClass = vm_find_class(env, \"java/lang/Character\");");
+        w.println("    if (id_intClass) id_intValueOfMid = (*env)->GetStaticMethodID(env, id_intClass, \"valueOf\", \"(I)Ljava/lang/Integer;\");");
+        w.println("    if (id_longClass) id_longValueOfMid = (*env)->GetStaticMethodID(env, id_longClass, \"valueOf\", \"(J)Ljava/lang/Long;\");");
+        w.println("    if (id_floatClass) id_floatValueOfMid = (*env)->GetStaticMethodID(env, id_floatClass, \"valueOf\", \"(F)Ljava/lang/Float;\");");
+        w.println("    if (id_doubleClass) id_doubleValueOfMid = (*env)->GetStaticMethodID(env, id_doubleClass, \"valueOf\", \"(D)Ljava/lang/Double;\");");
+        w.println("    if (id_boolClass) id_boolValueOfMid = (*env)->GetStaticMethodID(env, id_boolClass, \"valueOf\", \"(Z)Ljava/lang/Boolean;\");");
+        w.println("    if (id_byteClass) id_byteValueOfMid = (*env)->GetStaticMethodID(env, id_byteClass, \"valueOf\", \"(B)Ljava/lang/Byte;\");");
+        w.println("    if (id_shortClass) id_shortValueOfMid = (*env)->GetStaticMethodID(env, id_shortClass, \"valueOf\", \"(S)Ljava/lang/Short;\");");
+        w.println("    if (id_charClass) id_charValueOfMid = (*env)->GetStaticMethodID(env, id_charClass, \"valueOf\", \"(C)Ljava/lang/Character;\");");
+        w.println("}");
+        w.println();
+
+        // Box a stack value to jobject
+        w.println("static jobject vm_indy_box(JNIEnv* env, char type, VMValue val) {");
+        w.println("    switch (type) {");
+        w.println("        case 'I': return (*env)->CallStaticObjectMethod(env, id_intClass, id_intValueOfMid, val.i);");
+        w.println("        case 'J': return (*env)->CallStaticObjectMethod(env, id_longClass, id_longValueOfMid, val.j);");
+        w.println("        case 'F': return (*env)->CallStaticObjectMethod(env, id_floatClass, id_floatValueOfMid, val.f);");
+        w.println("        case 'D': return (*env)->CallStaticObjectMethod(env, id_doubleClass, id_doubleValueOfMid, val.d);");
+        w.println("        case 'Z': return (*env)->CallStaticObjectMethod(env, id_boolClass, id_boolValueOfMid, val.i);");
+        w.println("        case 'B': return (*env)->CallStaticObjectMethod(env, id_byteClass, id_byteValueOfMid, (jbyte)val.i);");
+        w.println("        case 'S': return (*env)->CallStaticObjectMethod(env, id_shortClass, id_shortValueOfMid, (jshort)val.i);");
+        w.println("        case 'C': return (*env)->CallStaticObjectMethod(env, id_charClass, id_charValueOfMid, (jchar)val.i);");
+        w.println("        default:  return val.l;");
+        w.println("    }");
+        w.println("}");
+        w.println();
+
+        // Parse descriptor argument types into array, return count
+        w.println("static int vm_indy_parse_arg_types(const char* desc, char* outTypes, int maxTypes) {");
+        w.println("    int count = 0;");
+        w.println("    const char* p = desc + 1; // skip '('");
+        w.println("    while (*p && *p != ')' && count < maxTypes) {");
+        w.println("        if (*p == 'L') { outTypes[count++] = 'L'; while (*p && *p != ';') p++; if (*p) p++; }");
+        w.println("        else if (*p == '[') { outTypes[count++] = 'L'; while (*p == '[') p++; if (*p == 'L') { while (*p && *p != ';') p++; } if (*p) p++; }");
+        w.println("        else { outTypes[count++] = *p; p++; }");
+        w.println("    }");
+        w.println("    return count;");
+        w.println("}");
+        w.println();
+
+        // Pop captured args from stack into boxed Object array (correct order)
+        w.println("static jobjectArray vm_indy_pop_args(JNIEnv* env, VMFrame* frame, const char* desc, int capturedCount) {");
+        w.println("    if (capturedCount == 0) return NULL;");
+        w.println("    char argTypes[32];");
+        w.println("    vm_indy_parse_arg_types(desc, argTypes, 32);");
+        w.println("    jobjectArray arr = (*env)->NewObjectArray(env, capturedCount, id_objectClass, NULL);");
+        w.println("    if (!arr) return NULL;");
+        w.println("    // Pop from stack in reverse (top = last arg), store at correct position");
+        w.println("    for (int i = capturedCount - 1; i >= 0; i--) {");
+        w.println("        VMValue val = frame->stack[--frame->sp];");
+        w.println("        jobject boxed = vm_indy_box(env, argTypes[i], val);");
+        w.println("        (*env)->SetObjectArrayElement(env, arr, i, boxed);");
+        w.println("    }");
+        w.println("    return arr;");
+        w.println("}");
+        w.println();
+    }
+
+    private void emitMainFunction(PrintWriter w) {
         w.println("jobject vm_invoke_dynamic(JNIEnv* env, VMFrame* frame, MetaEntry* meta) {");
         w.println("    if (!meta) { VM_LOG(\"INVOKEDYNAMIC: meta is NULL\\n\"); return NULL; }");
+        w.println("    vm_indy_init_cache(env);");
+        w.println();
         w.println("    const char* methodName = vm_get_string(meta->nameIdx);");
         w.println("    const char* methodDesc = vm_get_string(meta->descIdx);");
         w.println("    VM_LOG(\"INVOKEDYNAMIC: name=%s, desc=%s, bsmIdx=%d\\n\", methodName, methodDesc, meta->bsmIdx);");
         w.println();
-        w.println("    if (meta->bsmIdx < 0 || meta->bsmIdx >= vm_bootstrap_count) {");
-        w.println("        VM_LOG(\"INVOKEDYNAMIC: Invalid bsmIdx=%d\\n\", meta->bsmIdx); return NULL;");
-        w.println("    }");
-        w.println("    VMBootstrapMethod* bsm = &vm_bootstrap_methods[meta->bsmIdx];");
-        w.println("    const char* bsmClass = vm_get_string(bsm->ownerIdx);");
-        w.println();
-        w.println("    // Initialize static cache");
-        w.println("    if (!id_mhClass) {");
-        w.println("        id_mhClass = vm_find_class(env, \"java/lang/invoke/MethodHandles\");");
-        w.println("        if (id_mhClass) id_lookupMid = (*env)->GetStaticMethodID(env, id_mhClass, \"lookup\", \"()Ljava/lang/invoke/MethodHandles$Lookup;\");");
-        w.println("        if (id_mhClass) id_privateLookupInMid = (*env)->GetStaticMethodID(env, id_mhClass, \"privateLookupIn\",");
-        w.println("            \"(Ljava/lang/Class;Ljava/lang/invoke/MethodHandles$Lookup;)Ljava/lang/invoke/MethodHandles$Lookup;\");");
-        w.println("    }");
-        w.println("    if (!id_mtClass) {");
-        w.println("        id_mtClass = vm_find_class(env, \"java/lang/invoke/MethodType\");");
-        w.println("        if (id_mtClass) id_fromDescMid = (*env)->GetStaticMethodID(env, id_mtClass, \"fromMethodDescriptorString\",");
-        w.println("            \"(Ljava/lang/String;Ljava/lang/ClassLoader;)Ljava/lang/invoke/MethodType;\");");
-        w.println("    }");
-        w.println("    if (!id_classClass) {");
-        w.println("        id_classClass = vm_find_class(env, \"java/lang/Class\");");
-        w.println("        if (id_classClass) id_getClassLoaderMid = (*env)->GetMethodID(env, id_classClass, \"getClassLoader\", \"()Ljava/lang/ClassLoader;\");");
-        w.println("        if (id_classClass) id_forNameMid = (*env)->GetStaticMethodID(env, id_classClass, \"forName\", \"(Ljava/lang/String;ZLjava/lang/ClassLoader;)Ljava/lang/Class;\");");
-        w.println("    }");
-        w.println("    if (!id_lookupClass) {");
-        w.println("        id_lookupClass = vm_find_class(env, \"java/lang/invoke/MethodHandles$Lookup\");");
-        w.println("        if (id_lookupClass) id_findStaticMid = (*env)->GetMethodID(env, id_lookupClass, \"findStatic\",");
-        w.println("            \"(Ljava/lang/Class;Ljava/lang/String;Ljava/lang/invoke/MethodType;)Ljava/lang/invoke/MethodHandle;\");");
-        w.println("        if (id_lookupClass) id_findVirtualMid = (*env)->GetMethodID(env, id_lookupClass, \"findVirtual\",");
-        w.println("            \"(Ljava/lang/Class;Ljava/lang/String;Ljava/lang/invoke/MethodType;)Ljava/lang/invoke/MethodHandle;\");");
-        w.println("        if (id_lookupClass) id_findSpecialMid = (*env)->GetMethodID(env, id_lookupClass, \"findSpecial\",");
-        w.println("            \"(Ljava/lang/Class;Ljava/lang/String;Ljava/lang/invoke/MethodType;Ljava/lang/Class;)Ljava/lang/invoke/MethodHandle;\");");
-        w.println("    }");
-        w.println("    if (!id_lmfClass) {");
-        w.println("        id_lmfClass = vm_find_class(env, \"java/lang/invoke/LambdaMetafactory\");");
-        w.println("        if (id_lmfClass) id_metafactoryMid = (*env)->GetStaticMethodID(env, id_lmfClass, \"metafactory\",");
-        w.println("            \"(Ljava/lang/invoke/MethodHandles$Lookup;Ljava/lang/String;Ljava/lang/invoke/MethodType;Ljava/lang/invoke/MethodType;Ljava/lang/invoke/MethodHandle;Ljava/lang/invoke/MethodType;)Ljava/lang/invoke/CallSite;\");");
-        w.println("    }");
-        w.println("    if (!id_callSiteClass) {");
-        w.println("        id_callSiteClass = vm_find_class(env, \"java/lang/invoke/CallSite\");");
-        w.println("        if (id_callSiteClass) id_getTargetMid = (*env)->GetMethodID(env, id_callSiteClass, \"getTarget\", \"()Ljava/lang/invoke/MethodHandle;\");");
-        w.println("    }");
-        w.println("    if (!id_invokeWithArgsMid) {");
-        w.println("        jclass mhClass = vm_find_class(env, \"java/lang/invoke/MethodHandle\");");
-        w.println("        if (mhClass) id_invokeWithArgsMid = (*env)->GetMethodID(env, mhClass, \"invokeWithArguments\", \"([Ljava/lang/Object;)Ljava/lang/Object;\");");
-        w.println("    }");
-        w.println("    if (!id_objectClass) {");
-        w.println("        id_objectClass = vm_find_class(env, \"java/lang/Object\");");
-        w.println("        id_intClass = vm_find_class(env, \"java/lang/Integer\");");
-        w.println("        id_longClass = vm_find_class(env, \"java/lang/Long\");");
-        w.println("        id_floatClass = vm_find_class(env, \"java/lang/Float\");");
-        w.println("        id_doubleClass = vm_find_class(env, \"java/lang/Double\");");
-        w.println("        id_boolClass = vm_find_class(env, \"java/lang/Boolean\");");
-        w.println("        if (id_intClass) id_intValueOfMid = (*env)->GetStaticMethodID(env, id_intClass, \"valueOf\", \"(I)Ljava/lang/Integer;\");");
-        w.println("        if (id_longClass) id_longValueOfMid = (*env)->GetStaticMethodID(env, id_longClass, \"valueOf\", \"(J)Ljava/lang/Long;\");");
-        w.println("        if (id_floatClass) id_floatValueOfMid = (*env)->GetStaticMethodID(env, id_floatClass, \"valueOf\", \"(F)Ljava/lang/Float;\");");
-        w.println("        if (id_doubleClass) id_doubleValueOfMid = (*env)->GetStaticMethodID(env, id_doubleClass, \"valueOf\", \"(D)Ljava/lang/Double;\");");
-        w.println("        if (id_boolClass) id_boolValueOfMid = (*env)->GetStaticMethodID(env, id_boolClass, \"valueOf\", \"(Z)Ljava/lang/Boolean;\");");
-        w.println("    }");
-        w.println();
-        emitLambdaFactory(w);
-        w.println("}");
-        w.println();
-    }
-    
-    private void emitLambdaFactory(PrintWriter w) {
-        // ===== Step 1: Parse BSM args =====
-        w.println("    // LambdaMetafactory.metafactory(Lookup, String, MethodType, MethodType, MethodHandle, MethodType)");
-        w.println("    // BSM args: [0]=samMethodType, [1]=implMethod (MethodHandle), [2]=instantiatedMethodType");
-        w.println("    if (bsm->argCount < 3) {");
-        w.println("        VM_LOG(\"INVOKEDYNAMIC: Not enough BSM args (need 3, got %d)\\n\", bsm->argCount);");
-        w.println("        return NULL;");
-        w.println("    }");
-        w.println();
-        
-        // ===== Step 2: Get BSM argument strings =====
-        w.println("    const char* samMethodTypeStr = vm_get_string(bsm->args[0].strIdx);");
-        w.println("    const char* implMethodStr = vm_get_string(bsm->args[1].strIdx);");
-        w.println("    const char* instantiatedMethodTypeStr = vm_get_string(bsm->args[2].strIdx);");
-        w.println("    int handleTag = bsm->args[1].handleTag; // implMethod handle tag (REF_invokeStatic=6, etc)");
-        w.println("    VM_LOG(\"INVOKEDYNAMIC: samType=%s, implMethod=%s, instType=%s, handleTag=%d\\n\",");
-        w.println("        samMethodTypeStr, implMethodStr, instantiatedMethodTypeStr, handleTag);");
-        w.println();
-        
-        // ===== Step 3: Parse implMethod string =====
-        w.println("    // Parse implMethod: format is \"owner.name(desc)\"");
-        w.println("    char implOwner[256] = {0}, implName[256] = {0}, implDesc[512] = {0};");
-        w.println("    const char* implParen = strchr(implMethodStr, '(');");
-        w.println("    if (!implParen) { VM_LOG(\"INVOKEDYNAMIC: No impl paren in %s\\n\", implMethodStr); return NULL; }");
-        w.println("    strncpy(implDesc, implParen, sizeof(implDesc) - 1);");
-        w.println("    const char* lastDot = NULL;");
-        w.println("    for (const char* p = implMethodStr; p < implParen; p++) { if (*p == '.') lastDot = p; }");
-        w.println("    if (!lastDot) { VM_LOG(\"INVOKEDYNAMIC: No dot in implMethod %s\\n\", implMethodStr); return NULL; }");
-        w.println("    strncpy(implOwner, implMethodStr, lastDot - implMethodStr);");
-        w.println("    strncpy(implName, lastDot + 1, implParen - lastDot - 1);");
-        w.println("    VM_LOG(\"INVOKEDYNAMIC: implOwner=%s, implName=%s, implDesc=%s\\n\", implOwner, implName, implDesc);");
-        w.println();
-        
-        // ===== Step 4: Calculate captured arguments (inline, not nested function) =====
-        w.println("    // Calculate captured arguments from invokedType (methodDesc)");
-        w.println("    int capturedCount = 0;");
-        w.println("    const char* p = methodDesc + 1; // skip '('");
-        w.println("    while (*p && *p != ')') {");
-        w.println("        if (*p == 'L') { while (*p && *p != ';') p++; if (*p) p++; }");
-        w.println("        else if (*p == '[') { while (*p == '[') p++; if (*p == 'L') { while (*p && *p != ';') p++; } if (*p) p++; }");
-        w.println("        else { p++; }");
-        w.println("        capturedCount++;");
-        w.println("    }");
-        w.println("    VM_LOG(\"INVOKEDYNAMIC: methodDesc=%s, capturedCount=%d, sp=%d\\n\", methodDesc, capturedCount, frame->sp);");
-        w.println();
-        w.println("    // Validate we have enough stack elements");
+
+        // Calculate captured arg count from methodDesc
+        w.println("    char capturedTypes[32];");
+        w.println("    int capturedCount = vm_indy_parse_arg_types(methodDesc, capturedTypes, 32);");
         w.println("    if (frame->sp < capturedCount) {");
         w.println("        VM_LOG(\"INVOKEDYNAMIC: Stack underflow! sp=%d, need=%d\\n\", frame->sp, capturedCount);");
         w.println("        return NULL;");
         w.println("    }");
         w.println();
-        
-        // ===== Step 5: Get caller class for Lookup =====
-        w.println("    jclass ownerClass = (*env)->FindClass(env, implOwner);");
-        w.println("    if (!ownerClass) { VM_LOG(\"INVOKEDYNAMIC: Owner class not found: %s\\n\", implOwner); (*env)->ExceptionClear(env); return NULL; }");
-        w.println();
-        
-        // ===== Step 6: Create Lookup with proper caller class =====
-        w.println("    // Get MethodHandles.Lookup for the caller class (using cache)");
-        w.println("    jobject publicLookup = (*env)->CallStaticObjectMethod(env, id_mhClass, id_lookupMid);");
-        w.println();
-        w.println("    // Use privateLookupIn to get lookup with correct caller class");
-        w.println("    jobject lookup = (*env)->CallStaticObjectMethod(env, id_mhClass, id_privateLookupInMid, ownerClass, publicLookup);");
-        w.println("    if (!lookup) {");
-        w.println("        VM_LOG(\"INVOKEDYNAMIC: privateLookupIn failed\\n\");");
-        w.println("        if ((*env)->ExceptionCheck(env)) { (*env)->ExceptionDescribe(env); (*env)->ExceptionClear(env); }");
-        w.println("        return NULL;");
-        w.println("    }");
-        w.println();
-        
-        // ===== Step 7: Create MethodType objects =====
-        w.println("    // Create MethodTypes from descriptor strings (using cache)");
-        w.println("    jobject classLoader = (*env)->CallObjectMethod(env, ownerClass, id_getClassLoaderMid);");
-        w.println();
-        w.println("    jstring samDescJStr = (*env)->NewStringUTF(env, samMethodTypeStr);");
-        w.println("    jobject samMethodType = (*env)->CallStaticObjectMethod(env, id_mtClass, id_fromDescMid, samDescJStr, classLoader);");
-        w.println("    if (!samMethodType) { VM_LOG(\"INVOKEDYNAMIC: Failed to create samMethodType\\n\"); (*env)->ExceptionClear(env); return NULL; }");
-        w.println();
-        w.println("    jstring implDescJStr = (*env)->NewStringUTF(env, implDesc);");
-        w.println("    jobject implMethodType = (*env)->CallStaticObjectMethod(env, id_mtClass, id_fromDescMid, implDescJStr, classLoader);");
-        w.println("    if (!implMethodType) { VM_LOG(\"INVOKEDYNAMIC: Failed to create implMethodType\\n\"); (*env)->ExceptionClear(env); return NULL; }");
-        w.println();
-        w.println("    jstring instDescJStr = (*env)->NewStringUTF(env, instantiatedMethodTypeStr);");
-        w.println("    jobject instantiatedMethodType = (*env)->CallStaticObjectMethod(env, id_mtClass, id_fromDescMid, instDescJStr, classLoader);");
-        w.println("    if (!instantiatedMethodType) { VM_LOG(\"INVOKEDYNAMIC: Failed to create instantiatedMethodType\\n\"); (*env)->ExceptionClear(env); return NULL; }");
-        w.println();
-        
-        // ===== Step 8: Find the implementation method handle =====
-        w.println("    // Find the implementation method handle (using cache)");
-        w.println("    jobject implMethodHandle = NULL;");
-        w.println("    jstring implNameJStr = (*env)->NewStringUTF(env, implName);");
-        w.println();
-        w.println("    VM_LOG(\"INVOKEDYNAMIC: Finding method handle, tag=%d\\n\", handleTag);");
-        w.println("    if (handleTag == 6) { // REF_invokeStatic");
-        w.println("        implMethodHandle = (*env)->CallObjectMethod(env, lookup, id_findStaticMid, ownerClass, implNameJStr, implMethodType);");
-        w.println("    } else if (handleTag == 5 || handleTag == 9) { // REF_invokeVirtual || REF_invokeInterface");
-        w.println("        implMethodHandle = (*env)->CallObjectMethod(env, lookup, id_findVirtualMid, ownerClass, implNameJStr, implMethodType);");
-        w.println("    } else if (handleTag == 7) { // REF_invokeSpecial");
-        w.println("        implMethodHandle = (*env)->CallObjectMethod(env, lookup, id_findSpecialMid, ownerClass, implNameJStr, implMethodType, ownerClass);");
-        w.println("    } else {");
-        w.println("        VM_LOG(\"INVOKEDYNAMIC: Unsupported handleTag=%d\\n\", handleTag);");
-        w.println("        return NULL;");
-        w.println("    }");
-        w.println();
-        w.println("    if (!implMethodHandle) {");
-        w.println("        VM_LOG(\"INVOKEDYNAMIC: Failed to get MethodHandle for %s.%s\\n\", implOwner, implName);");
-        w.println("        if ((*env)->ExceptionCheck(env)) { (*env)->ExceptionDescribe(env); (*env)->ExceptionClear(env); }");
-        w.println("        return NULL;");
-        w.println("    }");
-        w.println();
-        
-        // ===== Step 9: Create invokedType (MethodType of the lambda factory) =====
-        w.println("    // Create invokedType from methodDesc");
-        w.println("    jstring methodDescJStr = (*env)->NewStringUTF(env, methodDesc);");
-        w.println("    jobject invokedType = (*env)->CallStaticObjectMethod(env, id_mtClass, id_fromDescMid, methodDescJStr, classLoader);");
-        w.println("    if (!invokedType) { VM_LOG(\"INVOKEDYNAMIC: Failed to create invokedType\\n\"); (*env)->ExceptionClear(env); return NULL; }");
-        w.println();
-        
-        // ===== Step 10: Call LambdaMetafactory.metafactory =====
-        w.println("    // Call LambdaMetafactory.metafactory (using cache)");
-        w.println("    jstring methodNameJStr = (*env)->NewStringUTF(env, methodName);");
-        w.println();
-        w.println("    VM_LOG(\"INVOKEDYNAMIC: Calling metafactory: name=%s, invokedType=%s\\n\", methodName, methodDesc);");
-        w.println("    jobject callSite = (*env)->CallStaticObjectMethod(env, id_lmfClass, id_metafactoryMid,");
-        w.println("        lookup, methodNameJStr, invokedType, samMethodType, implMethodHandle, instantiatedMethodType);");
-        w.println();
-        w.println("    if (!callSite) {");
-        w.println("        VM_LOG(\"INVOKEDYNAMIC: metafactory returned NULL\\n\");");
-        w.println("        if ((*env)->ExceptionCheck(env)) { (*env)->ExceptionDescribe(env); (*env)->ExceptionClear(env); }");
-        w.println("        return NULL;");
-        w.println("    }");
-        w.println();
-        
-        // ===== Step 11: Get target MethodHandle from CallSite =====
-        w.println("    // Get target MethodHandle from CallSite (using cache)");
-        w.println("    jobject targetHandle = (*env)->CallObjectMethod(env, callSite, id_getTargetMid);");
-        w.println("    if (!targetHandle) { VM_LOG(\"INVOKEDYNAMIC: getTarget returned NULL\\n\"); (*env)->ExceptionClear(env); return NULL; }");
-        w.println();
-        
-        // ===== Step 12: If no captured args, just return the lambda instance =====
-        w.println("    // If no captured arguments, we can invoke with empty args");
-        w.println("    if (capturedCount == 0) {");
-        w.println("        VM_LOG(\"INVOKEDYNAMIC: No captured args, returning lambda instance\\n\");");
-        w.println("        jobject result = (*env)->CallObjectMethod(env, targetHandle, id_invokeWithArgsMid, NULL);");
-        w.println("        if ((*env)->ExceptionCheck(env)) { (*env)->ExceptionDescribe(env); (*env)->ExceptionClear(env); return NULL; }");
+
+        // Check cache: if we already have a linked MethodHandle, just invoke it
+        w.println("    if (meta->cachedIndyResult != NULL) {");
+        w.println("        VM_LOG(\"INVOKEDYNAMIC: Using cached target\\n\");");
+        w.println("        jobjectArray invokeArgs = vm_indy_pop_args(env, frame, methodDesc, capturedCount);");
+        w.println("        jobject result = (*env)->CallObjectMethod(env, meta->cachedIndyResult, id_invokeWithArgsMid, invokeArgs);");
+        w.println("        if ((*env)->ExceptionCheck(env)) return NULL;");
         w.println("        return result;");
         w.println("    }");
         w.println();
-        
-        // ===== Step 13: Collect captured arguments from stack =====
-        w.println("    // Collect captured arguments from stack (using cached classes and methods)");
-        w.println("    jobjectArray invokeArgs = (*env)->NewObjectArray(env, capturedCount, id_objectClass, NULL);");
-        w.println("    if (!invokeArgs) { VM_LOG(\"INVOKEDYNAMIC: Failed to create args array\\n\"); (*env)->ExceptionClear(env); return NULL; }");
-        w.println();
-        w.println("    VM_LOG(\"INVOKEDYNAMIC: Collecting %d args from stack, sp=%d\\n\", capturedCount, frame->sp);");
-        w.println("    const char* argp = methodDesc + 1;");
-        w.println("    for (int i = capturedCount - 1; i >= 0; i--) {");
-        w.println("        jobject boxedArg = NULL;");
-        w.println("        char argType = *argp;");
-        w.println("        VM_LOG(\"INVOKEDYNAMIC:   arg[%d] type=%c\\n\", i, argType);");
-        w.println("        if (argType == 'L' || argType == '[') {");
-        w.println("            boxedArg = frame->stack[--frame->sp].l;");
-        w.println("            if (argType == 'L') { while (*argp && *argp != ';') argp++; if (*argp) argp++; }");
-        w.println("            else { while (*argp == '[') argp++; if (*argp == 'L') { while (*argp && *argp != ';') argp++; } if (*argp) argp++; }");
-        w.println("        } else if (argType == 'I') {");
-        w.println("            jint val = frame->stack[--frame->sp].i;");
-        w.println("            boxedArg = (*env)->CallStaticObjectMethod(env, id_intClass, id_intValueOfMid, val);");
-        w.println("            argp++;");
-        w.println("        } else if (argType == 'J') {");
-        w.println("            jlong val = frame->stack[--frame->sp].j;");
-        w.println("            boxedArg = (*env)->CallStaticObjectMethod(env, id_longClass, id_longValueOfMid, val);");
-        w.println("            argp++;");
-        w.println("        } else if (argType == 'F') {");
-        w.println("            jfloat val = frame->stack[--frame->sp].f;");
-        w.println("            boxedArg = (*env)->CallStaticObjectMethod(env, id_floatClass, id_floatValueOfMid, val);");
-        w.println("            argp++;");
-        w.println("        } else if (argType == 'D') {");
-        w.println("            jdouble val = frame->stack[--frame->sp].d;");
-        w.println("            boxedArg = (*env)->CallStaticObjectMethod(env, id_doubleClass, id_doubleValueOfMid, val);");
-        w.println("            argp++;");
-        w.println("        } else if (argType == 'Z') {");
-        w.println("            jint val = frame->stack[--frame->sp].i;");
-        w.println("            boxedArg = (*env)->CallStaticObjectMethod(env, id_boolClass, id_boolValueOfMid, val);");
-        w.println("            argp++;");
-        w.println("        } else if (argType == 'B' || argType == 'S' || argType == 'C') {");
-        w.println("            jint val = frame->stack[--frame->sp].i;");
-        w.println("            boxedArg = (*env)->CallStaticObjectMethod(env, id_intClass, id_intValueOfMid, val);");
-        w.println("            argp++;");
-        w.println("        } else {");
-        w.println("            VM_LOG(\"INVOKEDYNAMIC: Unknown arg type: %c\\n\", argType);");
-        w.println("            argp++;");
-        w.println("        }");
-        w.println("        VM_LOG(\"INVOKEDYNAMIC:   arg[%d] boxed=%p\\n\", i, boxedArg);");
-        w.println("        (*env)->SetObjectArrayElement(env, invokeArgs, i, boxedArg);");
+
+        // Validate BSM
+        w.println("    if (meta->bsmIdx < 0 || meta->bsmIdx >= vm_bootstrap_count) {");
+        w.println("        VM_LOG(\"INVOKEDYNAMIC: Invalid bsmIdx=%d\\n\", meta->bsmIdx); return NULL;");
         w.println("    }");
+        w.println("    VMBootstrapMethod* bsm = &vm_bootstrap_methods[meta->bsmIdx];");
+        w.println("    const char* bsmOwner = vm_get_string(bsm->ownerIdx);");
+        w.println("    const char* bsmName = vm_get_string(bsm->nameIdx);");
+        w.println("    VM_LOG(\"INVOKEDYNAMIC: BSM=%s.%s\\n\", bsmOwner, bsmName);");
         w.println();
-        
-        // ===== Step 14: Invoke with captured arguments =====
-        w.println("    // Invoke the lambda factory with captured arguments (using cache)");
-        w.println("    jobject result = (*env)->CallObjectMethod(env, targetHandle, id_invokeWithArgsMid, invokeArgs);");
+
+        // Dispatch based on BSM class
+        w.println("    jobject callSite = NULL;");
         w.println();
-        w.println("    if ((*env)->ExceptionCheck(env)) {");
-        w.println("        VM_LOG(\"INVOKEDYNAMIC: Exception during invoke\\n\");");
-        w.println("        (*env)->ExceptionDescribe(env);");
-        w.println("        (*env)->ExceptionClear(env);");
+
+        // --- StringConcatFactory ---
+        emitStringConcatPath(w);
+
+        // --- LambdaMetafactory ---
+        emitLambdaMetafactoryPath(w);
+
+        // --- Fallback: unknown BSM ---
+        w.println("    else {");
+        w.println("        VM_LOG(\"INVOKEDYNAMIC: Unsupported BSM: %s.%s\\n\", bsmOwner, bsmName);");
+        w.println("        // Pop captured args to keep stack balanced");
+        w.println("        for (int i = 0; i < capturedCount; i++) frame->sp--;");
         w.println("        return NULL;");
         w.println("    }");
+        w.println();
+
+        // Get target MethodHandle from CallSite, cache it, invoke
+        w.println("    if (!callSite) {");
+        w.println("        VM_LOG(\"INVOKEDYNAMIC: CallSite is NULL\\n\");");
+        w.println("        if ((*env)->ExceptionCheck(env)) { (*env)->ExceptionDescribe(env); (*env)->ExceptionClear(env); }");
+        w.println("        for (int i = 0; i < capturedCount; i++) frame->sp--;");
+        w.println("        return NULL;");
+        w.println("    }");
+        w.println();
+        w.println("    jobject targetHandle = (*env)->CallObjectMethod(env, callSite, id_getTargetMid);");
+        w.println("    if (!targetHandle) {");
+        w.println("        VM_LOG(\"INVOKEDYNAMIC: getTarget returned NULL\\n\");");
+        w.println("        (*env)->ExceptionClear(env);");
+        w.println("        for (int i = 0; i < capturedCount; i++) frame->sp--;");
+        w.println("        return NULL;");
+        w.println("    }");
+        w.println();
+        // Cache the MethodHandle as global ref (thread-safe: if another thread raced, just discard ours)
+        w.println("    jobject globalTarget = (*env)->NewGlobalRef(env, targetHandle);");
+        w.println("    if (__sync_bool_compare_and_swap((void**)&meta->cachedIndyResult, NULL, globalTarget) == 0) {");
+        w.println("        (*env)->DeleteGlobalRef(env, globalTarget);  // another thread won the race");
+        w.println("    }");
+        w.println();
+        // Pop captured args and invoke
+        w.println("    jobjectArray invokeArgs = vm_indy_pop_args(env, frame, methodDesc, capturedCount);");
+        w.println("    jobject result = (*env)->CallObjectMethod(env, targetHandle, id_invokeWithArgsMid, invokeArgs);");
+        w.println("    if ((*env)->ExceptionCheck(env)) return NULL;");
         w.println("    VM_LOG(\"INVOKEDYNAMIC: Success, result=%p\\n\", result);");
         w.println("    return result;");
+        w.println("}");
+        w.println();
+    }
+
+    private void emitStringConcatPath(PrintWriter w) {
+        w.println("    if (id_scfClass && strcmp(bsmOwner, \"java/lang/invoke/StringConcatFactory\") == 0) {");
+        w.println("        // StringConcatFactory path");
+        w.println("        VM_LOG(\"INVOKEDYNAMIC: StringConcatFactory path, method=%s\\n\", bsmName);");
+        w.println();
+        // Create lookup
+        w.println("        jclass callerClass = frame->callerClass;");
+        w.println("        if (!callerClass) callerClass = (*env)->FindClass(env, \"java/lang/Object\");");
+        w.println("        jobject publicLookup = (*env)->CallStaticObjectMethod(env, id_mhClass, id_lookupMid);");
+        w.println("        jobject lookup = (*env)->CallStaticObjectMethod(env, id_mhClass, id_privateLookupInMid, callerClass, publicLookup);");
+        w.println("        if (!lookup) { if ((*env)->ExceptionCheck(env)) (*env)->ExceptionClear(env); lookup = publicLookup; }");
+        w.println();
+        // Create invokedType (MethodType)
+        w.println("        jobject classLoader = (*env)->CallObjectMethod(env, callerClass, id_getClassLoaderMid);");
+        w.println("        jstring descStr = (*env)->NewStringUTF(env, methodDesc);");
+        w.println("        jobject invokedType = (*env)->CallStaticObjectMethod(env, id_mtClass, id_fromDescMid, descStr, classLoader);");
+        w.println("        if (!invokedType) { (*env)->ExceptionClear(env); return NULL; }");
+        w.println("        jstring nameStr = (*env)->NewStringUTF(env, methodName);");
+        w.println();
+        w.println("        if (strcmp(bsmName, \"makeConcatWithConstants\") == 0 && id_makeConcatConstantsMid) {");
+        w.println("            // makeConcatWithConstants(Lookup, String, MethodType, String recipe, Object... constants)");
+        w.println("            if (bsm->argCount < 1) { VM_LOG(\"INVOKEDYNAMIC: SCF needs recipe arg\\n\"); return NULL; }");
+        w.println("            const char* recipe = vm_get_string(bsm->args[0].strIdx);");
+        w.println("            jstring recipeStr = (*env)->NewStringUTF(env, recipe);");
+        w.println("            // Remaining BSM args are constants");
+        w.println("            int constCount = bsm->argCount - 1;");
+        w.println("            jobjectArray constants = (*env)->NewObjectArray(env, constCount, id_objectClass, NULL);");
+        w.println("            for (int i = 0; i < constCount; i++) {");
+        w.println("                BsmArg* a = &bsm->args[i + 1];");
+        w.println("                jobject val = NULL;");
+        w.println("                switch (a->type) {");
+        w.println("                    case BSM_ARG_STRING: val = (*env)->NewStringUTF(env, vm_get_string(a->strIdx)); break;");
+        w.println("                    case BSM_ARG_INTEGER: { VMValue v; v.i = a->intVal; val = vm_indy_box(env, 'I', v); break; }");
+        w.println("                    case BSM_ARG_LONG: { VMValue v; v.j = a->longVal; val = vm_indy_box(env, 'J', v); break; }");
+        w.println("                    case BSM_ARG_FLOAT: { VMValue v; v.f = a->floatVal; val = vm_indy_box(env, 'F', v); break; }");
+        w.println("                    case BSM_ARG_DOUBLE: { VMValue v; v.d = a->doubleVal; val = vm_indy_box(env, 'D', v); break; }");
+        w.println("                    default: break;");
+        w.println("                }");
+        w.println("                if (val) (*env)->SetObjectArrayElement(env, constants, i, val);");
+        w.println("            }");
+        w.println("            callSite = (*env)->CallStaticObjectMethod(env, id_scfClass, id_makeConcatConstantsMid,");
+        w.println("                lookup, nameStr, invokedType, recipeStr, constants);");
+        w.println("        } else if (strcmp(bsmName, \"makeConcat\") == 0 && id_makeConcatMid) {");
+        w.println("            // makeConcat(Lookup, String, MethodType)");
+        w.println("            callSite = (*env)->CallStaticObjectMethod(env, id_scfClass, id_makeConcatMid,");
+        w.println("                lookup, nameStr, invokedType);");
+        w.println("        } else {");
+        w.println("            VM_LOG(\"INVOKEDYNAMIC: Unknown SCF method: %s\\n\", bsmName);");
+        w.println("            return NULL;");
+        w.println("        }");
+        w.println("    }");
+    }
+
+    private void emitLambdaMetafactoryPath(PrintWriter w) {
+        w.println("    else if (strcmp(bsmOwner, \"java/lang/invoke/LambdaMetafactory\") == 0) {");
+        w.println("        // LambdaMetafactory path");
+        w.println("        if (bsm->argCount < 3) {");
+        w.println("            VM_LOG(\"INVOKEDYNAMIC: LMF needs >= 3 BSM args, got %d\\n\", bsm->argCount);");
+        w.println("            return NULL;");
+        w.println("        }");
+        w.println();
+        // Parse BSM args
+        w.println("        const char* samMethodTypeStr = vm_get_string(bsm->args[0].strIdx);");
+        w.println("        const char* implMethodStr = vm_get_string(bsm->args[1].strIdx);");
+        w.println("        const char* instantiatedMethodTypeStr = vm_get_string(bsm->args[2].strIdx);");
+        w.println("        int handleTag = bsm->args[1].handleTag;");
+        w.println("        VM_LOG(\"INVOKEDYNAMIC: samType=%s, impl=%s, instType=%s, tag=%d\\n\",");
+        w.println("            samMethodTypeStr, implMethodStr, instantiatedMethodTypeStr, handleTag);");
+        w.println();
+        // Parse implMethod: "owner.name(desc)"
+        w.println("        char implOwner[256] = {0}, implName[256] = {0}, implDesc[512] = {0};");
+        w.println("        const char* implParen = strchr(implMethodStr, '(');");
+        w.println("        if (!implParen) { VM_LOG(\"INVOKEDYNAMIC: No paren in %s\\n\", implMethodStr); return NULL; }");
+        w.println("        strncpy(implDesc, implParen, sizeof(implDesc) - 1);");
+        w.println("        const char* lastDot = NULL;");
+        w.println("        for (const char* p = implMethodStr; p < implParen; p++) { if (*p == '.') lastDot = p; }");
+        w.println("        if (!lastDot) { VM_LOG(\"INVOKEDYNAMIC: No dot in %s\\n\", implMethodStr); return NULL; }");
+        w.println("        strncpy(implOwner, implMethodStr, lastDot - implMethodStr);");
+        w.println("        strncpy(implName, lastDot + 1, implParen - lastDot - 1);");
+        w.println();
+        // Create Lookup
+        w.println("        jclass ownerClass = (*env)->FindClass(env, implOwner);");
+        w.println("        if (!ownerClass) { (*env)->ExceptionClear(env); VM_LOG(\"INVOKEDYNAMIC: Class not found: %s\\n\", implOwner); return NULL; }");
+        w.println("        jobject publicLookup = (*env)->CallStaticObjectMethod(env, id_mhClass, id_lookupMid);");
+        w.println("        jobject lookup = (*env)->CallStaticObjectMethod(env, id_mhClass, id_privateLookupInMid, ownerClass, publicLookup);");
+        w.println("        if (!lookup) { if ((*env)->ExceptionCheck(env)) (*env)->ExceptionClear(env); lookup = publicLookup; }");
+        w.println();
+        // Create MethodType objects
+        w.println("        jobject classLoader = (*env)->CallObjectMethod(env, ownerClass, id_getClassLoaderMid);");
+        w.println("        jstring samDescStr = (*env)->NewStringUTF(env, samMethodTypeStr);");
+        w.println("        jobject samMethodType = (*env)->CallStaticObjectMethod(env, id_mtClass, id_fromDescMid, samDescStr, classLoader);");
+        w.println("        if (!samMethodType) { (*env)->ExceptionClear(env); return NULL; }");
+        w.println("        jstring implDescStr = (*env)->NewStringUTF(env, implDesc);");
+        w.println("        jobject implMethodType = (*env)->CallStaticObjectMethod(env, id_mtClass, id_fromDescMid, implDescStr, classLoader);");
+        w.println("        if (!implMethodType) { (*env)->ExceptionClear(env); return NULL; }");
+        w.println("        jstring instDescStr = (*env)->NewStringUTF(env, instantiatedMethodTypeStr);");
+        w.println("        jobject instantiatedMethodType = (*env)->CallStaticObjectMethod(env, id_mtClass, id_fromDescMid, instDescStr, classLoader);");
+        w.println("        if (!instantiatedMethodType) { (*env)->ExceptionClear(env); return NULL; }");
+        w.println();
+        // Find impl MethodHandle based on handleTag
+        w.println("        jobject implMethodHandle = NULL;");
+        w.println("        jstring implNameStr = (*env)->NewStringUTF(env, implName);");
+        w.println("        if (handleTag == 6) { // REF_invokeStatic");
+        w.println("            implMethodHandle = (*env)->CallObjectMethod(env, lookup, id_findStaticMid, ownerClass, implNameStr, implMethodType);");
+        w.println("        } else if (handleTag == 5 || handleTag == 9) { // REF_invokeVirtual || REF_invokeInterface");
+        w.println("            implMethodHandle = (*env)->CallObjectMethod(env, lookup, id_findVirtualMid, ownerClass, implNameStr, implMethodType);");
+        w.println("        } else if (handleTag == 7) { // REF_invokeSpecial");
+        w.println("            implMethodHandle = (*env)->CallObjectMethod(env, lookup, id_findSpecialMid, ownerClass, implNameStr, implMethodType, ownerClass);");
+        w.println("        } else if (handleTag == 8) { // REF_newInvokeSpecial (constructor reference)");
+        w.println("            implMethodHandle = (*env)->CallObjectMethod(env, lookup, id_findConstructorMid, ownerClass, implMethodType);");
+        w.println("        } else {");
+        w.println("            VM_LOG(\"INVOKEDYNAMIC: Unsupported handleTag=%d\\n\", handleTag);");
+        w.println("            return NULL;");
+        w.println("        }");
+        w.println("        if (!implMethodHandle) {");
+        w.println("            VM_LOG(\"INVOKEDYNAMIC: MethodHandle not found for %s.%s tag=%d\\n\", implOwner, implName, handleTag);");
+        w.println("            if ((*env)->ExceptionCheck(env)) { (*env)->ExceptionDescribe(env); (*env)->ExceptionClear(env); }");
+        w.println("            return NULL;");
+        w.println("        }");
+        w.println();
+        // Create invokedType
+        w.println("        jstring methodDescStr = (*env)->NewStringUTF(env, methodDesc);");
+        w.println("        jobject invokedType = (*env)->CallStaticObjectMethod(env, id_mtClass, id_fromDescMid, methodDescStr, classLoader);");
+        w.println("        if (!invokedType) { (*env)->ExceptionClear(env); return NULL; }");
+        w.println("        jstring methodNameStr = (*env)->NewStringUTF(env, methodName);");
+        w.println();
+        // Call metafactory or altMetafactory
+        w.println("        if (strcmp(bsmName, \"metafactory\") == 0) {");
+        w.println("            callSite = (*env)->CallStaticObjectMethod(env, id_lmfClass, id_metafactoryMid,");
+        w.println("                lookup, methodNameStr, invokedType, samMethodType, implMethodHandle, instantiatedMethodType);");
+        w.println("        } else if (strcmp(bsmName, \"altMetafactory\") == 0 && id_altMetafactoryMid) {");
+        w.println("            // altMetafactory(Lookup, String, MethodType, Object...)");
+        w.println("            // Pack all BSM args: samMethodType, implMethodHandle, instantiatedMethodType, flags, ...extra");
+        w.println("            jobjectArray altArgs = (*env)->NewObjectArray(env, bsm->argCount, id_objectClass, NULL);");
+        w.println("            (*env)->SetObjectArrayElement(env, altArgs, 0, samMethodType);");
+        w.println("            (*env)->SetObjectArrayElement(env, altArgs, 1, implMethodHandle);");
+        w.println("            (*env)->SetObjectArrayElement(env, altArgs, 2, instantiatedMethodType);");
+        w.println("            // Remaining args (flags, marker interfaces, bridges)");
+        w.println("            for (int i = 3; i < bsm->argCount; i++) {");
+        w.println("                BsmArg* a = &bsm->args[i];");
+        w.println("                jobject val = NULL;");
+        w.println("                switch (a->type) {");
+        w.println("                    case BSM_ARG_INTEGER: { VMValue v; v.i = a->intVal; val = vm_indy_box(env, 'I', v); break; }");
+        w.println("                    case BSM_ARG_STRING: val = (*env)->NewStringUTF(env, vm_get_string(a->strIdx)); break;");
+        w.println("                    case BSM_ARG_METHOD_TYPE: {");
+        w.println("                        jstring mtStr = (*env)->NewStringUTF(env, vm_get_string(a->strIdx));");
+        w.println("                        val = (*env)->CallStaticObjectMethod(env, id_mtClass, id_fromDescMid, mtStr, classLoader);");
+        w.println("                        break;");
+        w.println("                    }");
+        w.println("                    default: break;");
+        w.println("                }");
+        w.println("                if (val) (*env)->SetObjectArrayElement(env, altArgs, i, val);");
+        w.println("            }");
+        w.println("            callSite = (*env)->CallStaticObjectMethod(env, id_lmfClass, id_altMetafactoryMid,");
+        w.println("                lookup, methodNameStr, invokedType, altArgs);");
+        w.println("        } else {");
+        w.println("            VM_LOG(\"INVOKEDYNAMIC: Unknown LMF method: %s\\n\", bsmName);");
+        w.println("            return NULL;");
+        w.println("        }");
+        w.println("    }");
     }
 }
