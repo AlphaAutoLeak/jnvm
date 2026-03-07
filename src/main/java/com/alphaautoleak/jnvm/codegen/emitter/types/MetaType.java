@@ -62,6 +62,10 @@ public class MetaType {
         w.println("    int nameLen;");
         w.println("    int descIdx;");
         w.println("    int descLen;");
+        w.println("    // META_METHOD: pre-parsed invoke meta (optimization)");
+        w.println("    int argCount;           // argument count (pre-computed)");
+        w.println("    char returnTypeChar;    // return type char (pre-computed)");
+        w.println("    int argTypesIdx;        // pre-parsed arg types string index (e.g., \"IJB\" for int, long, boolean)");
         w.println("    // META_INVOKE_DYNAMIC");
         w.println("    int bsmIdx;");
         w.println("    // META_IINC");

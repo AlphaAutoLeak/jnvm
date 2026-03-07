@@ -38,6 +38,16 @@ public class VmDataGenerator {
     private List<BootstrapEntry> globalBootstrapMethods = new ArrayList<>();
     private Map<String, Integer> bootstrapIndexMap = new HashMap<>();
     
+    /** 方法调用元数据预计算结果缓存: "methodId_metaIdx" -> InvokeMetaInfo */
+    private Map<String, InvokeMetaInfo> invokeMetaCache = new HashMap<>();
+    
+    /** 方法描述符解析结果 */
+    private static class InvokeMetaInfo {
+        int argCount;
+        char returnTypeChar;
+        String argTypes;  // 预解析的参数类型字符串，如 "IJB"
+    }
+    
     public VmDataGenerator(File dir, List<EncryptedMethodData> methods, byte[] stringKey, boolean encryptStrings) {
         this.dir = dir;
         this.methods = methods;
@@ -145,6 +155,27 @@ public class VmDataGenerator {
                     for (ExceptionEntry e : excTable) {
                         if (e.getCatchType() != null) {
                             allStrings.add(e.getCatchType());
+                        }
+                    }
+                }
+            }
+            
+            // 第一遍：预计算所有 INVOKE 元数据
+            for (EncryptedMethodData method : methods) {
+                List<String> localPool = method.getStringPool();
+                List<MetaEntry> metaList = method.getMetadata();
+                if (localPool == null || metaList == null) continue;
+                for (int i = 0; i < metaList.size(); i++) {
+                    MetaEntry m = metaList.get(i);
+                    if (m.type == MetaType.META_METHOD || m.type == MetaType.META_INVOKE_DYNAMIC) {
+                        if (m.descIdx >= 0 && m.descIdx < localPool.size()) {
+                            String desc = localPool.get(m.descIdx);
+                            InvokeMetaInfo info = parseMethodDesc(desc);
+                            invokeMetaCache.put(method.getMethodId() + "_" + i, info);
+                            // 添加 argTypes 字符串到全局池
+                            if (info.argTypes != null && !info.argTypes.isEmpty()) {
+                                allStrings.add(info.argTypes);
+                            }
                         }
                     }
                 }
@@ -558,6 +589,19 @@ public class VmDataGenerator {
                             mapStringIndex(localPool, m.nameIdx), m.nameLen);
                         w.printf(".descIdx=%d, .descLen=%d",
                             mapStringIndex(localPool, m.descIdx), m.descLen);
+                        // 添加预计算的调用元数据
+                        if (m.type == MetaType.META_METHOD) {
+                            InvokeMetaInfo info = invokeMetaCache.get(id + "_" + i);
+                            if (info != null) {
+                                w.printf(", .argCount=%d, .returnTypeChar='%c'",
+                                    info.argCount, info.returnTypeChar);
+                                if (info.argTypes != null && !info.argTypes.isEmpty()) {
+                                    w.printf(", .argTypesIdx=%d", getOrAddStringIndex(info.argTypes));
+                                } else {
+                                    w.printf(", .argTypesIdx=-1");
+                                }
+                            }
+                        }
                         break;
                     case META_INVOKE_DYNAMIC:
                         // 映射局部 bsmIdx 到全局索引
@@ -570,6 +614,17 @@ public class VmDataGenerator {
                             mapStringIndex(localPool, m.nameIdx), m.nameLen);
                         w.printf(".descIdx=%d, .descLen=%d",
                             mapStringIndex(localPool, m.descIdx), m.descLen);
+                        // 添加预计算的调用元数据
+                        InvokeMetaInfo info = invokeMetaCache.get(id + "_" + i);
+                        if (info != null) {
+                            w.printf(", .argCount=%d, .returnTypeChar='%c'",
+                                info.argCount, info.returnTypeChar);
+                            if (info.argTypes != null && !info.argTypes.isEmpty()) {
+                                w.printf(", .argTypesIdx=%d", getOrAddStringIndex(info.argTypes));
+                            } else {
+                                w.printf(", .argTypesIdx=-1");
+                            }
+                        }
                         break;
                     case META_JUMP:
                         w.printf(".jumpOffset=%d", m.jumpOffset);
@@ -659,5 +714,69 @@ public class VmDataGenerator {
     
     private String metaTypeToString(MetaType type) {
         return type.name();
+    }
+    
+    /**
+     * 解析方法描述符，预计算调用元数据
+     * @param desc 方法描述符，如 "(ILjava/lang/String;J)I"
+     * @return InvokeMetaInfo 包含 argCount, returnTypeChar, argTypes
+     */
+    private InvokeMetaInfo parseMethodDesc(String desc) {
+        InvokeMetaInfo info = new InvokeMetaInfo();
+        StringBuilder argTypes = new StringBuilder();
+        
+        int i = 1; // 跳过 '('
+        while (i < desc.length() && desc.charAt(i) != ')') {
+            char c = desc.charAt(i);
+            if (c == 'L') {
+                // 对象类型，添加 'L' 作为标记
+                argTypes.append('L');
+                while (i < desc.length() && desc.charAt(i) != ';') i++;
+                i++; // 跳过 ';'
+            } else if (c == '[') {
+                // 数组类型，视为对象类型
+                argTypes.append('L');
+                while (i < desc.length() && desc.charAt(i) == '[') i++;
+                if (desc.charAt(i) == 'L') {
+                    while (i < desc.length() && desc.charAt(i) != ';') i++;
+                    i++; // 跳过 ';'
+                } else {
+                    i++; // 跳过基本类型字符
+                }
+            } else {
+                // 基本类型
+                argTypes.append(c);
+                i++;
+            }
+            info.argCount++;
+        }
+        
+        // 跳过 ')' 并获取返回类型
+        if (i < desc.length() && desc.charAt(i) == ')') {
+            i++;
+            if (i < desc.length()) {
+                info.returnTypeChar = desc.charAt(i);
+            } else {
+                info.returnTypeChar = 'V';
+            }
+        }
+        
+        info.argTypes = argTypes.toString();
+        return info;
+    }
+    
+    /**
+     * 预计算所有方法的 INVOKE 元数据
+     */
+    private void precomputeInvokeMeta(List<String> localPool, int methodId, List<MetaEntry> metaList) {
+        if (metaList == null) return;
+        for (int i = 0; i < metaList.size(); i++) {
+            MetaEntry m = metaList.get(i);
+            if (m.type == MetaType.META_METHOD || m.type == MetaType.META_INVOKE_DYNAMIC) {
+                String desc = localPool.get(m.descIdx);
+                InvokeMetaInfo info = parseMethodDesc(desc);
+                invokeMetaCache.put(methodId + "_" + i, info);
+            }
+        }
     }
 }
