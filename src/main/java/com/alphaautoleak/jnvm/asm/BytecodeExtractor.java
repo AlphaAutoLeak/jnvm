@@ -3,6 +3,7 @@ package com.alphaautoleak.jnvm.asm;
 import com.alphaautoleak.jnvm.crypto.OpcodeObfuscator;
 import org.objectweb.asm.*;
 import org.objectweb.asm.tree.*;
+import org.objectweb.asm.tree.analysis.*;
 
 import java.util.*;
 
@@ -42,6 +43,9 @@ public class BytecodeExtractor {
 
     /** Bootstrap method table */
     private final List<BootstrapEntry> bootstrapMethods = new ArrayList<>();
+
+    /** Stack type frames from ASM analysis (for 64-bit stack op transformation) */
+    private Frame<BasicValue>[] frames;
 
     /** Label to PC mapping */
     private final Map<LabelNode, Integer> labelToPc = new HashMap<>();
@@ -100,13 +104,22 @@ public class BytecodeExtractor {
     /**
      * Performs extraction
      */
+    @SuppressWarnings("unchecked")
     public void extract() {
+        // Run stack type analysis for 64-bit stack operation transformation
+        try {
+            Analyzer<BasicValue> analyzer = new Analyzer<>(new BasicInterpreter());
+            frames = analyzer.analyze(classNode.name, methodNode);
+        } catch (AnalyzerException e) {
+            frames = null; // Fall back to no transformation
+        }
+
         // First pass: generate bytecode and metadata
         firstPass();
-        
+
         // Backfill jump targets
         backpatchJumps();
-        
+
         // Extract exception table
         extractExceptionTable();
     }
@@ -117,12 +130,12 @@ public class BytecodeExtractor {
      */
     private void firstPass() {
         InsnList insns = methodNode.instructions;
-        
+
         // Traverse all instructions, generate bytecode and metadata
         // Also collect Label PCs
         for (int i = 0; i < insns.size(); i++) {
             AbstractInsnNode node = insns.get(i);
-            
+
             // Handle Label - map to current PC
             if (node instanceof LabelNode) {
                 LabelNode labelNode = (LabelNode) node;
@@ -131,21 +144,24 @@ public class BytecodeExtractor {
                 labelToPc.put(labelNode, pc);
                 continue;
             }
-            
+
             // Skip LineNumber and Frame
             if (node instanceof LineNumberNode || node instanceof FrameNode) {
                 continue;
             }
-            
-            // Emit instruction
-            emitInstruction(node);
+
+            // Emit instruction (with instruction index for stack analysis)
+            emitInstruction(node, i);
         }
     }
 
-    private void emitInstruction(AbstractInsnNode node) {
+    private void emitInstruction(AbstractInsnNode node, int insnIndex) {
         int opcode = node.getOpcode();
         int pc = bytecodes.size();
-        
+
+        // Transform stack operations for 64-bit VM (1 slot per long/double)
+        opcode = transformStackOpFor64Bit(opcode, insnIndex);
+
         // Write obfuscated opcode
         bytecodes.add(opcodeObfuscator.encode(opcode));
         
@@ -540,6 +556,79 @@ public class BytecodeExtractor {
             }
         }
         return true;
+    }
+
+    // ===== 64-bit stack operation transformation =====
+
+    /**
+     * Transforms stack manipulation opcodes for the 64-bit VM where long/double
+     * occupy 1 slot instead of 2. Without this, DUP2/POP2/DUP_X2 etc. corrupt
+     * the stack when operating on category-2 values (long/double).
+     */
+    private int transformStackOpFor64Bit(int opcode, int insnIndex) {
+        if (frames == null || insnIndex < 0 || insnIndex >= frames.length || frames[insnIndex] == null) {
+            return opcode;
+        }
+        Frame<BasicValue> frame = frames[insnIndex];
+        int stackSize = frame.getStackSize();
+
+        switch (opcode) {
+            case Opcodes.DUP2: // 0x5c
+                // Form 1: 2 cat1 → dup both (keep DUP2)
+                // Form 2: 1 cat2 → dup it (use DUP)
+                if (stackSize >= 1 && frame.getStack(stackSize - 1).getSize() == 2) {
+                    return Opcodes.DUP;
+                }
+                break;
+
+            case Opcodes.POP2: // 0x58
+                // Form 1: 2 cat1 → pop both (keep POP2)
+                // Form 2: 1 cat2 → pop it (use POP)
+                if (stackSize >= 1 && frame.getStack(stackSize - 1).getSize() == 2) {
+                    return Opcodes.POP;
+                }
+                break;
+
+            case Opcodes.DUP_X2: // 0x5b
+                // Form 1: cat1, cat1, cat1 → insert top below 3 (keep DUP_X2)
+                // Form 2: cat1 on top, cat2 below → insert top below 2 (use DUP_X1)
+                if (stackSize >= 2 && frame.getStack(stackSize - 2).getSize() == 2) {
+                    return Opcodes.DUP_X1;
+                }
+                break;
+
+            case Opcodes.DUP2_X1: // 0x5d
+                // Form 1: cat1, cat1 on top, cat1 below → (keep DUP2_X1)
+                // Form 2: cat2 on top, cat1 below → insert below 2 (use DUP_X1)
+                if (stackSize >= 1 && frame.getStack(stackSize - 1).getSize() == 2) {
+                    return Opcodes.DUP_X1;
+                }
+                break;
+
+            case Opcodes.DUP2_X2: // 0x5e
+                if (stackSize >= 1) {
+                    boolean topIsCat2 = frame.getStack(stackSize - 1).getSize() == 2;
+                    if (topIsCat2) {
+                        // Check what's below
+                        boolean belowIsCat2 = stackSize >= 2 && frame.getStack(stackSize - 2).getSize() == 2;
+                        if (belowIsCat2) {
+                            // Form 4: cat2 on top, cat2 below → DUP_X1
+                            return Opcodes.DUP_X1;
+                        } else {
+                            // Form 2: cat2 on top, 2×cat1 below → DUP_X2
+                            return Opcodes.DUP_X2;
+                        }
+                    } else if (stackSize >= 3) {
+                        boolean belowBelowIsCat2 = frame.getStack(stackSize - 3).getSize() == 2;
+                        if (belowBelowIsCat2) {
+                            // Form 3: 2×cat1 on top, cat2 below → DUP2_X1
+                            return Opcodes.DUP2_X1;
+                        }
+                    }
+                }
+                break;
+        }
+        return opcode;
     }
 
     // ===== String pool management =====
