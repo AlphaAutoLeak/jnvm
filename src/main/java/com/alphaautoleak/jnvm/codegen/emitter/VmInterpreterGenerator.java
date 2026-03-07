@@ -337,7 +337,8 @@ public class VmInterpreterGenerator {
         // 设置参数
         w.println("    frame.locals[0].l = instance;");
         w.println("    const char* methodDesc = (m->descIdx >= 0) ? vm_get_string(m->descIdx) : NULL;");
-        w.println("    vm_unbox_args(env, &frame, args, methodDesc, instance ? 1 : 0);");
+        w.println("    const char* argTypes = (m->argTypesIdx >= 0) ? vm_get_string(m->argTypesIdx) : NULL;");
+        w.println("    vm_unbox_args_fast(env, &frame, args, argTypes, m->argCount, instance ? 1 : 0);");
         w.println();
         
         // 指令是否需要元数据的查找表（0=不需要，1=需要）

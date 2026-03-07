@@ -39,6 +39,9 @@ public class VMMethodType {
         w.println("    int isStatic;            // 是否静态方法");
         w.println("    VMExceptionEntry* exceptionTable;  // 异常表");
         w.println("    int exceptionTableLength;         // 异常表长度");
+        w.println("    // 预解析的方法参数信息（性能优化）");
+        w.println("    int argCount;            // 参数个数");
+        w.println("    int argTypesIdx;         // 参数类型字符串索引（如 \"IJDL\"）");
         w.println("} VMMethod;");
         w.println();
     }

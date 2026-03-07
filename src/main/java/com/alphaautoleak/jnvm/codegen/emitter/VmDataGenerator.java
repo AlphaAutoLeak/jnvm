@@ -261,7 +261,12 @@ public class VmDataGenerator {
                 } else {
                     w.printf(".exceptionTable=NULL, .exceptionTableLength=0, ");
                 }
-                w.printf(".isStatic=%d },\n", method.isStatic() ? 1 : 0);
+                // 添加预解析的参数信息
+                String argTypes = parseMethodArgTypes(desc);
+                int argCount = argTypes.length();
+                int argTypesIdx = argCount > 0 ? getOrAddStringIndex(argTypes) : -1;
+                w.printf(".isStatic=%d, .argCount=%d, .argTypesIdx=%d },\n",
+                    method.isStatic() ? 1 : 0, argCount, argTypesIdx);
             }
             w.println("};");
         }
@@ -763,6 +768,36 @@ public class VmDataGenerator {
         
         info.argTypes = argTypes.toString();
         return info;
+    }
+    
+    /**
+     * 解析方法描述符，只返回参数类型字符串
+     */
+    private String parseMethodArgTypes(String desc) {
+        if (desc == null || desc.isEmpty()) return "";
+        StringBuilder argTypes = new StringBuilder();
+        int i = 1; // 跳过 '('
+        while (i < desc.length() && desc.charAt(i) != ')') {
+            char c = desc.charAt(i);
+            if (c == 'L') {
+                argTypes.append('L');
+                while (i < desc.length() && desc.charAt(i) != ';') i++;
+                i++;
+            } else if (c == '[') {
+                argTypes.append('L');
+                while (i < desc.length() && desc.charAt(i) == '[') i++;
+                if (i < desc.length() && desc.charAt(i) == 'L') {
+                    while (i < desc.length() && desc.charAt(i) != ';') i++;
+                    i++;
+                } else {
+                    i++;
+                }
+            } else {
+                argTypes.append(c);
+                i++;
+            }
+        }
+        return argTypes.toString();
     }
     
     /**
