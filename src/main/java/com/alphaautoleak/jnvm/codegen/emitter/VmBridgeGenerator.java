@@ -143,14 +143,14 @@ public class VmBridgeGenerator {
         w.println("    // Initialize frame memory pool");
         w.println("    frame_pool_init();");
         w.println();
-        w.println("    // Initialize VM method lookup table (for direct VM-to-VM calls)");
-        w.println("    vm_init_method_lookup();");
-        w.println();
         if (encryptStrings) {
             w.println("    // Initialize string pool (decrypt all strings)");
             w.println("    vm_init_strings();");
             w.println();
         }
+        w.println("    // Initialize VM method lookup table (for direct VM-to-VM calls)");
+        w.println("    vm_init_method_lookup();");
+        w.println();
         w.println("    if (register_native_methods(env) != JNI_OK) {");
         w.println("        return JNI_ERR;");
         w.println("    }");

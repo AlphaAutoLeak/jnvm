@@ -2,6 +2,5 @@ jar: samples/demo.jar
 out: samples/demo-obf.jar
 protect:
   - "**"
-encrypt-bytecode: false
 encrypt-strings: false
 debug: false
