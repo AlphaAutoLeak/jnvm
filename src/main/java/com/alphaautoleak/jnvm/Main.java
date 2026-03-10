@@ -53,7 +53,6 @@ public class Main {
         System.out.println("  Output JAR:   " + config.getOutputJar());
         System.out.println("  Targets:      " + config.getTargets());
         System.out.println("  Protect rules:" + config.getProtectRules());
-        System.out.println("  Anti-debug:   " + config.isAntiDebug());
         System.out.println("  Debug mode:   " + config.isDebug());
         System.out.println();
     }

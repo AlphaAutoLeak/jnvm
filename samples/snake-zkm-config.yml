@@ -1,5 +1,5 @@
-jar: samples/SnakeGame-zkm.jar
-out: samples/SnakeGame-zkm-obf.jar
+jar: samples/zkm/SnakeGame-zkm.jar
+out: samples/zkm/SnakeGame-zkm-obf.jar
 protect:
   - "**"
 encrypt-strings: false

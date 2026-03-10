@@ -14,9 +14,6 @@ protect:
 targets:
   - x86_64-windows-gnu
 
-# Enable anti-debug protections
-anti-debug: false
-
 # Enable debug logging
 debug: false
 

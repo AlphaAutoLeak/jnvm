@@ -1,5 +1,5 @@
-jar: samples/SnakeGame.jar
-out: samples/SnakeGame-obf.jar
+jar: samples/snake/SnakeGame.jar
+out: samples/snake/SnakeGame-obf.jar
 protect:
   - "**"
 encrypt-strings: false

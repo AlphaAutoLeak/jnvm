@@ -98,11 +98,6 @@ public class ProtectConfig {
                 }
             }
 
-            // anti-debug
-            if (config.containsKey("anti-debug")) {
-                antiDebug = Boolean.TRUE.equals(config.get("anti-debug"));
-            }
-
             // encrypt-strings
             if (config.containsKey("encrypt-strings")) {
                 encryptStrings = Boolean.TRUE.equals(config.get("encrypt-strings"));

@@ -1,5 +1,5 @@
-jar: samples/demo.jar
-out: samples/demo-obf.jar
+jar: samples/demo/demo.jar
+out: samples/demo/demo-obf.jar
 protect:
   - "**"
 encrypt-strings: false

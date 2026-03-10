@@ -8,7 +8,6 @@ A powerful Java bytecode protection tool that converts Java methods into native 
 - **Opcode Obfuscation**: Each bytecode instruction is mapped to a random opcode value, preventing easy reconstruction
 - **ChaCha20 Encryption**: All bytecode and strings are encrypted using ChaCha20 stream cipher
 - **Cross-Platform**: Supports multiple targets via Zig compiler (Windows, Linux, macOS, Android)
-- **Anti-Debug**: Built-in anti-debugging protections
 - **INVOKEDYNAMIC Support**: Support for lambda expressions and dynamic method invocation (experimental)
 
 > **Warning**: INVOKEDYNAMIC implementation is experimental and may contain bugs. Use with caution in production environments.
@@ -41,7 +40,6 @@ targets:
   - x86_64-windows-gnu
 
 # Options
-anti-debug: false
 debug: false
 native-dir: native
 ```
