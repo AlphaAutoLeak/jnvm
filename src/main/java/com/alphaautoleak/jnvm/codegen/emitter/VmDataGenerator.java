@@ -205,6 +205,7 @@ public class VmDataGenerator {
                         switch (argType) {
                             case STRING:
                             case METHOD_TYPE:
+                            case CLASS:
                                 allStrings.add(arg.toString());
                                 break;
                             case METHOD_HANDLE:
@@ -394,6 +395,10 @@ public class VmDataGenerator {
                         case METHOD_TYPE:
                             w.printf(".strIdx=%d", getOrAddStringIndex(arg.toString()));
                             break;
+                        case CLASS:
+                            // Class reference - store internal name
+                            w.printf(".strIdx=%d", getOrAddStringIndex(arg.toString()));
+                            break;
                         case METHOD_HANDLE:
                             // Format: "tag:owner:name:desc"
                             String[] parts = arg.toString().split(":");
@@ -450,6 +455,7 @@ public class VmDataGenerator {
             case DOUBLE: return "BSM_ARG_DOUBLE";
             case METHOD_TYPE: return "BSM_ARG_METHOD_TYPE";
             case METHOD_HANDLE: return "BSM_ARG_METHOD_HANDLE";
+            case CLASS: return "BSM_ARG_CLASS";
             default: return "BSM_ARG_STRING";
         }
     }

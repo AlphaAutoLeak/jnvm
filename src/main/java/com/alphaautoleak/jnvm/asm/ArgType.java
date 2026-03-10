@@ -10,5 +10,6 @@ public enum ArgType {
     FLOAT,        // float
     DOUBLE,       // double
     METHOD_TYPE,  // MethodType descriptor string
-    METHOD_HANDLE // MethodHandle reference
+    METHOD_HANDLE,// MethodHandle reference
+    CLASS         // Class reference (for altMetafactory marker interfaces, etc.)
 }

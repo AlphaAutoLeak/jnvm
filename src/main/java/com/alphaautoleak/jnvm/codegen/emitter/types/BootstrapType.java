@@ -23,7 +23,8 @@ public class BootstrapType {
         w.println("    BSM_ARG_FLOAT,");
         w.println("    BSM_ARG_DOUBLE,");
         w.println("    BSM_ARG_METHOD_TYPE,");
-        w.println("    BSM_ARG_METHOD_HANDLE");
+        w.println("    BSM_ARG_METHOD_HANDLE,");
+        w.println("    BSM_ARG_CLASS");
         w.println("} BsmArgType;");
         w.println();
     }

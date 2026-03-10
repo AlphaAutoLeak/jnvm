@@ -509,8 +509,18 @@ public class BytecodeExtractor {
                     argTypes.add(ArgType.STRING);
                 } else if (arg instanceof Type) {
                     Type t = (Type) arg;
-                    args.add(t.getDescriptor());
-                    argTypes.add(ArgType.METHOD_TYPE);
+                    String desc = t.getDescriptor();
+                    // Distinguish between MethodType (contains '(') and Class reference
+                    // MethodType: ()Ljava/util/ArrayList;
+                    // Class: Lcom/zelix/Demo$SAMInterfaceB; (or just the internal name for Class constants)
+                    if (desc.contains("(")) {
+                        args.add(desc);
+                        argTypes.add(ArgType.METHOD_TYPE);
+                    } else {
+                        // It's a Class reference - store internal name (without L; wrapper)
+                        args.add(t.getInternalName());
+                        argTypes.add(ArgType.CLASS);
+                    }
                 } else if (arg instanceof Handle) {
                     Handle h = (Handle) arg;
                     String serialized = h.getTag() + ":" + h.getOwner() + ":" +
@@ -550,7 +560,15 @@ public class BytecodeExtractor {
                         h.getName() + ":" + h.getDesc();
                 if (!a1.toString().equals(serialized)) return false;
             } else if (a2 instanceof Type) {
-                if (!a1.toString().equals(((Type) a2).getDescriptor())) return false;
+                Type t = (Type) a2;
+                String desc = t.getDescriptor();
+                if (desc.contains("(")) {
+                    // MethodType - compare descriptor
+                    if (!a1.toString().equals(desc)) return false;
+                } else {
+                    // Class - compare internal name
+                    if (!a1.toString().equals(t.getInternalName())) return false;
+                }
             } else {
                 if (!a1.toString().equals(a2.toString())) return false;
             }
