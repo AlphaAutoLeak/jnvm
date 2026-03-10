@@ -59,6 +59,55 @@ java -jar jnvm.jar config.yml
 | `ClassName#methodName` | Protect specific method |
 | `@annotation` | Protect methods with annotation |
 
+## Before/After Example
+
+### Original Code
+```java
+package pack.tests.reflects.annot;
+import java.lang.reflect.Field;
+import pack.tests.reflects.annot.anno;
+public class annoe {
+    @anno(val="PASS")
+    private static final String fail = "WHAT";
+    @anno
+    public void dox() throws Exception {
+        String toGet = "FAIL";
+        for (Field f : annoe.class.getDeclaredFields()) {
+            f.setAccessible(true);
+            anno obj = f.getAnnotation(anno.class);
+            if (obj == null) continue;
+            toGet = obj.val();
+        }
+        System.out.println(toGet);
+    }
+    @anno(val="no")
+    public void dov() {
+        System.out.println("FAIL");
+    }
+}
+```
+
+### Protected Code
+```java
+package pack.tests.reflects.annot;
+import com.helper.reflect.management.Helper;
+import pack.tests.reflects.annot.anno;
+public class annoe {
+    @anno(val="PASS")
+    private static final String fail = "WHAT";
+    @anno
+    public void dox() throws Exception {
+        Helper.executeVoid(-907003817, this, new Object[0], annoe.class);
+    }
+    @anno(val="no")
+    public void dov() {
+        Helper.executeVoid(-907003818, this, new Object[0], annoe.class);
+    }
+}
+```
+
+The original method bodies are replaced with native VM calls, making reverse engineering extremely difficult.
+
 ## How It Works
 
 1. **Scanning**: Analyzes the input JAR to find methods matching protection rules
@@ -75,7 +124,7 @@ java -jar jnvm.jar config.yml
 ## Compatibility
 
 JNVM has been tested with JARs obfuscated by:
-- **Zelix KlassMaster (ZKM)** - Full support including encrypted string decryption
+- **Zelix KlassMaster (ZKM)** - Full support including encrypted string decryption(maybe)
 - **ProGuard** - Standard obfuscation
 - **Allatori** - String encryption and flow obfuscation
 - **Vanilla Java** - No obfuscation
