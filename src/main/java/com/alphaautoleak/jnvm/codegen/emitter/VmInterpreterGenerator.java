@@ -82,6 +82,7 @@ public class VmInterpreterGenerator {
             w.println("#include <stdio.h>");
             w.println("#include <stdlib.h>");
             w.println("#include <string.h>");
+            w.println("#include <stdatomic.h>  // for atomic cache operations");
             w.println();
             
             // XOR key
@@ -185,7 +186,7 @@ public class VmInterpreterGenerator {
         // Class cache entry
         w.println("typedef struct {");
         w.println("    const char* key;    // className");
-        w.println("    jclass value;");
+        w.println("    _Atomic jclass value;  // atomic for thread-safe caching");
         w.println("} ClassCacheEntry;");
         w.println();
 
@@ -194,7 +195,7 @@ public class VmInterpreterGenerator {
         w.println("    const char* owner;");
         w.println("    const char* name;");
         w.println("    const char* desc;");
-        w.println("    jmethodID mid;");
+        w.println("    _Atomic jmethodID mid;  // atomic for thread-safe caching");
         w.println("} MethodCacheEntry;");
         w.println();
 
@@ -203,7 +204,7 @@ public class VmInterpreterGenerator {
         w.println("    const char* owner;");
         w.println("    const char* name;");
         w.println("    const char* desc;");
-        w.println("    jfieldID fid;");
+        w.println("    _Atomic jfieldID fid;  // atomic for thread-safe caching");
         w.println("} FieldCacheEntry;");
         w.println();
 
@@ -213,40 +214,52 @@ public class VmInterpreterGenerator {
         w.println("static FieldCacheEntry fieldCache[FIELD_CACHE_SIZE];");
         w.println();
 
-        // Class lookup - O(1) hash
-        w.println("__attribute__((hot))");
+        // Class lookup - O(1) hash with atomic cache and CAS for race condition handling
+        w.println("__attribute__((const, hot))");
         w.println("static jclass vm_find_class(JNIEnv* env, const char* className) {");
         w.println("    uint32_t idx = ptr_hash(className) & (CLASS_CACHE_SIZE - 1);");
         w.println("    ClassCacheEntry* e = &classCache[idx];");
-        w.println("    if (LIKELY(e->key == className && e->value != NULL)) {");
-        w.println("        return e->value;  // cache hit");
+        w.println("    // Atomic load for thread-safe cache read");
+        w.println("    jclass cached = atomic_load_explicit(&e->value, memory_order_relaxed);");
+        w.println("    if (LIKELY(e->key == className && cached != NULL)) {");
+        w.println("        return cached;  // cache hit");
         w.println("    }");
+        w.println("    // Cache miss - find and create global ref");
         w.println("    jclass localCls = (*env)->FindClass(env, className);");
-        w.println("    if (localCls) {");
-        w.println("        jclass globalCls = (*env)->NewGlobalRef(env, localCls);");
-        w.println("        if (globalCls) {");
-        w.println("            e->key = className;");
-        w.println("            e->value = globalCls;");
-        w.println("        }");
+        w.println("    if (!localCls) return NULL;");
+        w.println("    jclass globalCls = (*env)->NewGlobalRef(env, localCls);");
+        w.println("    if (!globalCls) return localCls;");
+        w.println("    // Check if key matches (different className may hash to same slot)");
+        w.println("    if (e->key != className && e->key != NULL) {");
+        w.println("        return globalCls;  // hash collision, don't cache");
         w.println("    }");
-        w.println("    return localCls;");
+        w.println("    // Use CAS to handle race condition");
+        w.println("    if (atomic_compare_exchange_strong_explicit(&e->value, &cached, globalCls, memory_order_relaxed, memory_order_relaxed)) {");
+        w.println("        e->key = className;  // we won the race");
+        w.println("        return globalCls;");
+        w.println("    }");
+        w.println("    // Another thread won - delete our global ref and use theirs");
+        w.println("    (*env)->DeleteGlobalRef(env, globalCls);");
+        w.println("    return cached;");
         w.println("}");
         w.println();
 
-        // Method lookup - O(1) hash
+        // Method lookup - O(1) hash with atomic cache
         w.println("__attribute__((hot))");
         w.println("static jmethodID vm_get_method_id(JNIEnv* env, jclass cls, const char* owner, const char* name, const char* desc) {");
         w.println("    uint32_t idx = triple_hash(owner, name, desc) & (METHOD_CACHE_SIZE - 1);");
         w.println("    MethodCacheEntry* e = &methodCache[idx];");
-        w.println("    if (LIKELY(e->owner == owner && e->name == name && e->desc == desc && e->mid != NULL)) {");
-        w.println("        return e->mid;  // cache hit");
+        w.println("    // Atomic load for thread-safe cache read");
+        w.println("    jmethodID cached = atomic_load_explicit(&e->mid, memory_order_relaxed);");
+        w.println("    if (LIKELY(e->owner == owner && e->name == name && e->desc == desc && cached != NULL)) {");
+        w.println("        return cached;  // cache hit");
         w.println("    }");
         w.println("    jmethodID mid = (*env)->GetMethodID(env, cls, name, desc);");
         w.println("    if (mid) {");
         w.println("        e->owner = owner;");
         w.println("        e->name = name;");
         w.println("        e->desc = desc;");
-        w.println("        e->mid = mid;");
+        w.println("        atomic_store_explicit(&e->mid, mid, memory_order_relaxed);");
         w.println("    }");
         w.println("    return mid;");
         w.println("}");
@@ -256,34 +269,38 @@ public class VmInterpreterGenerator {
         w.println("static jmethodID vm_get_static_method_id(JNIEnv* env, jclass cls, const char* owner, const char* name, const char* desc) {");
         w.println("    uint32_t idx = triple_hash(owner, name, desc) & (METHOD_CACHE_SIZE - 1);");
         w.println("    MethodCacheEntry* e = &methodCache[idx];");
-        w.println("    if (LIKELY(e->owner == owner && e->name == name && e->desc == desc && e->mid != NULL)) {");
-        w.println("        return e->mid;  // cache hit");
+        w.println("    // Atomic load for thread-safe cache read");
+        w.println("    jmethodID cached = atomic_load_explicit(&e->mid, memory_order_relaxed);");
+        w.println("    if (LIKELY(e->owner == owner && e->name == name && e->desc == desc && cached != NULL)) {");
+        w.println("        return cached;  // cache hit");
         w.println("    }");
         w.println("    jmethodID mid = (*env)->GetStaticMethodID(env, cls, name, desc);");
         w.println("    if (mid) {");
         w.println("        e->owner = owner;");
         w.println("        e->name = name;");
         w.println("        e->desc = desc;");
-        w.println("        e->mid = mid;");
+        w.println("        atomic_store_explicit(&e->mid, mid, memory_order_relaxed);");
         w.println("    }");
         w.println("    return mid;");
         w.println("}");
         w.println();
 
-        // Field lookup - O(1) hash
+        // Field lookup - O(1) hash with atomic cache
         w.println("__attribute__((hot))");
         w.println("static jfieldID vm_get_field_id(JNIEnv* env, jclass cls, const char* owner, const char* name, const char* desc) {");
         w.println("    uint32_t idx = triple_hash(owner, name, desc) & (FIELD_CACHE_SIZE - 1);");
         w.println("    FieldCacheEntry* e = &fieldCache[idx];");
-        w.println("    if (LIKELY(e->owner == owner && e->name == name && e->desc == desc && e->fid != NULL)) {");
-        w.println("        return e->fid;  // cache hit");
+        w.println("    // Atomic load for thread-safe cache read");
+        w.println("    jfieldID cached = atomic_load_explicit(&e->fid, memory_order_relaxed);");
+        w.println("    if (LIKELY(e->owner == owner && e->name == name && e->desc == desc && cached != NULL)) {");
+        w.println("        return cached;  // cache hit");
         w.println("    }");
         w.println("    jfieldID fid = (*env)->GetFieldID(env, cls, name, desc);");
         w.println("    if (fid) {");
         w.println("        e->owner = owner;");
         w.println("        e->name = name;");
         w.println("        e->desc = desc;");
-        w.println("        e->fid = fid;");
+        w.println("        atomic_store_explicit(&e->fid, fid, memory_order_relaxed);");
         w.println("    }");
         w.println("    return fid;");
         w.println("}");
@@ -293,15 +310,17 @@ public class VmInterpreterGenerator {
         w.println("static jfieldID vm_get_static_field_id(JNIEnv* env, jclass cls, const char* owner, const char* name, const char* desc) {");
         w.println("    uint32_t idx = triple_hash(owner, name, desc) & (FIELD_CACHE_SIZE - 1);");
         w.println("    FieldCacheEntry* e = &fieldCache[idx];");
-        w.println("    if (LIKELY(e->owner == owner && e->name == name && e->desc == desc && e->fid != NULL)) {");
-        w.println("        return e->fid;  // cache hit");
+        w.println("    // Atomic load for thread-safe cache read");
+        w.println("    jfieldID cached = atomic_load_explicit(&e->fid, memory_order_relaxed);");
+        w.println("    if (LIKELY(e->owner == owner && e->name == name && e->desc == desc && cached != NULL)) {");
+        w.println("        return cached;  // cache hit");
         w.println("    }");
         w.println("    jfieldID fid = (*env)->GetStaticFieldID(env, cls, name, desc);");
         w.println("    if (fid) {");
         w.println("        e->owner = owner;");
         w.println("        e->name = name;");
         w.println("        e->desc = desc;");
-        w.println("        e->fid = fid;");
+        w.println("        atomic_store_explicit(&e->fid, fid, memory_order_relaxed);");
         w.println("    }");
         w.println("    return fid;");
         w.println("}");
