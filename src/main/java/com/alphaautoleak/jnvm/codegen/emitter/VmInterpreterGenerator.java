@@ -142,6 +142,7 @@ public class VmInterpreterGenerator {
         w.println("    _frameOffset = 0;");
         w.println("}");
         w.println();
+        w.println("__attribute__((cold))");
         w.println("static inline void frame_pool_ensure_init(void) {");
         w.println("    if (UNLIKELY(_frameBase == NULL)) {");
         w.println("        _frameBase = (VMValue*)malloc(FRAME_POOL_SIZE);");
@@ -168,12 +169,14 @@ public class VmInterpreterGenerator {
         w.println();
 
         // Hash function
+        w.println("__attribute__((const))");
         w.println("static inline uint32_t ptr_hash(const void* p) {");
         w.println("    return (uint32_t)((uintptr_t)p >> 3);  // ignore low alignment bits");
         w.println("}");
         w.println();
 
         // Combined hash: three pointers
+        w.println("__attribute__((const))");
         w.println("static inline uint32_t triple_hash(const void* a, const void* b, const void* c) {");
         w.println("    return ptr_hash(a) ^ (ptr_hash(b) << 5) ^ (ptr_hash(c) << 11);");
         w.println("}");
@@ -211,6 +214,7 @@ public class VmInterpreterGenerator {
         w.println();
 
         // Class lookup - O(1) hash
+        w.println("__attribute__((hot))");
         w.println("static jclass vm_find_class(JNIEnv* env, const char* className) {");
         w.println("    uint32_t idx = ptr_hash(className) & (CLASS_CACHE_SIZE - 1);");
         w.println("    ClassCacheEntry* e = &classCache[idx];");
@@ -230,6 +234,7 @@ public class VmInterpreterGenerator {
         w.println();
 
         // Method lookup - O(1) hash
+        w.println("__attribute__((hot))");
         w.println("static jmethodID vm_get_method_id(JNIEnv* env, jclass cls, const char* owner, const char* name, const char* desc) {");
         w.println("    uint32_t idx = triple_hash(owner, name, desc) & (METHOD_CACHE_SIZE - 1);");
         w.println("    MethodCacheEntry* e = &methodCache[idx];");
@@ -247,6 +252,7 @@ public class VmInterpreterGenerator {
         w.println("}");
         w.println();
 
+        w.println("__attribute__((hot))");
         w.println("static jmethodID vm_get_static_method_id(JNIEnv* env, jclass cls, const char* owner, const char* name, const char* desc) {");
         w.println("    uint32_t idx = triple_hash(owner, name, desc) & (METHOD_CACHE_SIZE - 1);");
         w.println("    MethodCacheEntry* e = &methodCache[idx];");
@@ -265,6 +271,7 @@ public class VmInterpreterGenerator {
         w.println();
 
         // Field lookup - O(1) hash
+        w.println("__attribute__((hot))");
         w.println("static jfieldID vm_get_field_id(JNIEnv* env, jclass cls, const char* owner, const char* name, const char* desc) {");
         w.println("    uint32_t idx = triple_hash(owner, name, desc) & (FIELD_CACHE_SIZE - 1);");
         w.println("    FieldCacheEntry* e = &fieldCache[idx];");
@@ -282,6 +289,7 @@ public class VmInterpreterGenerator {
         w.println("}");
         w.println();
 
+        w.println("__attribute__((hot))");
         w.println("static jfieldID vm_get_static_field_id(JNIEnv* env, jclass cls, const char* owner, const char* name, const char* desc) {");
         w.println("    uint32_t idx = triple_hash(owner, name, desc) & (FIELD_CACHE_SIZE - 1);");
         w.println("    FieldCacheEntry* e = &fieldCache[idx];");
@@ -312,6 +320,7 @@ public class VmInterpreterGenerator {
         w.println();
         w.println("static VMMethodLookupEntry vmMethodLookup[VM_METHOD_LOOKUP_SIZE];");
         w.println();
+        w.println("__attribute__((const, always_inline))");
         w.println("static inline int vm_lookup_method(const char* owner, const char* name, const char* desc) {");
         w.println("    uint32_t hash = triple_hash(owner, name, desc);");
         w.println("    for (int probe = 0; probe < 8; probe++) {");
@@ -323,6 +332,7 @@ public class VmInterpreterGenerator {
         w.println("    return -1;");
         w.println("}");
         w.println();
+        w.println("__attribute__((cold))");
         w.println("void vm_init_method_lookup(void) {");
         w.println("    memset(vmMethodLookup, 0, sizeof(vmMethodLookup));");
         w.println("    for (int i = 0; i < vm_method_count; i++) {");
@@ -508,6 +518,7 @@ public class VmInterpreterGenerator {
 
     private void emitExecuteWrappers(PrintWriter w) {
         // void
+        w.println("__attribute__((hot))");
         w.println("void vm_execute_method_void(JNIEnv* env, int methodId, jobject instance, jobjectArray args, jclass callerClass) {");
         w.println("    ExecuteResult r = vm_execute_common(env, methodId, instance, args, callerClass, NULL, 0);");
         w.println("    (void)r;  // ignore return value");
@@ -515,6 +526,7 @@ public class VmInterpreterGenerator {
         w.println();
 
         // int
+        w.println("__attribute__((hot))");
         w.println("jint vm_execute_method_int(JNIEnv* env, int methodId, jobject instance, jobjectArray args, jclass callerClass) {");
         w.println("    ExecuteResult r = vm_execute_common(env, methodId, instance, args, callerClass, NULL, 0);");
         w.println("    return r.value.i;");
@@ -522,6 +534,7 @@ public class VmInterpreterGenerator {
         w.println();
 
         // long
+        w.println("__attribute__((hot))");
         w.println("jlong vm_execute_method_long(JNIEnv* env, int methodId, jobject instance, jobjectArray args, jclass callerClass) {");
         w.println("    ExecuteResult r = vm_execute_common(env, methodId, instance, args, callerClass, NULL, 0);");
         w.println("    return r.value.j;");
@@ -529,6 +542,7 @@ public class VmInterpreterGenerator {
         w.println();
 
         // float
+        w.println("__attribute__((hot))");
         w.println("jfloat vm_execute_method_float(JNIEnv* env, int methodId, jobject instance, jobjectArray args, jclass callerClass) {");
         w.println("    ExecuteResult r = vm_execute_common(env, methodId, instance, args, callerClass, NULL, 0);");
         w.println("    return r.value.f;");
@@ -536,6 +550,7 @@ public class VmInterpreterGenerator {
         w.println();
 
         // double
+        w.println("__attribute__((hot))");
         w.println("jdouble vm_execute_method_double(JNIEnv* env, int methodId, jobject instance, jobjectArray args, jclass callerClass) {");
         w.println("    ExecuteResult r = vm_execute_common(env, methodId, instance, args, callerClass, NULL, 0);");
         w.println("    return r.value.d;");
@@ -543,6 +558,7 @@ public class VmInterpreterGenerator {
         w.println();
 
         // object
+        w.println("__attribute__((hot))");
         w.println("jobject vm_execute_method_object(JNIEnv* env, int methodId, jobject instance, jobjectArray args, jclass callerClass) {");
         w.println("    ExecuteResult r = vm_execute_common(env, methodId, instance, args, callerClass, NULL, 0);");
         w.println("    return r.value.l;");

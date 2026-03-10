@@ -49,6 +49,7 @@ public class StringHelper extends VMHelper {
             w.println();
             
             // Get decrypted string
+            w.println("__attribute__((const))");
             w.println("const char* vm_get_string(int idx) {");
             w.println("    if (idx < 0 || idx >= vm_string_count) return \"\";");
             w.println("    VMString* vs = &vm_strings[idx];");
@@ -60,6 +61,7 @@ public class StringHelper extends VMHelper {
             w.println();
         } else {
             // Non-encryption mode: return string directly
+            w.println("__attribute__((const))");
             w.println("const char* vm_get_string(int idx) {");
             w.println("    if (idx < 0 || idx >= vm_string_count) return \"\";");
             w.println("    return (const char*)vm_strings[idx].encData;");

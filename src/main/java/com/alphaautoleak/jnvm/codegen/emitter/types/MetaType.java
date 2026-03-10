@@ -37,7 +37,7 @@ public class MetaType {
 
     private static void emitMetaEntry(PrintWriter w) {
         w.println("/* Metadata entry - instruction operand */");
-        w.println("typedef struct {");
+        w.println("typedef struct __attribute__((aligned(8))) {");
         w.println("    MetaType type;");
         w.println("    // META_INT, META_LOCAL, META_NEWARRAY");
         w.println("    jint intVal;");

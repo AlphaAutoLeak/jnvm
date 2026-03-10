@@ -21,6 +21,7 @@ public class MethodDescHelper extends VMHelper {
     @Override
     public void generateSource(PrintWriter w) {
         // parse_method_desc
+        w.println("__attribute__((const))");
         w.println("void vm_parse_method_desc(const char* desc, int* argCount, char* returnType) {");
         w.println("    *argCount = 0;");
         w.println("    const char* p = desc + 1;");
@@ -36,6 +37,7 @@ public class MethodDescHelper extends VMHelper {
         w.println();
         
         // get_arg_type
+        w.println("__attribute__((const))");
         w.println("char vm_get_arg_type(const char* desc, int argIndex) {");
         w.println("    const char* p = desc + 1;");
         w.println("    int current = 0;");

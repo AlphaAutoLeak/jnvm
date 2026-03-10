@@ -30,7 +30,7 @@ public class BootstrapType {
 
     private static void emitBsmArg(PrintWriter w) {
         w.println("/* Bootstrap method argument */");
-        w.println("typedef struct {");
+        w.println("typedef struct __attribute__((packed)) {  // only primitive types, safe to pack");
         w.println("    BsmArgType type;");
         w.println("    int strIdx;       // string index for String/MethodType/MethodHandle");
         w.println("    int intVal;");

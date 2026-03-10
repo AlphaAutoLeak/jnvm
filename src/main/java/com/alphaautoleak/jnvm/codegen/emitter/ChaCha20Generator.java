@@ -40,6 +40,7 @@ public class ChaCha20Generator extends CodeEmitter {
             src.println();
             src.println("#define ROTL32(v, n) (((v) << (n)) | ((v) >> (32 - (n))))");
             src.println();
+            src.println("__attribute__((hot))");
             src.println("static void quarterround(uint32_t* a, uint32_t* b, uint32_t* c, uint32_t* d) {");
             src.println("    *a += *b; *d ^= *a; *d = ROTL32(*d, 16);");
             src.println("    *c += *d; *b ^= *c; *b = ROTL32(*b, 12);");
@@ -49,6 +50,7 @@ public class ChaCha20Generator extends CodeEmitter {
             src.println();
             src.println("static const char* SIGMA = \"expand 32-byte k\";");
             src.println();
+            src.println("__attribute__((hot))");
             src.println("void chacha20_encrypt(const uint8_t* key, const uint8_t* nonce,");
             src.println("                      const uint8_t* input, uint8_t* output, size_t len) {");
             src.println("    uint32_t state[16], working[16];");

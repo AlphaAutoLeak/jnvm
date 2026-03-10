@@ -19,6 +19,7 @@ public class MetaHelper extends VMHelper {
     
     @Override
     public void generateSource(PrintWriter w) {
+        w.println("__attribute__((const, hot))");
         w.println("MetaEntry* vm_get_meta(VMMethod* m, int pc) {");
         w.println("    int idx = m->pcToMetaIdx[pc];");
         w.println("    return idx >= 0 ? &m->metadata[idx] : NULL;");

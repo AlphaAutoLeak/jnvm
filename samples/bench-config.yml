@@ -2,5 +2,5 @@ jar: samples/bench/bench.jar
 out: samples/bench/bench-obf.jar
 protect:
   - "**"
-encrypt-strings: true
+encrypt-strings: false
 debug: false

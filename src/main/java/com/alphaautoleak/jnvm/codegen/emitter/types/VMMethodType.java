@@ -14,7 +14,7 @@ public class VMMethodType {
     
     private static void emitExceptionEntry(PrintWriter w) {
         w.println("/* Exception table entry */");
-        w.println("typedef struct {");
+        w.println("typedef struct __attribute__((packed)) {  // only ints, safe to pack");
         w.println("    int startPc;             // try block start PC (inclusive)");
         w.println("    int endPc;               // try block end PC (exclusive)");
         w.println("    int handlerPc;           // catch handler start PC");
@@ -25,7 +25,7 @@ public class VMMethodType {
 
     private static void emitVMMethod(PrintWriter w) {
         w.println("/* Method definition */");
-        w.println("typedef struct {");
+        w.println("typedef struct __attribute__((aligned(16))) {  // cache-line friendly alignment");
         w.println("    int methodId;");
         w.println("    int maxStack;");
         w.println("    int maxLocals;");
