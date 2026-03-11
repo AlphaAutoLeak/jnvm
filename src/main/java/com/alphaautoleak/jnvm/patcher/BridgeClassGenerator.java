@@ -25,52 +25,53 @@ class BridgeClassGenerator {
 
         // Declare 6 type-specialized native methods
         // Note: declared as native but actually registered via RegisterNatives
+        // New format: args[0]=instance, args[1..n]=params, args[n+1]=callerClass
 
-        // static native void executeVoid(int, Object, Object[], Class)
+        // static native void executeVoid(int, Object[])
         cw.visitMethod(
                 Opcodes.ACC_PUBLIC | Opcodes.ACC_STATIC | Opcodes.ACC_NATIVE,
                 "executeVoid",
-                "(ILjava/lang/Object;[Ljava/lang/Object;Ljava/lang/Class;)V",
+                "(I[Ljava/lang/Object;)V",
                 null,
                 null).visitEnd();
 
-        // static native int executeInt(int, Object, Object[], Class)
+        // static native int executeInt(int, Object[])
         cw.visitMethod(
                 Opcodes.ACC_PUBLIC | Opcodes.ACC_STATIC | Opcodes.ACC_NATIVE,
                 "executeInt",
-                "(ILjava/lang/Object;[Ljava/lang/Object;Ljava/lang/Class;)I",
+                "(I[Ljava/lang/Object;)I",
                 null,
                 null).visitEnd();
 
-        // static native long executeLong(int, Object, Object[], Class)
+        // static native long executeLong(int, Object[])
         cw.visitMethod(
                 Opcodes.ACC_PUBLIC | Opcodes.ACC_STATIC | Opcodes.ACC_NATIVE,
                 "executeLong",
-                "(ILjava/lang/Object;[Ljava/lang/Object;Ljava/lang/Class;)J",
+                "(I[Ljava/lang/Object;)J",
                 null,
                 null).visitEnd();
 
-        // static native float executeFloat(int, Object, Object[], Class)
+        // static native float executeFloat(int, Object[])
         cw.visitMethod(
                 Opcodes.ACC_PUBLIC | Opcodes.ACC_STATIC | Opcodes.ACC_NATIVE,
                 "executeFloat",
-                "(ILjava/lang/Object;[Ljava/lang/Object;Ljava/lang/Class;)F",
+                "(I[Ljava/lang/Object;)F",
                 null,
                 null).visitEnd();
 
-        // static native double executeDouble(int, Object, Object[], Class)
+        // static native double executeDouble(int, Object[])
         cw.visitMethod(
                 Opcodes.ACC_PUBLIC | Opcodes.ACC_STATIC | Opcodes.ACC_NATIVE,
                 "executeDouble",
-                "(ILjava/lang/Object;[Ljava/lang/Object;Ljava/lang/Class;)D",
+                "(I[Ljava/lang/Object;)D",
                 null,
                 null).visitEnd();
 
-        // static native Object executeObject(int, Object, Object[], Class)
+        // static native Object executeObject(int, Object[])
         cw.visitMethod(
                 Opcodes.ACC_PUBLIC | Opcodes.ACC_STATIC | Opcodes.ACC_NATIVE,
                 "executeObject",
-                "(ILjava/lang/Object;[Ljava/lang/Object;Ljava/lang/Class;)Ljava/lang/Object;",
+                "(I[Ljava/lang/Object;)Ljava/lang/Object;",
                 null,
                 null).visitEnd();
 

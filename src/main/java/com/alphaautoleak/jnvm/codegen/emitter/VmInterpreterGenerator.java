@@ -61,14 +61,26 @@ public class VmInterpreterGenerator {
             }
 
             w.println();
-            // Execution function declarations for each return type
-            w.println("void vm_execute_method_void(JNIEnv* env, int methodId, jobject instance, jobjectArray args, jclass callerClass);");
-            w.println("jint vm_execute_method_int(JNIEnv* env, int methodId, jobject instance, jobjectArray args, jclass callerClass);");
-            w.println("jlong vm_execute_method_long(JNIEnv* env, int methodId, jobject instance, jobjectArray args, jclass callerClass);");
-            w.println("jfloat vm_execute_method_float(JNIEnv* env, int methodId, jobject instance, jobjectArray args, jclass callerClass);");
-            w.println("jdouble vm_execute_method_double(JNIEnv* env, int methodId, jobject instance, jobjectArray args, jclass callerClass);");
-            w.println("jobject vm_execute_method_object(JNIEnv* env, int methodId, jobject instance, jobjectArray args, jclass callerClass);");
+            // Execution result struct (for return value and type)
+            w.println("// Execution result struct (for return value and type)");
+            w.println("typedef struct {");
+            w.println("    VMValue value;");
+            w.println("    char returnType;  // 'V', 'I', 'J', 'F', 'D', 'L'");
+            w.println("} ExecuteResult;");
             w.println();
+
+            // Execution function declarations for each return type
+            // New format: args[0]=instance, args[1..n]=params, args[n+1]=callerClass
+            w.println("void vm_execute_method_void(JNIEnv* env, int methodId, jobjectArray args);");
+            w.println("jint vm_execute_method_int(JNIEnv* env, int methodId, jobjectArray args);");
+            w.println("jlong vm_execute_method_long(JNIEnv* env, int methodId, jobjectArray args);");
+            w.println("jfloat vm_execute_method_float(JNIEnv* env, int methodId, jobjectArray args);");
+            w.println("jdouble vm_execute_method_double(JNIEnv* env, int methodId, jobjectArray args);");
+            w.println("jobject vm_execute_method_object(JNIEnv* env, int methodId, jobjectArray args);");
+            w.println();
+            // Internal function for VM-to-VM direct calls
+            w.println("// Internal: direct VM-to-VM call with pre-built locals");
+            w.println("ExecuteResult vm_execute_common(JNIEnv* env, int methodId, jobjectArray args, VMValue* directLocals, int directLocalSlots, jclass callerClass);");
             w.println("#endif");
         }
     }
@@ -389,15 +401,12 @@ public class VmInterpreterGenerator {
     }
     
     private void emitExecuteCommon(PrintWriter w) {
-        w.println("// Execution result struct (for return value and type)");
-        w.println("typedef struct {");
-        w.println("    VMValue value;");
-        w.println("    char returnType;  // 'V', 'I', 'J', 'F', 'D', 'L'");
-        w.println("} ExecuteResult;");
-        w.println();
+        // ExecuteResult is now defined in vm_interpreter.h
 
+        // New format: args[0]=instance, args[1..n]=params, args[n+1]=callerClass
+        // For direct VM-to-VM calls: args=NULL, directLocals!=NULL, callerClass passed directly
         w.println("__attribute__((hot))");
-        w.println("static ExecuteResult vm_execute_common(JNIEnv* env, int methodId, jobject instance, jobjectArray args, jclass callerClass, VMValue* directLocals, int directLocalSlots) {");
+        w.println("ExecuteResult vm_execute_common(JNIEnv* env, int methodId, jobjectArray args, VMValue* directLocals, int directLocalSlots, jclass callerClass) {");
         w.println("    frame_pool_ensure_init();");
         w.println("    ExecuteResult execResult = { .returnType = 'V' };");
         w.println("    methodId ^= METHOD_ID_XOR_KEY;");
@@ -410,6 +419,17 @@ public class VmInterpreterGenerator {
 
         // Bytecode used directly (no longer encrypted)
         w.println("    uint8_t* bytecode = m->bytecode;");
+        w.println();
+
+        // Extract instance and callerClass from args array (only when directLocals is NULL)
+        // args[0] = instance, args[1..n] = params, args[n+1] = callerClass
+        w.println("    jobject instance = NULL;");
+        w.println("    if (!directLocals && args) {");
+        w.println("        jsize argsLen = (*env)->GetArrayLength(env, args);");
+        w.println("        instance = (argsLen > 0) ? (*env)->GetObjectArrayElement(env, args, 0) : NULL;");
+        w.println("        callerClass = (argsLen > 1 && m->argCount + 1 < argsLen) ?");
+        w.println("            (jclass)(*env)->GetObjectArrayElement(env, args, argsLen - 1) : callerClass;");
+        w.println("    }");
         w.println();
 
         // Initialize frame
@@ -426,7 +446,9 @@ public class VmInterpreterGenerator {
         w.println("        memset(frame.locals, 0, m->maxLocals * sizeof(VMValue));");
         w.println("        frame.locals[0].l = instance;");
         w.println("        const char* argTypes = (m->argTypesIdx >= 0) ? vm_get_string(m->argTypesIdx) : NULL;");
-        w.println("        vm_unbox_args_fast(env, &frame, args, argTypes, m->argCount, instance ? 1 : 0);");
+        w.println("        // Unbox args[1..n] (skip args[0]=instance, skip last element=callerClass)");
+        w.println("        jsize argsLen = args ? (*env)->GetArrayLength(env, args) : 0;");
+        w.println("        vm_unbox_args_fast(env, &frame, args, argTypes, m->argCount, instance ? 1 : 0, argsLen > 1 ? argsLen - 1 : 1);");
         w.println("    }");
         w.println();
 
@@ -538,48 +560,48 @@ public class VmInterpreterGenerator {
     private void emitExecuteWrappers(PrintWriter w) {
         // void
         w.println("__attribute__((hot))");
-        w.println("void vm_execute_method_void(JNIEnv* env, int methodId, jobject instance, jobjectArray args, jclass callerClass) {");
-        w.println("    ExecuteResult r = vm_execute_common(env, methodId, instance, args, callerClass, NULL, 0);");
+        w.println("void vm_execute_method_void(JNIEnv* env, int methodId, jobjectArray args) {");
+        w.println("    ExecuteResult r = vm_execute_common(env, methodId, args, NULL, 0, NULL);");
         w.println("    (void)r;  // ignore return value");
         w.println("}");
         w.println();
 
         // int
         w.println("__attribute__((hot))");
-        w.println("jint vm_execute_method_int(JNIEnv* env, int methodId, jobject instance, jobjectArray args, jclass callerClass) {");
-        w.println("    ExecuteResult r = vm_execute_common(env, methodId, instance, args, callerClass, NULL, 0);");
+        w.println("jint vm_execute_method_int(JNIEnv* env, int methodId, jobjectArray args) {");
+        w.println("    ExecuteResult r = vm_execute_common(env, methodId, args, NULL, 0, NULL);");
         w.println("    return r.value.i;");
         w.println("}");
         w.println();
 
         // long
         w.println("__attribute__((hot))");
-        w.println("jlong vm_execute_method_long(JNIEnv* env, int methodId, jobject instance, jobjectArray args, jclass callerClass) {");
-        w.println("    ExecuteResult r = vm_execute_common(env, methodId, instance, args, callerClass, NULL, 0);");
+        w.println("jlong vm_execute_method_long(JNIEnv* env, int methodId, jobjectArray args) {");
+        w.println("    ExecuteResult r = vm_execute_common(env, methodId, args, NULL, 0, NULL);");
         w.println("    return r.value.j;");
         w.println("}");
         w.println();
 
         // float
         w.println("__attribute__((hot))");
-        w.println("jfloat vm_execute_method_float(JNIEnv* env, int methodId, jobject instance, jobjectArray args, jclass callerClass) {");
-        w.println("    ExecuteResult r = vm_execute_common(env, methodId, instance, args, callerClass, NULL, 0);");
+        w.println("jfloat vm_execute_method_float(JNIEnv* env, int methodId, jobjectArray args) {");
+        w.println("    ExecuteResult r = vm_execute_common(env, methodId, args, NULL, 0, NULL);");
         w.println("    return r.value.f;");
         w.println("}");
         w.println();
 
         // double
         w.println("__attribute__((hot))");
-        w.println("jdouble vm_execute_method_double(JNIEnv* env, int methodId, jobject instance, jobjectArray args, jclass callerClass) {");
-        w.println("    ExecuteResult r = vm_execute_common(env, methodId, instance, args, callerClass, NULL, 0);");
+        w.println("jdouble vm_execute_method_double(JNIEnv* env, int methodId, jobjectArray args) {");
+        w.println("    ExecuteResult r = vm_execute_common(env, methodId, args, NULL, 0, NULL);");
         w.println("    return r.value.d;");
         w.println("}");
         w.println();
 
         // object
         w.println("__attribute__((hot))");
-        w.println("jobject vm_execute_method_object(JNIEnv* env, int methodId, jobject instance, jobjectArray args, jclass callerClass) {");
-        w.println("    ExecuteResult r = vm_execute_common(env, methodId, instance, args, callerClass, NULL, 0);");
+        w.println("jobject vm_execute_method_object(JNIEnv* env, int methodId, jobjectArray args) {");
+        w.println("    ExecuteResult r = vm_execute_common(env, methodId, args, NULL, 0, NULL);");
         w.println("    return r.value.l;");
         w.println("}");
     }

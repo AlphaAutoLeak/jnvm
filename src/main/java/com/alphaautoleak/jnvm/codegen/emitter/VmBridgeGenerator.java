@@ -42,59 +42,54 @@ public class VmBridgeGenerator {
 
     /**
      * Generate execute functions for each return type
+     * New format: args[0]=instance, args[1..n]=params, args[n+1]=callerClass
      */
     private void emitExecuteFunctions(PrintWriter w) {
         // void
         w.println("/* void return type */");
         w.println("static void JNICALL native_execute_void(JNIEnv* env, jclass cls,");
-        w.println("                                        jint methodId, jobject instance,");
-        w.println("                                        jobjectArray args, jclass callerClass) {");
-        w.println("    vm_execute_method_void(env, methodId, instance, args, callerClass);");
+        w.println("                                        jint methodId, jobjectArray args) {");
+        w.println("    vm_execute_method_void(env, methodId, args);");
         w.println("}");
         w.println();
 
         // int (including boolean, byte, char, short, int)
         w.println("/* int return type (boolean/byte/char/short/int) */");
         w.println("static jint JNICALL native_execute_int(JNIEnv* env, jclass cls,");
-        w.println("                                         jint methodId, jobject instance,");
-        w.println("                                         jobjectArray args, jclass callerClass) {");
-        w.println("    return vm_execute_method_int(env, methodId, instance, args, callerClass);");
+        w.println("                                         jint methodId, jobjectArray args) {");
+        w.println("    return vm_execute_method_int(env, methodId, args);");
         w.println("}");
         w.println();
 
         // long
         w.println("/* long return type */");
         w.println("static jlong JNICALL native_execute_long(JNIEnv* env, jclass cls,");
-        w.println("                                           jint methodId, jobject instance,");
-        w.println("                                           jobjectArray args, jclass callerClass) {");
-        w.println("    return vm_execute_method_long(env, methodId, instance, args, callerClass);");
+        w.println("                                           jint methodId, jobjectArray args) {");
+        w.println("    return vm_execute_method_long(env, methodId, args);");
         w.println("}");
         w.println();
 
         // float
         w.println("/* float return type */");
         w.println("static jfloat JNICALL native_execute_float(JNIEnv* env, jclass cls,");
-        w.println("                                             jint methodId, jobject instance,");
-        w.println("                                             jobjectArray args, jclass callerClass) {");
-        w.println("    return vm_execute_method_float(env, methodId, instance, args, callerClass);");
+        w.println("                                             jint methodId, jobjectArray args) {");
+        w.println("    return vm_execute_method_float(env, methodId, args);");
         w.println("}");
         w.println();
 
         // double
         w.println("/* double return type */");
         w.println("static jdouble JNICALL native_execute_double(JNIEnv* env, jclass cls,");
-        w.println("                                              jint methodId, jobject instance,");
-        w.println("                                              jobjectArray args, jclass callerClass) {");
-        w.println("    return vm_execute_method_double(env, methodId, instance, args, callerClass);");
+        w.println("                                              jint methodId, jobjectArray args) {");
+        w.println("    return vm_execute_method_double(env, methodId, args);");
         w.println("}");
         w.println();
 
         // object
         w.println("/* object return type */");
         w.println("static jobject JNICALL native_execute_object(JNIEnv* env, jclass cls,");
-        w.println("                                               jint methodId, jobject instance,");
-        w.println("                                               jobjectArray args, jclass callerClass) {");
-        w.println("    return vm_execute_method_object(env, methodId, instance, args, callerClass);");
+        w.println("                                               jint methodId, jobjectArray args) {");
+        w.println("    return vm_execute_method_object(env, methodId, args);");
         w.println("}");
     }
 
@@ -104,12 +99,12 @@ public class VmBridgeGenerator {
     private void emitRegisterNatives(PrintWriter w) {
         w.println("/* JNI method registration table */");
         w.println("static JNINativeMethod native_methods[] = {");
-        w.println("    { \"executeVoid\",   \"(ILjava/lang/Object;[Ljava/lang/Object;Ljava/lang/Class;)V\",       (void*)native_execute_void },");
-        w.println("    { \"executeInt\",    \"(ILjava/lang/Object;[Ljava/lang/Object;Ljava/lang/Class;)I\",       (void*)native_execute_int },");
-        w.println("    { \"executeLong\",   \"(ILjava/lang/Object;[Ljava/lang/Object;Ljava/lang/Class;)J\",       (void*)native_execute_long },");
-        w.println("    { \"executeFloat\",  \"(ILjava/lang/Object;[Ljava/lang/Object;Ljava/lang/Class;)F\",       (void*)native_execute_float },");
-        w.println("    { \"executeDouble\", \"(ILjava/lang/Object;[Ljava/lang/Object;Ljava/lang/Class;)D\",       (void*)native_execute_double },");
-        w.println("    { \"executeObject\", \"(ILjava/lang/Object;[Ljava/lang/Object;Ljava/lang/Class;)Ljava/lang/Object;\", (void*)native_execute_object }");
+        w.println("    { \"executeVoid\",   \"(I[Ljava/lang/Object;)V\",                  (void*)native_execute_void },");
+        w.println("    { \"executeInt\",    \"(I[Ljava/lang/Object;)I\",                  (void*)native_execute_int },");
+        w.println("    { \"executeLong\",   \"(I[Ljava/lang/Object;)J\",                  (void*)native_execute_long },");
+        w.println("    { \"executeFloat\",  \"(I[Ljava/lang/Object;)F\",                  (void*)native_execute_float },");
+        w.println("    { \"executeDouble\", \"(I[Ljava/lang/Object;)D\",                  (void*)native_execute_double },");
+        w.println("    { \"executeObject\", \"(I[Ljava/lang/Object;)Ljava/lang/Object;\", (void*)native_execute_object }");
         w.println("};");
         w.println();
 

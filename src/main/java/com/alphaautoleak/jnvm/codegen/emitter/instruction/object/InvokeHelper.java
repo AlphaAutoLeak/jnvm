@@ -302,7 +302,7 @@ public class InvokeHelper {
 
         // Call vm_execute_common directly with pre-built locals
         w.println(indent + "int obfTargetId = vmTargetId ^ METHOD_ID_XOR_KEY;");
-        w.println(indent + "ExecuteResult directResult = vm_execute_common(env, obfTargetId, NULL, NULL, frame.callerClass, tempLocals, targetMaxLocals);");
+        w.println(indent + "ExecuteResult directResult = vm_execute_common(env, obfTargetId, NULL, tempLocals, targetMaxLocals, frame.callerClass);");
 
         // Check for exceptions from direct call (use returnType flag, no JNI ExceptionCheck needed)
         w.println(indent + "if (UNLIKELY(directResult.returnType == 'X')) {");

@@ -15,12 +15,13 @@ public class MethodBodyRewriter {
     private final int methodIdXorKey;
 
     // Execute method descriptors for each return type
-    private static final String EXECUTE_VOID_DESC   = "(ILjava/lang/Object;[Ljava/lang/Object;Ljava/lang/Class;)V";
-    private static final String EXECUTE_INT_DESC    = "(ILjava/lang/Object;[Ljava/lang/Object;Ljava/lang/Class;)I";
-    private static final String EXECUTE_LONG_DESC   = "(ILjava/lang/Object;[Ljava/lang/Object;Ljava/lang/Class;)J";
-    private static final String EXECUTE_FLOAT_DESC  = "(ILjava/lang/Object;[Ljava/lang/Object;Ljava/lang/Class;)F";
-    private static final String EXECUTE_DOUBLE_DESC = "(ILjava/lang/Object;[Ljava/lang/Object;Ljava/lang/Class;)D";
-    private static final String EXECUTE_OBJECT_DESC = "(ILjava/lang/Object;[Ljava/lang/Object;Ljava/lang/Class;)Ljava/lang/Object;";
+    // New format: args[0]=instance, args[1..n]=params, args[n+1]=callerClass
+    private static final String EXECUTE_VOID_DESC   = "(I[Ljava/lang/Object;)V";
+    private static final String EXECUTE_INT_DESC    = "(I[Ljava/lang/Object;)I";
+    private static final String EXECUTE_LONG_DESC   = "(I[Ljava/lang/Object;)J";
+    private static final String EXECUTE_FLOAT_DESC  = "(I[Ljava/lang/Object;)F";
+    private static final String EXECUTE_DOUBLE_DESC = "(I[Ljava/lang/Object;)D";
+    private static final String EXECUTE_OBJECT_DESC = "(I[Ljava/lang/Object;)Ljava/lang/Object;";
 
     MethodBodyRewriter(String bridgeClass, int methodIdXorKey) {
         this.bridgeClass = bridgeClass;
@@ -38,28 +39,39 @@ public class MethodBodyRewriter {
         int obfuscatedMethodId = methodId ^ methodIdXorKey;
         insns.add(new LdcInsnNode(obfuscatedMethodId));
 
-        // 2. Push this or null
+        // 2. Create parameter array Object[] with unified format:
+        //    args[0] = instance (or null for static methods)
+        //    args[1..n] = method parameters
+        //    args[n+1] = callerClass
+        int totalArgs = 1 + argTypes.length + 1; // instance + params + callerClass
+        insns.add(new LdcInsnNode(totalArgs));
+        insns.add(new TypeInsnNode(Opcodes.ANEWARRAY, "java/lang/Object"));
+
+        // args[0] = instance (this or null)
+        insns.add(new InsnNode(Opcodes.DUP));
+        insns.add(new LdcInsnNode(0));
         if (isStatic) {
             insns.add(new InsnNode(Opcodes.ACONST_NULL));
         } else {
             insns.add(new VarInsnNode(Opcodes.ALOAD, 0));
         }
+        insns.add(new InsnNode(Opcodes.AASTORE));
 
-        // 3. Create parameter array Object[]
-        insns.add(new LdcInsnNode(argTypes.length));
-        insns.add(new TypeInsnNode(Opcodes.ANEWARRAY, "java/lang/Object"));
-
+        // args[1..n] = method parameters
         int localIdx = isStatic ? 0 : 1;
         for (int i = 0; i < argTypes.length; i++) {
             insns.add(new InsnNode(Opcodes.DUP));
-            insns.add(new LdcInsnNode(i));
+            insns.add(new LdcInsnNode(i + 1)); // offset by 1 for instance
             InstructionsUtil.loadAndBox(insns, argTypes[i], localIdx);
             insns.add(new InsnNode(Opcodes.AASTORE));
             localIdx += argTypes[i].getSize();
         }
 
-        // 4. Push caller class
+        // args[n+1] = callerClass
+        insns.add(new InsnNode(Opcodes.DUP));
+        insns.add(new LdcInsnNode(argTypes.length + 1));
         insns.add(new LdcInsnNode(org.objectweb.asm.Type.getType("L" + cn.name + ";")));
+        insns.add(new InsnNode(Opcodes.AASTORE));
 
         // 5. Call corresponding native method based on return type
         String executeMethod = getExecuteMethod(retType);

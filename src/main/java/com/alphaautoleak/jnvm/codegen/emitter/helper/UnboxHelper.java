@@ -14,13 +14,16 @@ public class UnboxHelper extends VMHelper {
     
     @Override
     public void generateHeader(PrintWriter w) {
-        w.println("void vm_unbox_args_fast(JNIEnv* env, VMFrame* frame, jobjectArray args, const char* argTypes, int argCount, int hasThis);");
+        // endIndex: exclusive end index, args[endIndex-1] is last param, args[endIndex] is callerClass
+        w.println("void vm_unbox_args_fast(JNIEnv* env, VMFrame* frame, jobjectArray args, const char* argTypes, int argCount, int hasThis, int endIndex);");
     }
     
     @Override
     public void generateSource(PrintWriter w) {
         // Fast version: directly use pre-stored argument type string with atomic caching
-        w.println("void vm_unbox_args_fast(JNIEnv* env, VMFrame* frame, jobjectArray args, const char* argTypes, int argCount, int hasThis) {");
+        // New format: args[0]=instance, args[1..n]=params, args[n+1]=callerClass
+        // endIndex is exclusive: process args[1..endIndex-1]
+        w.println("void vm_unbox_args_fast(JNIEnv* env, VMFrame* frame, jobjectArray args, const char* argTypes, int argCount, int hasThis, int endIndex) {");
         w.println("    if (!args) return;");
         w.println("    jsize len = (*env)->GetArrayLength(env, args);");
         w.println("    (*env)->EnsureLocalCapacity(env, len + 32);");
@@ -89,9 +92,12 @@ public class UnboxHelper extends VMHelper {
         w.println();
         
         w.println("    int localIdx = hasThis ? 1 : 0;");
-        w.println("    for (jsize i = 0; i < len; i++) {");
+        w.println("    // Process args[1..endIndex-1], skip args[0]=instance and args[endIndex]=callerClass");
+        w.println("    int startIdx = 1;");
+        w.println("    int stopIdx = endIndex > 0 ? endIndex : len;");
+        w.println("    for (jsize i = startIdx; i < stopIdx && i < len; i++) {");
         w.println("        jobject arg = (*env)->GetObjectArrayElement(env, args, i);");
-        w.println("        char expectedType = argTypes ? argTypes[i] : 0;");
+        w.println("        char expectedType = argTypes ? argTypes[i - 1] : 0;  // argTypes is 0-indexed for params only");
         w.println();
         w.println("        if (arg == NULL) {");
         w.println("            frame->locals[localIdx].l = NULL;");

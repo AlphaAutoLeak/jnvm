@@ -90,19 +90,19 @@ public class annoe {
 ### Protected Code
 ```java
 package pack.tests.reflects.annot;
-import com.helper.reflect.management.Helper;
+import lib.xml.abc.Dispatcher;
 import pack.tests.reflects.annot.anno;
 public class annoe {
-    @anno(val="PASS")
-    private static final String fail = "WHAT";
-    @anno
-    public void dox() throws Exception {
-        Helper.executeVoid(-907003817, this, new Object[0], annoe.class);
-    }
-    @anno(val="no")
-    public void dov() {
-        Helper.executeVoid(-907003818, this, new Object[0], annoe.class);
-    }
+   @anno(val="PASS")
+   private static final String fail = "WHAT";
+   @anno
+   public void dox() throws Exception {
+      Dispatcher.executeVoid(1282844577, new Object[]{this, annoe.class});
+   }
+   @anno(val="no")
+   public void dov() {
+      Dispatcher.executeVoid(1282844576, new Object[]{this, annoe.class});
+   }
 }
 ```
 
