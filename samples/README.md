@@ -9,7 +9,7 @@
 | Obfuscator                        | Test#1  | Test#2   | Performance | Size |
 |-----------------------------------|---------|----------|-------------|------|
 | [None](https://www.java.com/#LOL) | PPPPPPP | PPPPPPPP | 27ms        | 29KB |
-| [jnvm](./)                        | PPPPPPP | FPPPPEPP | 550ms       | 60KB | 
+| [jnvm](./)                        | PPPPPPP | FPPPPEPP | 560ms       | 60KB | 
 | [jnvm-string](./)                 | PPPPPPP | FPPPPEPP | 590ms       | 64KB | 
 
 # evaluator

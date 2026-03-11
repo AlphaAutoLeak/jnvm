@@ -29,6 +29,8 @@ public class MultiANewArrayInstruction extends Instruction {
         w.println("                    }");
         w.println();
         w.println("                    jarray result = NULL;");
+        w.println("                    int elemClassNameBufSize = 0;");
+        w.println("                    char* elemClassNameBuf = NULL;");
         w.println("                    if (dims >= 1) {");
         w.println("                        const char* p = className;");
         w.println("                        while (*p == '[') p++;");
@@ -47,7 +49,6 @@ public class MultiANewArrayInstruction extends Instruction {
         w.println("                            default:");
         w.println("                                if (elemType == 'L' || depth < dims) {");
         w.println("                                    const char* elemClassName;");
-        w.println("                                    char elemClassNameBuf[256];");
         w.println("                                    if (depth < dims) {");
         w.println("                                        elemClassName = className + 1;");
         w.println("                                    } else {");
@@ -55,7 +56,9 @@ public class MultiANewArrayInstruction extends Instruction {
         w.println("                                        const char* end = start;");
         w.println("                                        while (*end && *end != ';') end++;");
         w.println("                                        int len = end - start;");
-        w.println("                                        if (len > 0 && len < 256) {");
+        w.println("                                        if (len > 0) {");
+        w.println("                                            elemClassNameBufSize = len + 1;");
+        w.println("                                            elemClassNameBuf = tmp_buf_alloc(elemClassNameBufSize);");
         w.println("                                            memcpy(elemClassNameBuf, start, len);");
         w.println("                                            elemClassNameBuf[len] = '\\0';");
         w.println("                                            elemClassName = elemClassNameBuf;");
@@ -72,6 +75,7 @@ public class MultiANewArrayInstruction extends Instruction {
         w.println("                        }");
         w.println("                    }");
         w.println();
+        w.println("                    if (elemClassNameBuf) tmp_buf_free(elemClassNameBufSize);");
         w.println("                    frame.stack[frame.sp++].l = result;");
         w.println("                    free(sizes);");
         w.println("                }");
@@ -95,6 +99,8 @@ public class MultiANewArrayInstruction extends Instruction {
         w.println("                    sizes[i] = frame.stack[--frame.sp].i;");
         w.println("                }");
         w.println("                jarray result = NULL;");
+        w.println("                int elemClassNameBufSize = 0;");
+        w.println("                char* elemClassNameBuf = NULL;");
         w.println("                if (dims >= 1) {");
         w.println("                    const char* p = className;");
         w.println("                    while (*p == '[') p++;");
@@ -112,7 +118,6 @@ public class MultiANewArrayInstruction extends Instruction {
         w.println("                        default:");
         w.println("                            if (elemType == 'L' || depth < dims) {");
         w.println("                                const char* elemClassName;");
-        w.println("                                char elemClassNameBuf[256];");
         w.println("                                if (depth < dims) {");
         w.println("                                    elemClassName = className + 1;");
         w.println("                                } else {");
@@ -120,7 +125,9 @@ public class MultiANewArrayInstruction extends Instruction {
         w.println("                                    const char* end = start;");
         w.println("                                    while (*end && *end != ';') end++;");
         w.println("                                    int len = end - start;");
-        w.println("                                    if (len > 0 && len < 256) {");
+        w.println("                                    if (len > 0) {");
+        w.println("                                        elemClassNameBufSize = len + 1;");
+        w.println("                                        elemClassNameBuf = tmp_buf_alloc(elemClassNameBufSize);");
         w.println("                                        memcpy(elemClassNameBuf, start, len);");
         w.println("                                        elemClassNameBuf[len] = '\\0';");
         w.println("                                        elemClassName = elemClassNameBuf;");
@@ -136,6 +143,7 @@ public class MultiANewArrayInstruction extends Instruction {
         w.println("                            break;");
         w.println("                    }");
         w.println("                }");
+        w.println("                if (elemClassNameBuf) tmp_buf_free(elemClassNameBufSize);");
         w.println("                frame.stack[frame.sp++].l = result;");
         w.println("                free(sizes);");
         w.println("            }");

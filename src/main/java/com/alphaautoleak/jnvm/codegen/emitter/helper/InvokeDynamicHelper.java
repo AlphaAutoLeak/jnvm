@@ -187,16 +187,20 @@ public class InvokeDynamicHelper extends VMHelper {
         // Pop captured args from stack into boxed Object array (correct order)
         w.println("static jobjectArray vm_indy_pop_args(JNIEnv* env, VMFrame* frame, const char* desc, int capturedCount) {");
         w.println("    if (capturedCount == 0) return NULL;");
-        w.println("    char argTypes[32];");
-        w.println("    vm_indy_parse_arg_types(desc, argTypes, 32);");
+        w.println("    TMP_SAVE;  // Save for cleanup");
+        w.println("    // Dynamic allocation for argTypes (each arg needs 1 char, plus safety margin)");
+        w.println("    int argTypesSize = capturedCount + 8;");
+        w.println("    char* argTypes = tmp_buf_alloc(argTypesSize);");
+        w.println("    vm_indy_parse_arg_types(desc, argTypes, argTypesSize);");
         w.println("    jobjectArray arr = (*env)->NewObjectArray(env, capturedCount, id_objectClass, NULL);");
-        w.println("    if (!arr) return NULL;");
+        w.println("    if (!arr) { TMP_RESTORE; return NULL; }");
         w.println("    // Pop from stack in reverse (top = last arg), store at correct position");
         w.println("    for (int i = capturedCount - 1; i >= 0; i--) {");
         w.println("        VMValue val = frame->stack[--frame->sp];");
         w.println("        jobject boxed = vm_indy_box(env, argTypes[i], val);");
         w.println("        (*env)->SetObjectArrayElement(env, arr, i, boxed);");
         w.println("    }");
+        w.println("    TMP_RESTORE;  // Cleanup before return");
         w.println("    return arr;");
         w.println("}");
         w.println();
@@ -204,7 +208,8 @@ public class InvokeDynamicHelper extends VMHelper {
 
     private void emitMainFunction(PrintWriter w) {
         w.println("jobject vm_invoke_dynamic(JNIEnv* env, VMFrame* frame, MetaEntry* meta) {");
-        w.println("    if (!meta) { VM_LOG(\"INVOKEDYNAMIC: meta is NULL\\n\"); return NULL; }");
+        w.println("    TMP_SAVE;  // Save frame offset for automatic cleanup on return");
+        w.println("    if (!meta) { VM_LOG(\"INVOKEDYNAMIC: meta is NULL\\n\"); TMP_RESTORE; return NULL; }");
         w.println("    vm_indy_init_cache(env);");
         w.println();
         w.println("    const char* methodName = vm_get_string(meta->nameIdx);");
@@ -212,18 +217,21 @@ public class InvokeDynamicHelper extends VMHelper {
         w.println("    VM_LOG(\"INVOKEDYNAMIC: name=%s, desc=%s, bsmIdx=%d\\n\", methodName, methodDesc, meta->bsmIdx);");
         w.println();
 
-        // Calculate captured arg count from methodDesc
-        w.println("    char capturedTypes[32];");
-        w.println("    int capturedCount = vm_indy_parse_arg_types(methodDesc, capturedTypes, 32);");
+        // Calculate captured arg count from methodDesc - use dynamic allocation
+        w.println("    int descLen = strlen(methodDesc);");
+        w.println("    int capturedTypesSize = descLen + 8;  // at most 1 char per descriptor char");
+        w.println("    char* capturedTypes = tmp_buf_alloc(capturedTypesSize);");
+        w.println("    int capturedCount = vm_indy_parse_arg_types(methodDesc, capturedTypes, capturedTypesSize);");
         w.println("    if (frame->sp < capturedCount) {");
         w.println("        VM_LOG(\"INVOKEDYNAMIC: Stack underflow! sp=%d, need=%d\\n\", frame->sp, capturedCount);");
-        w.println("        return NULL;");
+        w.println("        TMP_RESTORE; return NULL;");
         w.println("    }");
         w.println();
 
         // Check cache: if we already have a linked MethodHandle, just invoke it
         w.println("    if (meta->cachedIndyResult != NULL) {");
         w.println("        VM_LOG(\"INVOKEDYNAMIC: Using cached target\\n\");");
+        w.println("        TMP_RESTORE;  // Restore before recursive call");
         w.println("        jobjectArray invokeArgs = vm_indy_pop_args(env, frame, methodDesc, capturedCount);");
         w.println("        jobject result = (*env)->CallObjectMethod(env, meta->cachedIndyResult, id_invokeWithArgsMid, invokeArgs);");
         w.println("        if ((*env)->ExceptionCheck(env)) return NULL;");
@@ -233,7 +241,7 @@ public class InvokeDynamicHelper extends VMHelper {
 
         // Validate BSM
         w.println("    if (meta->bsmIdx < 0 || meta->bsmIdx >= vm_bootstrap_count) {");
-        w.println("        VM_LOG(\"INVOKEDYNAMIC: Invalid bsmIdx=%d\\n\", meta->bsmIdx); return NULL;");
+        w.println("        VM_LOG(\"INVOKEDYNAMIC: Invalid bsmIdx=%d\\n\", meta->bsmIdx); TMP_RESTORE; return NULL;");
         w.println("    }");
         w.println("    VMBootstrapMethod* bsm = &vm_bootstrap_methods[meta->bsmIdx];");
         w.println("    const char* bsmOwner = vm_get_string(bsm->ownerIdx);");
@@ -256,7 +264,7 @@ public class InvokeDynamicHelper extends VMHelper {
         w.println("        VM_LOG(\"INVOKEDYNAMIC: Unsupported BSM: %s.%s\\n\", bsmOwner, bsmName);");
         w.println("        // Pop captured args to keep stack balanced");
         w.println("        for (int i = 0; i < capturedCount; i++) frame->sp--;");
-        w.println("        return NULL;");
+        w.println("        TMP_RESTORE; return NULL;");
         w.println("    }");
         w.println();
 
@@ -265,7 +273,7 @@ public class InvokeDynamicHelper extends VMHelper {
         w.println("        VM_LOG(\"INVOKEDYNAMIC: CallSite is NULL\\n\");");
         w.println("        if ((*env)->ExceptionCheck(env)) { (*env)->ExceptionDescribe(env); (*env)->ExceptionClear(env); }");
         w.println("        for (int i = 0; i < capturedCount; i++) frame->sp--;");
-        w.println("        return NULL;");
+        w.println("        TMP_RESTORE; return NULL;");
         w.println("    }");
         w.println();
         w.println("    jobject targetHandle = (*env)->CallObjectMethod(env, callSite, id_getTargetMid);");
@@ -273,7 +281,7 @@ public class InvokeDynamicHelper extends VMHelper {
         w.println("        VM_LOG(\"INVOKEDYNAMIC: getTarget returned NULL\\n\");");
         w.println("        (*env)->ExceptionClear(env);");
         w.println("        for (int i = 0; i < capturedCount; i++) frame->sp--;");
-        w.println("        return NULL;");
+        w.println("        TMP_RESTORE; return NULL;");
         w.println("    }");
         w.println();
         // Cache the MethodHandle as global ref (thread-safe: if another thread raced, just discard ours)
@@ -283,6 +291,7 @@ public class InvokeDynamicHelper extends VMHelper {
         w.println("    }");
         w.println();
         // Pop captured args and invoke
+        w.println("    TMP_RESTORE;  // Restore before recursive call");
         w.println("    jobjectArray invokeArgs = vm_indy_pop_args(env, frame, methodDesc, capturedCount);");
         w.println("    jobject result = (*env)->CallObjectMethod(env, targetHandle, id_invokeWithArgsMid, invokeArgs);");
         w.println("    if ((*env)->ExceptionCheck(env)) return NULL;");
@@ -308,12 +317,12 @@ public class InvokeDynamicHelper extends VMHelper {
         w.println("        jobject classLoader = (*env)->CallObjectMethod(env, callerClass, id_getClassLoaderMid);");
         w.println("        jstring descStr = (*env)->NewStringUTF(env, methodDesc);");
         w.println("        jobject invokedType = (*env)->CallStaticObjectMethod(env, id_mtClass, id_fromDescMid, descStr, classLoader);");
-        w.println("        if (!invokedType) { (*env)->ExceptionClear(env); return NULL; }");
+        w.println("        if (!invokedType) { (*env)->ExceptionClear(env); TMP_RESTORE; return NULL; }");
         w.println("        jstring nameStr = (*env)->NewStringUTF(env, methodName);");
         w.println();
         w.println("        if (strcmp(bsmName, \"makeConcatWithConstants\") == 0 && id_makeConcatConstantsMid) {");
         w.println("            // makeConcatWithConstants(Lookup, String, MethodType, String recipe, Object... constants)");
-        w.println("            if (bsm->argCount < 1) { VM_LOG(\"INVOKEDYNAMIC: SCF needs recipe arg\\n\"); return NULL; }");
+        w.println("            if (bsm->argCount < 1) { VM_LOG(\"INVOKEDYNAMIC: SCF needs recipe arg\\n\"); TMP_RESTORE; return NULL; }");
         w.println("            const char* recipe = vm_get_string(bsm->args[0].strIdx);");
         w.println("            jstring recipeStr = (*env)->NewStringUTF(env, recipe);");
         w.println("            // Remaining BSM args are constants");
@@ -340,7 +349,7 @@ public class InvokeDynamicHelper extends VMHelper {
         w.println("                lookup, nameStr, invokedType);");
         w.println("        } else {");
         w.println("            VM_LOG(\"INVOKEDYNAMIC: Unknown SCF method: %s\\n\", bsmName);");
-        w.println("            return NULL;");
+        w.println("            TMP_RESTORE; return NULL;");
         w.println("        }");
         w.println("    }");
     }
@@ -350,7 +359,7 @@ public class InvokeDynamicHelper extends VMHelper {
         w.println("        // LambdaMetafactory path");
         w.println("        if (bsm->argCount < 3) {");
         w.println("            VM_LOG(\"INVOKEDYNAMIC: LMF needs >= 3 BSM args, got %d\\n\", bsm->argCount);");
-        w.println("            return NULL;");
+        w.println("            TMP_RESTORE; return NULL;");
         w.println("        }");
         w.println();
         // Parse BSM args
@@ -361,20 +370,26 @@ public class InvokeDynamicHelper extends VMHelper {
         w.println("        VM_LOG(\"INVOKEDYNAMIC: samType=%s, impl=%s, instType=%s, tag=%d\\n\",");
         w.println("            samMethodTypeStr, implMethodStr, instantiatedMethodTypeStr, handleTag);");
         w.println();
-        // Parse implMethod: "owner.name(desc)"
-        w.println("        char implOwner[256] = {0}, implName[256] = {0}, implDesc[512] = {0};");
+        // Parse implMethod: "owner.name(desc)" - dynamic allocation
+        w.println("        int implMethodStrLen = strlen(implMethodStr);");
+        w.println("        char* implOwner = tmp_buf_alloc(implMethodStrLen + 1);");
+        w.println("        char* implName = tmp_buf_alloc(implMethodStrLen + 1);");
+        w.println("        char* implDesc = tmp_buf_alloc(implMethodStrLen + 1);");
+        w.println("        memset(implOwner, 0, implMethodStrLen + 1);");
+        w.println("        memset(implName, 0, implMethodStrLen + 1);");
+        w.println("        memset(implDesc, 0, implMethodStrLen + 1);");
         w.println("        const char* implParen = strchr(implMethodStr, '(');");
-        w.println("        if (!implParen) { VM_LOG(\"INVOKEDYNAMIC: No paren in %s\\n\", implMethodStr); return NULL; }");
-        w.println("        strncpy(implDesc, implParen, sizeof(implDesc) - 1);");
+        w.println("        if (!implParen) { VM_LOG(\"INVOKEDYNAMIC: No paren in %s\\n\", implMethodStr); TMP_RESTORE; return NULL; }");
+        w.println("        TMP_STRCPY(implDesc, implMethodStrLen + 1, implParen);");
         w.println("        const char* lastDot = NULL;");
         w.println("        for (const char* p = implMethodStr; p < implParen; p++) { if (*p == '.') lastDot = p; }");
-        w.println("        if (!lastDot) { VM_LOG(\"INVOKEDYNAMIC: No dot in %s\\n\", implMethodStr); return NULL; }");
-        w.println("        strncpy(implOwner, implMethodStr, lastDot - implMethodStr);");
-        w.println("        strncpy(implName, lastDot + 1, implParen - lastDot - 1);");
+        w.println("        if (!lastDot) { VM_LOG(\"INVOKEDYNAMIC: No dot in %s\\n\", implMethodStr); TMP_RESTORE; return NULL; }");
+        w.println("        TMP_STRNCPY(implOwner, implMethodStr, lastDot - implMethodStr, implMethodStrLen + 1);");
+        w.println("        TMP_STRNCPY(implName, lastDot + 1, implParen - lastDot - 1, implMethodStrLen + 1);");
         w.println();
         // Create Lookup
         w.println("        jclass ownerClass = (*env)->FindClass(env, implOwner);");
-        w.println("        if (!ownerClass) { (*env)->ExceptionClear(env); VM_LOG(\"INVOKEDYNAMIC: Class not found: %s\\n\", implOwner); return NULL; }");
+        w.println("        if (!ownerClass) { (*env)->ExceptionClear(env); VM_LOG(\"INVOKEDYNAMIC: Class not found: %s\\n\", implOwner); TMP_RESTORE; return NULL; }");
         w.println("        jobject publicLookup = (*env)->CallStaticObjectMethod(env, id_mhClass, id_lookupMid);");
         w.println("        jobject lookup = (*env)->CallStaticObjectMethod(env, id_mhClass, id_privateLookupInMid, ownerClass, publicLookup);");
         w.println("        if (!lookup) { if ((*env)->ExceptionCheck(env)) (*env)->ExceptionClear(env); lookup = publicLookup; }");
@@ -383,13 +398,13 @@ public class InvokeDynamicHelper extends VMHelper {
         w.println("        jobject classLoader = (*env)->CallObjectMethod(env, ownerClass, id_getClassLoaderMid);");
         w.println("        jstring samDescStr = (*env)->NewStringUTF(env, samMethodTypeStr);");
         w.println("        jobject samMethodType = (*env)->CallStaticObjectMethod(env, id_mtClass, id_fromDescMid, samDescStr, classLoader);");
-        w.println("        if (!samMethodType) { (*env)->ExceptionClear(env); return NULL; }");
+        w.println("        if (!samMethodType) { (*env)->ExceptionClear(env); TMP_RESTORE; return NULL; }");
         w.println("        jstring implDescStr = (*env)->NewStringUTF(env, implDesc);");
         w.println("        jobject implMethodType = (*env)->CallStaticObjectMethod(env, id_mtClass, id_fromDescMid, implDescStr, classLoader);");
-        w.println("        if (!implMethodType) { (*env)->ExceptionClear(env); return NULL; }");
+        w.println("        if (!implMethodType) { (*env)->ExceptionClear(env); TMP_RESTORE; return NULL; }");
         w.println("        jstring instDescStr = (*env)->NewStringUTF(env, instantiatedMethodTypeStr);");
         w.println("        jobject instantiatedMethodType = (*env)->CallStaticObjectMethod(env, id_mtClass, id_fromDescMid, instDescStr, classLoader);");
-        w.println("        if (!instantiatedMethodType) { (*env)->ExceptionClear(env); return NULL; }");
+        w.println("        if (!instantiatedMethodType) { (*env)->ExceptionClear(env); TMP_RESTORE; return NULL; }");
         w.println();
         // Find impl MethodHandle based on handleTag
         w.println("        jobject implMethodHandle = NULL;");
@@ -404,18 +419,18 @@ public class InvokeDynamicHelper extends VMHelper {
         w.println("            implMethodHandle = (*env)->CallObjectMethod(env, lookup, id_findConstructorMid, ownerClass, implMethodType);");
         w.println("        } else {");
         w.println("            VM_LOG(\"INVOKEDYNAMIC: Unsupported handleTag=%d\\n\", handleTag);");
-        w.println("            return NULL;");
+        w.println("            TMP_RESTORE; return NULL;");
         w.println("        }");
         w.println("        if (!implMethodHandle) {");
         w.println("            VM_LOG(\"INVOKEDYNAMIC: MethodHandle not found for %s.%s tag=%d\\n\", implOwner, implName, handleTag);");
         w.println("            if ((*env)->ExceptionCheck(env)) { (*env)->ExceptionDescribe(env); (*env)->ExceptionClear(env); }");
-        w.println("            return NULL;");
+        w.println("            TMP_RESTORE; return NULL;");
         w.println("        }");
         w.println();
         // Create invokedType
         w.println("        jstring methodDescStr = (*env)->NewStringUTF(env, methodDesc);");
         w.println("        jobject invokedType = (*env)->CallStaticObjectMethod(env, id_mtClass, id_fromDescMid, methodDescStr, classLoader);");
-        w.println("        if (!invokedType) { (*env)->ExceptionClear(env); return NULL; }");
+        w.println("        if (!invokedType) { (*env)->ExceptionClear(env); TMP_RESTORE; return NULL; }");
         w.println("        jstring methodNameStr = (*env)->NewStringUTF(env, methodName);");
         w.println();
         // Call metafactory or altMetafactory
@@ -445,13 +460,15 @@ public class InvokeDynamicHelper extends VMHelper {
         w.println("                        // Class reference - convert internal name to Class object");
         w.println("                        // Internal name uses '/', but Class.forName needs '.'");
         w.println("                        const char* internalName = vm_get_string(a->strIdx);");
-        w.println("                        char javaName[256];");
+        w.println("                        int internalNameLen = strlen(internalName);");
+        w.println("                        char* javaName = tmp_buf_alloc(internalNameLen + 1);");
         w.println("                        int j = 0;");
-        w.println("                        for (const char* p = internalName; *p && j < 255; p++, j++) {");
+        w.println("                        for (const char* p = internalName; *p && j < internalNameLen; p++, j++) {");
         w.println("                            javaName[j] = (*p == '/') ? '.' : *p;");
         w.println("                        }");
         w.println("                        javaName[j] = '\\0';");
         w.println("                        jstring clsNameStr = (*env)->NewStringUTF(env, javaName);");
+        w.println("                        // No tmp_buf_free needed - TMP_RESTORE will clean up");
         w.println("                        val = (*env)->CallStaticObjectMethod(env, id_classClass, id_forNameMid, clsNameStr, JNI_TRUE, classLoader);");
         w.println("                        break;");
         w.println("                    }");
@@ -463,7 +480,7 @@ public class InvokeDynamicHelper extends VMHelper {
         w.println("                lookup, methodNameStr, invokedType, altArgs);");
         w.println("        } else {");
         w.println("            VM_LOG(\"INVOKEDYNAMIC: Unknown LMF method: %s\\n\", bsmName);");
-        w.println("            return NULL;");
+        w.println("            TMP_RESTORE; return NULL;");
         w.println("        }");
         w.println("    }");
     }

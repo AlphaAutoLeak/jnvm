@@ -146,6 +146,7 @@ public class VmInterpreterGenerator {
         // === Frame memory pool (thread-local bump allocator) ===
         w.println("// === Frame memory pool (thread-local bump allocator) ===");
         w.println("#define FRAME_POOL_SIZE (4 * 1024 * 1024)  // 4MB per thread");
+        w.println("#define TMP_BUF_MAX 4096  // max temp buffer size per allocation");
         w.println();
         w.println("static __thread VMValue* _frameBase;");
         w.println("static __thread int _frameOffset;  // offset in VMValue units");
@@ -172,6 +173,48 @@ public class VmInterpreterGenerator {
         w.println("static inline void frame_pool_pop(int count) {");
         w.println("    _frameOffset -= count;");
         w.println("}");
+        w.println();
+
+        // Temporary string buffer allocation (byte-level, 8-byte aligned)
+        w.println("// === Temporary string buffer (byte-level, 8-byte aligned) ===");
+        w.println("// For safe string operations with dynamic length");
+        w.println("static inline char* tmp_buf_alloc(int bytes) {");
+        w.println("    // Round up to 8-byte alignment (sizeof(VMValue))");
+        w.println("    int aligned = (bytes + 7) / 8;");
+        w.println("    VMValue* ptr = _frameBase + _frameOffset;");
+        w.println("    _frameOffset += aligned;");
+        w.println("    return (char*)ptr;");
+        w.println("}");
+        w.println();
+        w.println("static inline void tmp_buf_free(int bytes) {");
+        w.println("    int aligned = (bytes + 7) / 8;");
+        w.println("    _frameOffset -= aligned;");
+        w.println("}");
+        w.println();
+
+        // Helper macro for safe string copy with length check
+        w.println("// Safe string copy with overflow protection");
+        w.println("#define TMP_STRCPY(dst, dst_size, src) do { \\");
+        w.println("    size_t _len = strlen(src); \\");
+        w.println("    if (_len >= (size_t)(dst_size)) { \\");
+        w.println("        _len = (dst_size) - 1; \\");
+        w.println("    } \\");
+        w.println("    memcpy((dst), (src), _len); \\");
+        w.println("    (dst)[_len] = '\\0'; \\");
+        w.println("} while(0)");
+        w.println();
+        w.println("#define TMP_STRNCPY(dst, src, max_len, dst_size) do { \\");
+        w.println("    size_t _len = (max_len) < (size_t)(dst_size) ? (max_len) : (size_t)(dst_size) - 1; \\");
+        w.println("    memcpy((dst), (src), _len); \\");
+        w.println("    (dst)[_len] = '\\0'; \\");
+        w.println("} while(0)");
+        w.println();
+
+        // Function-level temp buffer save/restore for automatic cleanup
+        w.println("// === Function-level temp buffer save/restore ===");
+        w.println("// Usage: TMP_SAVE at function start, TMP_RESTORE before every return");
+        w.println("#define TMP_SAVE int _savedFrameOffset = _frameOffset");
+        w.println("#define TMP_RESTORE _frameOffset = _savedFrameOffset");
         w.println();
 
         // === Hash cache system ===
