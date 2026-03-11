@@ -221,6 +221,17 @@ public class VmDataGenerator {
                 }
             }
             
+            // Add VMMethod argTypes strings to global pool (for vm_execute_common parameter unboxing)
+            for (EncryptedMethodData method : methods) {
+                String desc = method.getDescriptor();
+                if (desc != null) {
+                    String argTypes = parseMethodArgTypes(desc);
+                    if (argTypes != null && !argTypes.isEmpty()) {
+                        allStrings.add(argTypes);
+                    }
+                }
+            }
+            
             // Build global string index mapping
             globalStringIndexMap = new HashMap<>();
             int globalIdx = 0;

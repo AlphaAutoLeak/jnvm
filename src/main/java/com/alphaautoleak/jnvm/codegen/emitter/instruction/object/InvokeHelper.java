@@ -281,7 +281,7 @@ public class InvokeHelper {
         w.println(indent + "    slotMap[i] = nextSlot;");
         w.println(indent + "    nextSlot++;");
         w.println(indent + "    char t = argTypes ? argTypes[i] : 'L';");
-        w.println(indent + "    if (t == 'J' || t == 'D') nextSlot++;");
+        w.println(indent + "    if (t == 'J' || t == 'D') nextSlot++;  // long/double occupy 2 slots in bytecode");
         w.println(indent + "}");
 
         // Pop args from caller stack (reverse order) into callee locals
