@@ -39,23 +39,6 @@ public class JarScanner {
     }
     
     /**
-     * Legacy constructor (no obfuscation)
-     */
-    public JarScanner(ProtectConfig config) {
-        this(config, new OpcodeObfuscator() {
-            @Override public int encode(int opcode) { return opcode; }
-            @Override public int decode(int obfuscated) { return obfuscated; }
-        });
-    }
-
-    /**
-     * Returns the opcode obfuscator used during scanning
-     */
-    public OpcodeObfuscator getOpcodeObfuscator() {
-        return opcodeObfuscator;
-    }
-
-    /**
      * Scans JAR file, returns all method info to be protected
      */
     public List<MethodInfo> scan(File jarFile) throws IOException {

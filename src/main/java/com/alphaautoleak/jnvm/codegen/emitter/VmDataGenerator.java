@@ -315,7 +315,7 @@ public class VmDataGenerator {
             // Encrypt and store each string
             int idx = 0;
             for (String s : strings) {
-                byte[] plaintext = s.getBytes(StandardCharsets.UTF_8);
+                byte[] plaintext = toModifiedUtf8(s);
                 byte[] encrypted = CryptoUtils.chacha20(vmStringKey, stringNonce, 0, plaintext);
                 
                 w.printf("static const unsigned char vm_str_%d[] = {", idx);
@@ -340,7 +340,7 @@ public class VmDataGenerator {
             // Non-encryption mode: store plaintext strings directly (add null terminator)
             int idx = 0;
             for (String s : strings) {
-                byte[] bytes = s.getBytes(StandardCharsets.UTF_8);
+                byte[] bytes = toModifiedUtf8(s);
                 w.printf("static const char vm_str_%d[] = {", idx);
                 for (int i = 0; i < bytes.length; i++) {
                     if (i % 16 == 0) w.printf("\n    ");
@@ -355,7 +355,7 @@ public class VmDataGenerator {
             w.println("VMString vm_strings[] = {");
             idx = 0;
             for (String s : strings) {
-                w.printf("    { .encData=(const unsigned char*)vm_str_%d, .decData=NULL, .len=%d, .encrypted=0 },\n", idx, s.length());
+                w.printf("    { .encData=(const unsigned char*)vm_str_%d, .decData=NULL, .len=%d, .encrypted=0 },\n", idx, toModifiedUtf8(s).length);
                 idx++;
             }
             w.println("};");
@@ -593,6 +593,10 @@ public class VmDataGenerator {
                         // Add pre-computed invocation metadata
                         if (m.type == MetaType.META_METHOD) {
                             InvokeMetaInfo info = invokeMetaCache.get(id + "_" + i);
+                            if (info == null && localPool != null &&
+                                    m.descIdx >= 0 && m.descIdx < localPool.size()) {
+                                info = parseMethodDesc(localPool.get(m.descIdx));
+                            }
                             if (info != null) {
                                 w.printf(", .argCount=%d, .returnTypeChar='%c'",
                                     info.argCount, info.returnTypeChar);
@@ -614,6 +618,10 @@ public class VmDataGenerator {
                             mapStringIndex(localPool, m.descIdx), m.descLen);
                         // Add pre-computed invocation metadata
                         InvokeMetaInfo info = invokeMetaCache.get(id + "_" + i);
+                        if (info == null && localPool != null &&
+                                m.descIdx >= 0 && m.descIdx < localPool.size()) {
+                            info = parseMethodDesc(localPool.get(m.descIdx));
+                        }
                         if (info != null) {
                             w.printf(", .argCount=%d, .returnTypeChar='%c'",
                                 info.argCount, info.returnTypeChar);
@@ -708,6 +716,38 @@ public class VmDataGenerator {
             if (i % 16 == 0) w.printf("\n    ");
             w.printf("0x%02x%s", data[i] & 0xFF, (i < data.length - 1 ? ", " : ""));
         }
+    }
+
+    /**
+     * Encode Java String to Modified UTF-8 (same format as JNI NewStringUTF).
+     * This avoids embedded 0x00 bytes and encodes surrogate pairs as two 3-byte sequences.
+     */
+    private byte[] toModifiedUtf8(String s) {
+        if (s == null || s.isEmpty()) return new byte[0];
+        int len = s.length();
+        // Worst case 3 bytes per char
+        byte[] out = new byte[len * 3];
+        int idx = 0;
+        for (int i = 0; i < len; i++) {
+            int c = s.charAt(i);
+            if (c == 0x0000) {
+                out[idx++] = (byte) 0xC0;
+                out[idx++] = (byte) 0x80;
+            } else if (c <= 0x007F) {
+                out[idx++] = (byte) c;
+            } else if (c <= 0x07FF) {
+                out[idx++] = (byte) (0xC0 | (c >> 6));
+                out[idx++] = (byte) (0x80 | (c & 0x3F));
+            } else {
+                out[idx++] = (byte) (0xE0 | (c >> 12));
+                out[idx++] = (byte) (0x80 | ((c >> 6) & 0x3F));
+                out[idx++] = (byte) (0x80 | (c & 0x3F));
+            }
+        }
+        if (idx == out.length) return out;
+        byte[] trimmed = new byte[idx];
+        System.arraycopy(out, 0, trimmed, 0, idx);
+        return trimmed;
     }
     
     private String metaTypeToString(MetaType type) {

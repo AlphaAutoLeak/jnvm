@@ -48,7 +48,8 @@ public class InvokeHelper {
         w.println("                  meta->cachedClass = cls;");
         w.println("                  meta->cachedMid = mid;");
         w.println("                  }");
-        w.println("                  jvalue args[16];");
+        w.println("                  int _argc = argCount > 0 ? argCount : 1;");
+        w.println("                  jvalue args[_argc];");
         w.println("                  for (int i = argCount - 1; i >= 0; i--) {");
         w.println("                      char t = argTypes ? argTypes[i] : 'L';");
         w.println("                      switch (t) {");
@@ -63,12 +64,27 @@ public class InvokeHelper {
 
         if (!isStatic) {
             w.println("                  jobject receiver = frame.stack[--frame.sp].l;");
-            w.println("                  if (!receiver) {");
-            w.println("                      jclass npeClass = vm_find_class(env, \"java/lang/NullPointerException\");");
-            w.println("                      if (npeClass) (*env)->ThrowNew(env, npeClass, \"\");");
-            w.println("                      _hasException = 1; goto method_exit;");
+        w.println("                  if (!receiver) {");
+        w.println("                      jclass npeClass = vm_find_class(env, \"java/lang/NullPointerException\");");
+        w.println("                      if (npeClass) (*env)->ThrowNew(env, npeClass, \"\");");
+        w.println("                      _hasException = 1; goto method_exit;");
+        w.println("                  }");
+        }
+
+        w.println("                  const char* _cowner = vm_get_string(m->ownerIdx);");
+        w.println("                  const char* _cname  = vm_get_string(m->nameIdx);");
+        w.println("                  const char* _cdesc  = vm_get_string(m->descIdx);");
+        w.println("                  VM_LOG(\"INVOKE FROM %s.%s%s pc=%d -> %s.%s%s argc=%d\\n\", _cowner, _cname, _cdesc, invokePc, owner, name, desc, argCount);");
+        w.println("                  if (argTypes) VM_LOG(\"INVOKE ARGTYPES %s\\n\", argTypes);");
+        if (!isStatic) {
+            w.println("                  if (owner && name && desc &&");
+            w.println("                      strcmp(owner, \"java/lang/invoke/MethodHandle\") == 0 &&");
+            w.println("                      strcmp(name, \"asCollector\") == 0 &&");
+            w.println("                      strcmp(desc, \"(Ljava/lang/Class;I)Ljava/lang/invoke/MethodHandle;\") == 0) {");
+            w.println("                      VM_LOG(\"asCollector recv=%p arg0=%p arg1=%d sp=%d\\n\", (void*)receiver, (void*)args[0].l, args[1].i, frame.sp);");
             w.println("                  }");
         }
+        w.println("                  fflush(stdout);");
 
         w.println("                  switch (returnType) {");
         w.println("                      case 'V':");
@@ -109,7 +125,20 @@ public class InvokeHelper {
         }
         w.println("                  }");
         w.println("                  if ((*env)->ExceptionCheck(env)) {");
-        w.println("                      VM_LOG(\"Exception thrown at pc=%d\\n\", invokePc);");
+        w.println("                      const char* _owner = vm_get_string(m->ownerIdx);");
+        w.println("                      const char* _name  = vm_get_string(m->nameIdx);");
+        w.println("                      const char* _desc  = vm_get_string(m->descIdx);");
+        w.println("                      VM_LOG(\"Exception thrown at pc=%d in %s.%s%s\\n\", invokePc, _owner, _name, _desc);");
+        w.println("                      VM_LOG(\"Invoke target: %s.%s%s\\n\", owner, name, desc);");
+        if (!isStatic) {
+            w.println("                      if (owner && name && desc &&");
+            w.println("                          strcmp(owner, \"java/lang/String\") == 0 &&");
+            w.println("                          strcmp(name, \"substring\") == 0 &&");
+            w.println("                          strcmp(desc, \"(II)Ljava/lang/String;\") == 0) {");
+            w.println("                          VM_LOG(\"substring args: begin=%d, end=%d\\n\", args[0].i, args[1].i);");
+            w.println("                          if (receiver) VM_LOG(\"substring recv len=%d\\n\", (*env)->GetStringLength(env, (jstring)receiver));");
+            w.println("                      }");
+        }
         w.println("                      jthrowable exc = (*env)->ExceptionOccurred(env);");
         w.println("                      (*env)->ExceptionClear(env);");
         w.println("                      int hPc = vm_find_exception_handler(env, m, invokePc, exc);");
@@ -174,7 +203,8 @@ public class InvokeHelper {
         w.println("                  meta->cachedClass = cls;");
         w.println("                  meta->cachedMid = mid;");
         w.println("              }");
-        w.println("              jvalue args[16];");
+        w.println("              int _argc = argCount > 0 ? argCount : 1;");
+        w.println("              jvalue args[_argc];");
         w.println("              for (int i = argCount - 1; i >= 0; i--) {");
         w.println("                  char t = argTypes ? argTypes[i] : 'L';");
         w.println("                  switch (t) {");
@@ -195,6 +225,21 @@ public class InvokeHelper {
             w.println("                  _hasException = 1; goto method_exit;");
             w.println("              }");
         }
+
+        w.println("              const char* _cowner = vm_get_string(m->ownerIdx);");
+        w.println("              const char* _cname  = vm_get_string(m->nameIdx);");
+        w.println("              const char* _cdesc  = vm_get_string(m->descIdx);");
+        w.println("              VM_LOG(\"INVOKE FROM %s.%s%s pc=%d -> %s.%s%s argc=%d\\n\", _cowner, _cname, _cdesc, invokePc, owner, name, desc, argCount);");
+        w.println("              if (argTypes) VM_LOG(\"INVOKE ARGTYPES %s\\n\", argTypes);");
+        if (!isStatic) {
+            w.println("              if (owner && name && desc &&");
+            w.println("                  strcmp(owner, \"java/lang/invoke/MethodHandle\") == 0 &&");
+            w.println("                  strcmp(name, \"asCollector\") == 0 &&");
+            w.println("                  strcmp(desc, \"(Ljava/lang/Class;I)Ljava/lang/invoke/MethodHandle;\") == 0) {");
+            w.println("                  VM_LOG(\"asCollector recv=%p arg0=%p arg1=%d sp=%d\\n\", (void*)receiver, (void*)args[0].l, args[1].i, frame.sp);");
+            w.println("              }");
+        }
+        w.println("              fflush(stdout);");
 
         w.println("              switch (returnType) {");
         w.println("                  case 'V':");
@@ -235,7 +280,20 @@ public class InvokeHelper {
         }
         w.println("              }");
         w.println("              if (UNLIKELY((*env)->ExceptionCheck(env))) {");
-        w.println("                  VM_LOG(\"Exception thrown at pc=%d\\n\", invokePc);");
+        w.println("                  const char* _owner = vm_get_string(m->ownerIdx);");
+        w.println("                  const char* _name  = vm_get_string(m->nameIdx);");
+        w.println("                  const char* _desc  = vm_get_string(m->descIdx);");
+        w.println("                  VM_LOG(\"Exception thrown at pc=%d in %s.%s%s\\n\", invokePc, _owner, _name, _desc);");
+        w.println("                  VM_LOG(\"Invoke target: %s.%s%s\\n\", owner, name, desc);");
+        if (!isStatic) {
+            w.println("                  if (owner && name && desc &&");
+            w.println("                      strcmp(owner, \"java/lang/String\") == 0 &&");
+            w.println("                      strcmp(name, \"substring\") == 0 &&");
+            w.println("                      strcmp(desc, \"(II)Ljava/lang/String;\") == 0) {");
+            w.println("                      VM_LOG(\"substring args: begin=%d, end=%d\\n\", args[0].i, args[1].i);");
+            w.println("                      if (receiver) VM_LOG(\"substring recv len=%d\\n\", (*env)->GetStringLength(env, (jstring)receiver));");
+            w.println("                  }");
+        }
         w.println("                  jthrowable exc = (*env)->ExceptionOccurred(env);");
         w.println("                  (*env)->ExceptionClear(env);");
         w.println("                  int hPc = vm_find_exception_handler(env, m, invokePc, exc);");
@@ -271,7 +329,8 @@ public class InvokeHelper {
         w.println(indent + "memset(tempLocals, 0, targetMaxLocals * sizeof(VMValue));");
 
         // Calculate local slot positions for each argument
-        w.println(indent + "int slotMap[16];");
+        w.println(indent + "int _argc = argCount > 0 ? argCount : 1;");
+        w.println(indent + "int slotMap[_argc];");
         if (isStatic) {
             w.println(indent + "int nextSlot = 0;");
         } else {

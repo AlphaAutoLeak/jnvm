@@ -25,7 +25,10 @@ public class InvokeDynamicInstruction extends Instruction {
         w.println("                  if (result != NULL) frame.stack[frame.sp++].l = result;");
         // Check exception immediately after method call with correct PC
         w.println("                  if ((*env)->ExceptionCheck(env)) {");
-        w.println("                      VM_LOG(\"Exception thrown at pc=%d\\n\", invokePc);");
+        w.println("                      const char* _owner = vm_get_string(m->ownerIdx);");
+        w.println("                      const char* _name  = vm_get_string(m->nameIdx);");
+        w.println("                      const char* _desc  = vm_get_string(m->descIdx);");
+        w.println("                      VM_LOG(\"Exception thrown at pc=%d in %s.%s%s\\n\", invokePc, _owner, _name, _desc);");
         w.println("                      jthrowable exc = (*env)->ExceptionOccurred(env);");
         w.println("                      (*env)->ExceptionClear(env);");
         w.println("                      int hPc = vm_find_exception_handler(env, m, invokePc, exc);");
@@ -50,7 +53,10 @@ public class InvokeDynamicInstruction extends Instruction {
         w.println("              jobject result = vm_invoke_dynamic(env, &frame, meta);");
         w.println("              if (result != NULL) frame.stack[frame.sp++].l = result;");
         w.println("              if ((*env)->ExceptionCheck(env)) {");
-        w.println("                  VM_LOG(\"Exception thrown at pc=%d\\n\", invokePc);");
+        w.println("                  const char* _owner = vm_get_string(m->ownerIdx);");
+        w.println("                  const char* _name  = vm_get_string(m->nameIdx);");
+        w.println("                  const char* _desc  = vm_get_string(m->descIdx);");
+        w.println("                  VM_LOG(\"Exception thrown at pc=%d in %s.%s%s\\n\", invokePc, _owner, _name, _desc);");
         w.println("                  jthrowable exc = (*env)->ExceptionOccurred(env);");
         w.println("                  (*env)->ExceptionClear(env);");
         w.println("                  int hPc = vm_find_exception_handler(env, m, invokePc, exc);");

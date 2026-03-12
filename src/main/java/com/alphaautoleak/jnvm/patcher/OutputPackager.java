@@ -1,6 +1,7 @@
 package com.alphaautoleak.jnvm.patcher;
 
 import java.io.*;
+import java.nio.file.Files;
 import java.util.Enumeration;
 import java.util.HashSet;
 import java.util.List;
@@ -22,7 +23,7 @@ public class OutputPackager {
 
         try (JarFile original = new JarFile(jar);
              JarOutputStream jos = new JarOutputStream(
-                     new FileOutputStream(tempJar), original.getManifest())) {
+                     Files.newOutputStream(tempJar.toPath()), original.getManifest())) {
 
             Set<String> written = new HashSet<>();
 
