@@ -153,7 +153,10 @@ public class StackInstructions {
      * Register all stack operation instructions
      */
     public static void registerAll(InstructionRegistry registry) {
-        registry.register(new BaseInstructions.SimpleInstruction(0x57, "POP", "frame.sp--;"));
+        registry.register(new BaseInstructions.PolymorphicSimpleInstruction(0x57, "POP",
+                "frame.sp--;",
+                "frame.sp = frame.sp - 1;",
+                "--frame.sp;"));
         registry.register(new Pop2Instruction());
         registry.register(new DupInstruction(0x59, "DUP"));
         registry.register(new DupX1Instruction());

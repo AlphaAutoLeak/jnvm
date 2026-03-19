@@ -26,6 +26,7 @@ public class StringHelper extends VMHelper {
     @Override
     public void generateHeader(PrintWriter w) {
         w.println("const char* vm_get_string(int idx);");
+        w.println("int vm_get_string_len(int idx);");
         if (encryptStrings) {
             w.println("void vm_init_strings();");
         }
@@ -59,12 +60,26 @@ public class StringHelper extends VMHelper {
             w.println("    return (const char*)vs->encData;");
             w.println("}");
             w.println();
+
+            w.println("__attribute__((const))");
+            w.println("int vm_get_string_len(int idx) {");
+            w.println("    if (idx < 0 || idx >= vm_string_count) return 0;");
+            w.println("    return vm_strings[idx].len;");
+            w.println("}");
+            w.println();
         } else {
             // Non-encryption mode: return string directly
             w.println("__attribute__((const))");
             w.println("const char* vm_get_string(int idx) {");
             w.println("    if (idx < 0 || idx >= vm_string_count) return \"\";");
             w.println("    return (const char*)vm_strings[idx].encData;");
+            w.println("}");
+            w.println();
+
+            w.println("__attribute__((const))");
+            w.println("int vm_get_string_len(int idx) {");
+            w.println("    if (idx < 0 || idx >= vm_string_count) return 0;");
+            w.println("    return vm_strings[idx].len;");
             w.println("}");
             w.println();
         }

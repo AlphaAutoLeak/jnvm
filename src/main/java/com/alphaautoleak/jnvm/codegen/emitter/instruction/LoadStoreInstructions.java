@@ -8,6 +8,23 @@ import java.io.PrintWriter;
  * Load/Store instructions (64-bit only)
  */
 public class LoadStoreInstructions {
+    private static String[] loadLocalTemplates(int localIndex) {
+        String i = Integer.toString(localIndex);
+        return new String[] {
+                "frame.stack[frame.sp++] = frame.locals[" + i + "];",
+                "frame.stack[frame.sp] = frame.locals[" + i + "]; frame.sp++;",
+                "frame.sp += 1; frame.stack[frame.sp - 1] = frame.locals[" + i + "];"
+        };
+    }
+
+    private static String[] storeLocalTemplates(int localIndex) {
+        String i = Integer.toString(localIndex);
+        return new String[] {
+                "frame.locals[" + i + "] = frame.stack[--frame.sp];",
+                "frame.sp -= 1; frame.locals[" + i + "] = frame.stack[frame.sp];",
+                "frame.locals[" + i + "] = frame.stack[frame.sp - 1]; frame.sp -= 1;"
+        };
+    }
     
     /**
      * Register all load/store instructions
@@ -35,32 +52,32 @@ public class LoadStoreInstructions {
         
         // ILOAD_0 to ILOAD_3
         for (int i = 0; i < 4; i++) {
-            registry.register(new BaseInstructions.SimpleInstruction(0x1a + i, "ILOAD_" + i,
-                "frame.stack[frame.sp++] = frame.locals[" + i + "];"));
+            registry.register(new BaseInstructions.PolymorphicSimpleInstruction(0x1a + i, "ILOAD_" + i,
+                loadLocalTemplates(i)));
         }
         
         // LLOAD_0 to LLOAD_3
         for (int i = 0; i < 4; i++) {
-            registry.register(new BaseInstructions.SimpleInstruction(0x1e + i, "LLOAD_" + i,
-                "frame.stack[frame.sp++] = frame.locals[" + i + "];"));
+            registry.register(new BaseInstructions.PolymorphicSimpleInstruction(0x1e + i, "LLOAD_" + i,
+                loadLocalTemplates(i)));
         }
         
         // FLOAD_0 to FLOAD_3
         for (int i = 0; i < 4; i++) {
-            registry.register(new BaseInstructions.SimpleInstruction(0x22 + i, "FLOAD_" + i,
-                "frame.stack[frame.sp++] = frame.locals[" + i + "];"));
+            registry.register(new BaseInstructions.PolymorphicSimpleInstruction(0x22 + i, "FLOAD_" + i,
+                loadLocalTemplates(i)));
         }
         
         // DLOAD_0 to DLOAD_3
         for (int i = 0; i < 4; i++) {
-            registry.register(new BaseInstructions.SimpleInstruction(0x26 + i, "DLOAD_" + i,
-                "frame.stack[frame.sp++] = frame.locals[" + i + "];"));
+            registry.register(new BaseInstructions.PolymorphicSimpleInstruction(0x26 + i, "DLOAD_" + i,
+                loadLocalTemplates(i)));
         }
         
         // ALOAD_0 to ALOAD_3
         for (int i = 0; i < 4; i++) {
-            registry.register(new BaseInstructions.SimpleInstruction(0x2a + i, "ALOAD_" + i,
-                "frame.stack[frame.sp++] = frame.locals[" + i + "];"));
+            registry.register(new BaseInstructions.PolymorphicSimpleInstruction(0x2a + i, "ALOAD_" + i,
+                loadLocalTemplates(i)));
         }
         
         // ISTORE, LSTORE, FSTORE, DSTORE, ASTORE
@@ -72,28 +89,28 @@ public class LoadStoreInstructions {
         
         // ISTORE_0 to ISTORE_3
         for (int i = 0; i < 4; i++) {
-            registry.register(new BaseInstructions.SimpleInstruction(0x3b + i, "ISTORE_" + i,
-                "frame.locals[" + i + "] = frame.stack[--frame.sp];"));
+            registry.register(new BaseInstructions.PolymorphicSimpleInstruction(0x3b + i, "ISTORE_" + i,
+                storeLocalTemplates(i)));
         }
         // LSTORE_0 to LSTORE_3
         for (int i = 0; i < 4; i++) {
-            registry.register(new BaseInstructions.SimpleInstruction(0x3f + i, "LSTORE_" + i,
-                "frame.locals[" + i + "] = frame.stack[--frame.sp];"));
+            registry.register(new BaseInstructions.PolymorphicSimpleInstruction(0x3f + i, "LSTORE_" + i,
+                storeLocalTemplates(i)));
         }
         // FSTORE_0 to FSTORE_3
         for (int i = 0; i < 4; i++) {
-            registry.register(new BaseInstructions.SimpleInstruction(0x43 + i, "FSTORE_" + i,
-                "frame.locals[" + i + "] = frame.stack[--frame.sp];"));
+            registry.register(new BaseInstructions.PolymorphicSimpleInstruction(0x43 + i, "FSTORE_" + i,
+                storeLocalTemplates(i)));
         }
         // DSTORE_0 to DSTORE_3
         for (int i = 0; i < 4; i++) {
-            registry.register(new BaseInstructions.SimpleInstruction(0x47 + i, "DSTORE_" + i,
-                "frame.locals[" + i + "] = frame.stack[--frame.sp];"));
+            registry.register(new BaseInstructions.PolymorphicSimpleInstruction(0x47 + i, "DSTORE_" + i,
+                storeLocalTemplates(i)));
         }
         // ASTORE_0 to ASTORE_3
         for (int i = 0; i < 4; i++) {
-            registry.register(new BaseInstructions.SimpleInstruction(0x4b + i, "ASTORE_" + i,
-                "frame.locals[" + i + "] = frame.stack[--frame.sp];"));
+            registry.register(new BaseInstructions.PolymorphicSimpleInstruction(0x4b + i, "ASTORE_" + i,
+                storeLocalTemplates(i)));
         }
     }
 }

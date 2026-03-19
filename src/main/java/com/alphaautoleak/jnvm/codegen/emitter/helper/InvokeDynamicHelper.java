@@ -230,10 +230,10 @@ public class InvokeDynamicHelper extends VMHelper {
         w.println("}");
         w.println();
 
-        w.println("static jobject vm_indy_class_from_type_desc(JNIEnv* env, const char* typeDesc, jobject classLoader) {");
+        w.println("static jobject vm_indy_class_from_type_desc(JNIEnv* env, const char* typeDesc, int typeDescLen, jobject classLoader) {");
         w.println("    if (!typeDesc || !id_mtReturnTypeMid) return NULL;");
         w.println("    TMP_SAVE;");
-        w.println("    int len = (int)strlen(typeDesc);");
+        w.println("    int len = (typeDescLen >= 0) ? typeDescLen : (int)strlen(typeDesc);");
         w.println("    char* methodDesc = tmp_buf_alloc(len + 4);");
         w.println("    methodDesc[0] = '(';");
         w.println("    methodDesc[1] = ')';");
@@ -248,16 +248,16 @@ public class InvokeDynamicHelper extends VMHelper {
         w.println("}");
         w.println();
 
-        w.println("static jobject vm_indy_owner_class(JNIEnv* env, const char* ownerInternal, jobject classLoader) {");
+        w.println("static jobject vm_indy_owner_class(JNIEnv* env, const char* ownerInternal, int ownerLen, jobject classLoader) {");
         w.println("    if (!ownerInternal) return NULL;");
         w.println("    TMP_SAVE;");
-        w.println("    int len = (int)strlen(ownerInternal);");
+        w.println("    int len = (ownerLen >= 0) ? ownerLen : (int)strlen(ownerInternal);");
         w.println("    char* typeDesc = tmp_buf_alloc(len + 3);");
         w.println("    typeDesc[0] = 'L';");
         w.println("    memcpy(typeDesc + 1, ownerInternal, len);");
         w.println("    typeDesc[len + 1] = ';';");
         w.println("    typeDesc[len + 2] = '\\0';");
-        w.println("    jobject cls = vm_indy_class_from_type_desc(env, typeDesc, classLoader);");
+        w.println("    jobject cls = vm_indy_class_from_type_desc(env, typeDesc, len + 2, classLoader);");
         w.println("    if (!cls) {");
         w.println("        vm_indy_clear_if_exception(env);");
         w.println("        cls = vm_find_class(env, ownerInternal);");
@@ -269,9 +269,9 @@ public class InvokeDynamicHelper extends VMHelper {
     }
 
     private void emitHelperPart3(PrintWriter w) {
-        w.println("static jobject vm_indy_resolve_handle(JNIEnv* env, jobject lookup, int tag, const char* owner, const char* name, const char* desc, jobject classLoader) {");
+        w.println("static jobject vm_indy_resolve_handle(JNIEnv* env, jobject lookup, int tag, const char* owner, int ownerLen, const char* name, const char* desc, jobject classLoader) {");
         w.println("    if (!lookup || !owner || !name || !desc) return NULL;");
-        w.println("    jobject ownerClass = vm_indy_owner_class(env, owner, classLoader);");
+        w.println("    jobject ownerClass = vm_indy_owner_class(env, owner, ownerLen, classLoader);");
         w.println("    if (!ownerClass) return NULL;");
         w.println("    jstring nameStr = (*env)->NewStringUTF(env, name);");
         w.println("    if (!nameStr) return NULL;");
@@ -289,7 +289,7 @@ public class InvokeDynamicHelper extends VMHelper {
         w.println("        if ((*env)->ExceptionCheck(env)) return NULL;");
         w.println("        return mh;");
         w.println("    }");
-        w.println("    jobject fieldType = vm_indy_class_from_type_desc(env, desc, classLoader);");
+        w.println("    jobject fieldType = vm_indy_class_from_type_desc(env, desc, -1, classLoader);");
         w.println("    if (!fieldType) return NULL;");
         w.println("    jobject mh = NULL;");
         w.println("    switch (tag) {");
@@ -317,7 +317,7 @@ public class InvokeDynamicHelper extends VMHelper {
         w.println("            const char* className = vm_get_string(a->strIdx);");
         w.println("            if (!className) return NULL;");
         w.println("            TMP_SAVE;");
-        w.println("            int len = (int)strlen(className);");
+        w.println("            int len = vm_get_string_len(a->strIdx);");
         w.println("            const char* descToUse = NULL;");
         w.println("            if (len == 1 || className[0] == '[' || className[0] == 'L') {");
         w.println("                descToUse = className;");
@@ -329,7 +329,7 @@ public class InvokeDynamicHelper extends VMHelper {
         w.println("                clsDesc[len + 2] = '\\0';");
         w.println("                descToUse = clsDesc;");
         w.println("            }");
-        w.println("            jobject cls = vm_indy_class_from_type_desc(env, descToUse, classLoader);");
+        w.println("            jobject cls = vm_indy_class_from_type_desc(env, descToUse, (len == 1 || className[0] == '[' || className[0] == 'L') ? len : (len + 2), classLoader);");
         w.println("            TMP_RESTORE;");
         w.println("            return cls;");
         w.println("        }");
@@ -337,7 +337,7 @@ public class InvokeDynamicHelper extends VMHelper {
         w.println("            const char* owner = vm_get_string(a->ownerIdx);");
         w.println("            const char* name = vm_get_string(a->nameIdx);");
         w.println("            const char* desc = vm_get_string(a->descIdx);");
-        w.println("            return vm_indy_resolve_handle(env, lookup, a->handleTag, owner, name, desc, classLoader);");
+        w.println("            return vm_indy_resolve_handle(env, lookup, a->handleTag, owner, vm_get_string_len(a->ownerIdx), name, desc, classLoader);");
         w.println("        }");
         w.println("        default: return NULL;");
         w.println("    }");
@@ -450,7 +450,7 @@ public class InvokeDynamicHelper extends VMHelper {
         w.println("            return NULL;");
         w.println("        }");
         w.println();
-        w.println("        jobject bsmHandle = vm_indy_resolve_handle(env, lookup, bsm->handleTag, bsmOwner, bsmName, bsmDesc, classLoader);");
+        w.println("        jobject bsmHandle = vm_indy_resolve_handle(env, lookup, bsm->handleTag, bsmOwner, vm_get_string_len(bsm->ownerIdx), bsmName, bsmDesc, classLoader);");
         w.println("        if (!bsmHandle) {");
         w.println("            if (!(*env)->ExceptionCheck(env)) vm_indy_throw_bsm_error(env, \"Failed to resolve bootstrap MethodHandle\");");
         w.println("            TMP_RESTORE;");

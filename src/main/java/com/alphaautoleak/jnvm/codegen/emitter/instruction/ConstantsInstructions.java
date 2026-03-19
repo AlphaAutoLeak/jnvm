@@ -8,6 +8,45 @@ import java.io.PrintWriter;
  * Constant loading instructions (64-bit only)
  */
 public class ConstantsInstructions {
+    private static String[] intConstTemplates(String value) {
+        return new String[] {
+                "frame.stack[frame.sp++].i = " + value + ";",
+                "frame.stack[frame.sp].i = " + value + "; frame.sp++;",
+                "frame.sp += 1; frame.stack[frame.sp - 1].i = " + value + ";"
+        };
+    }
+
+    private static String[] longConstTemplates(String value) {
+        return new String[] {
+                "frame.stack[frame.sp++].j = " + value + ";",
+                "frame.stack[frame.sp].j = " + value + "; frame.sp++;",
+                "frame.sp += 1; frame.stack[frame.sp - 1].j = " + value + ";"
+        };
+    }
+
+    private static String[] floatConstTemplates(String value) {
+        return new String[] {
+                "frame.stack[frame.sp++].f = " + value + ";",
+                "frame.stack[frame.sp].f = " + value + "; frame.sp++;",
+                "frame.sp += 1; frame.stack[frame.sp - 1].f = " + value + ";"
+        };
+    }
+
+    private static String[] doubleConstTemplates(String value) {
+        return new String[] {
+                "frame.stack[frame.sp++].d = " + value + ";",
+                "frame.stack[frame.sp].d = " + value + "; frame.sp++;",
+                "frame.sp += 1; frame.stack[frame.sp - 1].d = " + value + ";"
+        };
+    }
+
+    private static String[] nullConstTemplates() {
+        return new String[] {
+                "frame.stack[frame.sp++].l = NULL;",
+                "frame.stack[frame.sp].l = NULL; frame.sp++;",
+                "frame.sp += 1; frame.stack[frame.sp - 1].l = NULL;"
+        };
+    }
     
     /** LDC instruction */
     public static class LdcInstruction extends Instruction {
@@ -83,7 +122,7 @@ public class ConstantsInstructions {
             w.println(indent + "            if (err) (*env)->ThrowNew(env, err, \"LDC MethodHandle resolution failed\");");
             w.println(indent + "            break;");
             w.println(indent + "        }");
-            w.println(indent + "        jobject mh = vm_indy_resolve_handle(env, lookup, meta->handleTag, owner, name, desc, classLoader);");
+            w.println(indent + "        jobject mh = vm_indy_resolve_handle(env, lookup, meta->handleTag, owner, vm_get_string_len(meta->ownerIdx), name, desc, classLoader);");
             w.println(indent + "        if ((*env)->ExceptionCheck(env)) { break; }");
             w.println(indent + "        if (!mh) {");
             w.println(indent + "            jclass err = vm_find_class(env, \"java/lang/LinkageError\");");
@@ -138,34 +177,34 @@ public class ConstantsInstructions {
      */
     public static void registerAll(InstructionRegistry registry) {
         // ICONST_M1 to ICONST_5
-        registry.register(new BaseInstructions.SimpleInstruction(0x02, "ICONST_M1", 
-            "frame.stack[frame.sp++].i = -1;"));
+        registry.register(new BaseInstructions.PolymorphicSimpleInstruction(0x02, "ICONST_M1",
+            intConstTemplates("-1")));
         for (int i = 0; i <= 5; i++) {
-            registry.register(new BaseInstructions.SimpleInstruction(0x03 + i, "ICONST_" + i, 
-                "frame.stack[frame.sp++].i = " + i + ";"));
+            registry.register(new BaseInstructions.PolymorphicSimpleInstruction(0x03 + i, "ICONST_" + i,
+                intConstTemplates(Integer.toString(i))));
         }
         
         // LCONST_0, LCONST_1
-        registry.register(new BaseInstructions.SimpleInstruction(0x09, "LCONST_0", 
-            "frame.stack[frame.sp++].j = 0L;"));
-        registry.register(new BaseInstructions.SimpleInstruction(0x0a, "LCONST_1", 
-            "frame.stack[frame.sp++].j = 1L;"));
+        registry.register(new BaseInstructions.PolymorphicSimpleInstruction(0x09, "LCONST_0",
+            longConstTemplates("0L")));
+        registry.register(new BaseInstructions.PolymorphicSimpleInstruction(0x0a, "LCONST_1",
+            longConstTemplates("1L")));
         
         // FCONST_0, FCONST_1, FCONST_2
         for (int i = 0; i <= 2; i++) {
-            registry.register(new BaseInstructions.SimpleInstruction(0x0b + i, "FCONST_" + i,
-                "frame.stack[frame.sp++].f = " + i + ".0f;"));
+            registry.register(new BaseInstructions.PolymorphicSimpleInstruction(0x0b + i, "FCONST_" + i,
+                floatConstTemplates(i + ".0f")));
         }
         
         // DCONST_0, DCONST_1
-        registry.register(new BaseInstructions.SimpleInstruction(0x0e, "DCONST_0", 
-            "frame.stack[frame.sp++].d = 0.0;"));
-        registry.register(new BaseInstructions.SimpleInstruction(0x0f, "DCONST_1", 
-            "frame.stack[frame.sp++].d = 1.0;"));
+        registry.register(new BaseInstructions.PolymorphicSimpleInstruction(0x0e, "DCONST_0",
+            doubleConstTemplates("0.0")));
+        registry.register(new BaseInstructions.PolymorphicSimpleInstruction(0x0f, "DCONST_1",
+            doubleConstTemplates("1.0")));
         
         // ACONST_NULL
-        registry.register(new BaseInstructions.SimpleInstruction(0x01, "ACONST_NULL", 
-            "frame.stack[frame.sp++].l = NULL;"));
+        registry.register(new BaseInstructions.PolymorphicSimpleInstruction(0x01, "ACONST_NULL",
+            nullConstTemplates()));
         
         // BIPUSH, SIPUSH
         registry.register(new BaseInstructions.MetaInstruction(0x10, "BIPUSH", 
