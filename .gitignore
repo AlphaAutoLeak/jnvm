@@ -52,3 +52,4 @@ calculations.txt
 *.md
 /.iflow
 /samples/zkm/classes
+/samples/bench/classes

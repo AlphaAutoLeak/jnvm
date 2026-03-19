@@ -96,6 +96,7 @@ public class JarScanner {
         String className = cn.name; // internal format
 
         bootstrapGuard.scanClass(cn);
+        boolean stackTraceSensitiveClass = isStackTraceSensitiveClass(cn);
 
         // Skip interfaces (no method body) and synthetic classes
         if ((cn.access & Opcodes.ACC_INTERFACE) != 0 &&
@@ -115,6 +116,9 @@ public class JarScanner {
         }
 
         for (MethodNode mn : cn.methods) {
+            if (stackTraceSensitiveClass) {
+                continue;
+            }
             // Skip abstract and native methods (no bytecode)
             if ((mn.access & Opcodes.ACC_ABSTRACT) != 0 ||
                     (mn.access & Opcodes.ACC_NATIVE) != 0) {
@@ -142,6 +146,10 @@ public class JarScanner {
                 affectedClasses.add(className);
                 System.out.println("  [+] " + info);
             }
+        }
+
+        if (stackTraceSensitiveClass) {
+            System.out.println("  [SKIP] Stacktrace-sensitive class: " + className.replace('/', '.'));
         }
     }
 
@@ -214,6 +222,27 @@ public class JarScanner {
         for (AnnotationNode ann : mn.visibleAnnotations) {
             if (annotationDescs.contains(ann.desc)) {
                 return true;
+            }
+        }
+        return false;
+    }
+
+    private boolean isStackTraceSensitiveClass(ClassNode cn) {
+        for (MethodNode mn : cn.methods) {
+            if (mn.instructions == null) continue;
+            for (AbstractInsnNode insn = mn.instructions.getFirst(); insn != null; insn = insn.getNext()) {
+                if (!(insn instanceof MethodInsnNode)) continue;
+                MethodInsnNode mi = (MethodInsnNode) insn;
+                if ("java/lang/Throwable".equals(mi.owner)
+                        && "getStackTrace".equals(mi.name)
+                        && "()[Ljava/lang/StackTraceElement;".equals(mi.desc)) {
+                    return true;
+                }
+                if ("java/lang/StackTraceElement".equals(mi.owner)
+                        && "getMethodName".equals(mi.name)
+                        && "()Ljava/lang/String;".equals(mi.desc)) {
+                    return true;
+                }
             }
         }
         return false;

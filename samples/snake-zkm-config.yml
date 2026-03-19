@@ -5,3 +5,4 @@ protect:
 encrypt-strings: false
 debug: false
 protect-bootstrap-payload: true
+direct-native-rewrite: false

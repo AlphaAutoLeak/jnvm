@@ -97,7 +97,11 @@ public class Converter {
     }
 
     private JarPatcher createJarPatcher() {
-        return new JarPatcher(protectedMethods, affectedClasses);
+        return new JarPatcher(
+                protectedMethods,
+                affectedClasses,
+                config.isDirectNativeRewrite()
+        );
     }
 
     private ZigCompiler generateAndCompileNativeCode(JarPatcher patcher) throws Exception {
@@ -105,8 +109,10 @@ public class Converter {
         NativeCodeGenerator codegen = new NativeCodeGenerator(
                 config,
                 encryptedMethods,
+                protectedMethods,
                 patcher.getBridgeClass(),
                 patcher.getMethodIdXorKey(),
+                config.isDirectNativeRewrite(),
                 opcodeObfuscator
         );
         codegen.generate();

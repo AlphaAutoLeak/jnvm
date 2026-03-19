@@ -1,5 +1,6 @@
 package com.alphaautoleak.jnvm.codegen;
 
+import com.alphaautoleak.jnvm.asm.MethodInfo;
 import com.alphaautoleak.jnvm.codegen.emitter.*;
 import com.alphaautoleak.jnvm.config.ProtectConfig;
 import com.alphaautoleak.jnvm.crypto.EncryptedMethodData;
@@ -20,18 +21,27 @@ public class NativeCodeGenerator {
 
     private final ProtectConfig config;
     private final List<EncryptedMethodData> methods;
+    private final List<MethodInfo> protectedMethods;
     private final byte[] stringKey;
     private final String bridgeClass;
     private final int methodIdXorKey;
+    private final boolean directNativeRewrite;
     private final OpcodeObfuscator opcodeObfuscator;
 
-    public NativeCodeGenerator(ProtectConfig config, List<EncryptedMethodData> methods, 
-                               String bridgeClass, int methodIdXorKey, OpcodeObfuscator opcodeObfuscator) {
+    public NativeCodeGenerator(ProtectConfig config,
+                               List<EncryptedMethodData> methods,
+                               List<MethodInfo> protectedMethods,
+                               String bridgeClass,
+                               int methodIdXorKey,
+                               boolean directNativeRewrite,
+                               OpcodeObfuscator opcodeObfuscator) {
         this.config = config;
         this.methods = methods;
+        this.protectedMethods = protectedMethods;
         this.stringKey = StringEncryptor.generateStringKey();
         this.bridgeClass = bridgeClass;
         this.methodIdXorKey = methodIdXorKey;
+        this.directNativeRewrite = directNativeRewrite;
         this.opcodeObfuscator = opcodeObfuscator;
     }
 
@@ -64,7 +74,14 @@ public class NativeCodeGenerator {
         System.out.println("  [+] vm_interpreter.h / vm_interpreter.c");
 
         // vm_bridge.c
-        new VmBridgeGenerator(dir, bridgeClass, encryptStrings).generate();
+        new VmBridgeGenerator(
+                dir,
+                bridgeClass,
+                encryptStrings,
+                protectedMethods,
+                methodIdXorKey,
+                directNativeRewrite
+        ).generate();
         System.out.println("  [+] vm_bridge.c");
 
         System.out.println("[CODEGEN] Generated " + 7 + " files.");

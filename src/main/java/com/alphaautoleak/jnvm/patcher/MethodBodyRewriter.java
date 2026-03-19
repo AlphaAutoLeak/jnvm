@@ -1,55 +1,61 @@
 package com.alphaautoleak.jnvm.patcher;
 
 import com.alphaautoleak.jnvm.utils.InstructionsUtil;
+import com.alphaautoleak.jnvm.utils.BridgeFastPathUtil;
 import org.objectweb.asm.Opcodes;
 import org.objectweb.asm.Type;
 import org.objectweb.asm.tree.*;
 
 /**
- * Rewrites method body to call corresponding VMBridge.executeXxx() method
- * Selects different native functions based on return type, avoiding boxing/unboxing
+ * Rewrites protected method bodies to native bridge calls.
+ * Supports legacy bridge mode and direct-native-rewrite mode.
  */
 public class MethodBodyRewriter {
 
+    static final String REGISTER_NATIVE_METHOD_NAME = "__jnvm$registerClassNatives";
+    static final String REGISTER_NATIVE_METHOD_DESC = "(Ljava/lang/Class;)V";
+
     private final String bridgeClass;
     private final int methodIdXorKey;
+    private final boolean directNativeRewrite;
 
-    // Execute method descriptors for each return type
-    // New format: args[0]=instance, args[1..n]=params, args[n+1]=callerClass
-    private static final String EXECUTE_VOID_DESC   = "(I[Ljava/lang/Object;)V";
-    private static final String EXECUTE_INT_DESC    = "(I[Ljava/lang/Object;)I";
-    private static final String EXECUTE_LONG_DESC   = "(I[Ljava/lang/Object;)J";
-    private static final String EXECUTE_FLOAT_DESC  = "(I[Ljava/lang/Object;)F";
-    private static final String EXECUTE_DOUBLE_DESC = "(I[Ljava/lang/Object;)D";
-    private static final String EXECUTE_OBJECT_DESC = "(I[Ljava/lang/Object;)Ljava/lang/Object;";
-
-    MethodBodyRewriter(String bridgeClass, int methodIdXorKey) {
+    MethodBodyRewriter(String bridgeClass, int methodIdXorKey, boolean directNativeRewrite) {
         this.bridgeClass = bridgeClass;
         this.methodIdXorKey = methodIdXorKey;
+        this.directNativeRewrite = directNativeRewrite;
     }
 
-    void rewrite(ClassNode cn, MethodNode mn, int methodId) {
+    void rewrite(ClassNode cn, MethodNode mn, int methodId, boolean classHasDirectNativeMethods) {
+        if (directNativeRewrite) {
+            if ("<clinit>".equals(mn.name)) {
+                rewriteClinitForDirectNative(cn, mn, methodId, classHasDirectNativeMethods);
+            } else {
+                rewriteAsDirectNative(mn);
+            }
+            return;
+        }
+        rewriteLegacyObjectArray(cn, mn, methodId);
+    }
+
+    private void rewriteLegacyObjectArray(ClassNode cn, MethodNode mn, int methodId) {
         boolean isStatic = (mn.access & Opcodes.ACC_STATIC) != 0;
         Type[] argTypes = Type.getArgumentTypes(mn.desc);
         Type retType = Type.getReturnType(mn.desc);
 
         InsnList insns = new InsnList();
+        int obfMethodId = BridgeFastPathUtil.obfuscateMethodId(methodId, methodIdXorKey);
 
-        // 1. Push methodId (XOR obfuscated)
-        int obfuscatedMethodId = methodId ^ methodIdXorKey;
-        insns.add(new LdcInsnNode(obfuscatedMethodId));
+        // 1) methodId
+        InstructionsUtil.pushInt(insns, obfMethodId);
 
-        // 2. Create parameter array Object[] with unified format:
-        //    args[0] = instance (or null for static methods)
-        //    args[1..n] = method parameters
-        //    args[n+1] = callerClass
-        int totalArgs = 1 + argTypes.length + 1; // instance + params + callerClass
-        insns.add(new LdcInsnNode(totalArgs));
+        // 2) Object[] args: [0]=instance/null, [1..n]=params boxed, [n+1]=callerClass
+        int argsArrayLen = argTypes.length + 2;
+        InstructionsUtil.pushInt(insns, argsArrayLen);
         insns.add(new TypeInsnNode(Opcodes.ANEWARRAY, "java/lang/Object"));
 
-        // args[0] = instance (this or null)
+        // args[0] = receiver (or null for static)
         insns.add(new InsnNode(Opcodes.DUP));
-        insns.add(new LdcInsnNode(0));
+        InstructionsUtil.pushInt(insns, 0);
         if (isStatic) {
             insns.add(new InsnNode(Opcodes.ACONST_NULL));
         } else {
@@ -57,11 +63,11 @@ public class MethodBodyRewriter {
         }
         insns.add(new InsnNode(Opcodes.AASTORE));
 
-        // args[1..n] = method parameters
+        // args[1..n] = boxed parameters
         int localIdx = isStatic ? 0 : 1;
         for (int i = 0; i < argTypes.length; i++) {
             insns.add(new InsnNode(Opcodes.DUP));
-            insns.add(new LdcInsnNode(i + 1)); // offset by 1 for instance
+            InstructionsUtil.pushInt(insns, i + 1);
             InstructionsUtil.loadAndBox(insns, argTypes[i], localIdx);
             insns.add(new InsnNode(Opcodes.AASTORE));
             localIdx += argTypes[i].getSize();
@@ -69,19 +75,22 @@ public class MethodBodyRewriter {
 
         // args[n+1] = callerClass
         insns.add(new InsnNode(Opcodes.DUP));
-        insns.add(new LdcInsnNode(argTypes.length + 1));
+        InstructionsUtil.pushInt(insns, argTypes.length + 1);
         insns.add(new LdcInsnNode(org.objectweb.asm.Type.getType("L" + cn.name + ";")));
         insns.add(new InsnNode(Opcodes.AASTORE));
 
-        // 5. Call corresponding native method based on return type
-        String executeMethod = getExecuteMethod(retType);
-        String executeDesc = getExecuteDesc(retType);
-        insns.add(new MethodInsnNode(Opcodes.INVOKESTATIC, bridgeClass, executeMethod, executeDesc, false));
+        // 3) call legacy bridge entry
+        insns.add(new MethodInsnNode(
+                Opcodes.INVOKESTATIC,
+                bridgeClass,
+                getLegacyExecuteMethodName(retType),
+                getLegacyExecuteDesc(retType),
+                false
+        ));
 
-        // 6. Generate return instruction (no unboxing needed)
+        // 4) return
         generateDirectReturn(insns, retType);
 
-        // Replace method body
         mn.instructions.clear();
         mn.instructions.add(insns);
         mn.tryCatchBlocks.clear();
@@ -90,51 +99,125 @@ public class MethodBodyRewriter {
         mn.maxLocals = 0;
     }
 
-    /**
-     * Gets execute method name based on return type
-     */
-    private String getExecuteMethod(Type retType) {
+    void prependRegisterCallToClinit(ClassNode cn, MethodNode clinit) {
+        InsnList prelude = buildRegisterClassNativesPrelude(cn.name);
+        clinit.instructions.insert(prelude);
+    }
+
+    MethodNode createSyntheticRegisterOnlyClinit(String ownerClassInternalName) {
+        MethodNode mn = new MethodNode(
+                Opcodes.ACC_STATIC,
+                "<clinit>",
+                "()V",
+                null,
+                null
+        );
+        mn.instructions.add(buildRegisterClassNativesPrelude(ownerClassInternalName));
+        mn.instructions.add(new InsnNode(Opcodes.RETURN));
+        mn.maxStack = 0;
+        mn.maxLocals = 0;
+        return mn;
+    }
+
+    private InsnList buildRegisterClassNativesPrelude(String ownerClassInternalName) {
+        InsnList insns = new InsnList();
+        insns.add(new LdcInsnNode(Type.getType("L" + ownerClassInternalName + ";")));
+        insns.add(new MethodInsnNode(
+                Opcodes.INVOKESTATIC,
+                bridgeClass,
+                REGISTER_NATIVE_METHOD_NAME,
+                REGISTER_NATIVE_METHOD_DESC,
+                false
+        ));
+        return insns;
+    }
+
+    private void rewriteAsDirectNative(MethodNode mn) {
+        mn.access |= Opcodes.ACC_NATIVE;
+        mn.access &= ~Opcodes.ACC_ABSTRACT;
+        if (mn.instructions != null) {
+            mn.instructions.clear();
+        }
+        mn.tryCatchBlocks.clear();
+        if (mn.localVariables != null) mn.localVariables.clear();
+        mn.maxStack = 0;
+        mn.maxLocals = 0;
+    }
+
+    private void rewriteClinitForDirectNative(ClassNode cn, MethodNode mn, int methodId, boolean classHasDirectNativeMethods) {
+        InsnList insns = new InsnList();
+        int obfMethodId = BridgeFastPathUtil.obfuscateMethodId(methodId, methodIdXorKey);
+
+        // 1) Ensure this class direct-native methods are registered before VM execute
+        if (classHasDirectNativeMethods) {
+            insns.add(buildRegisterClassNativesPrelude(cn.name));
+        }
+
+        // 2) executeVoid(methodId, new Object[]{ null, callerClass })
+        InstructionsUtil.pushInt(insns, obfMethodId);
+        InstructionsUtil.pushInt(insns, 2);
+        insns.add(new TypeInsnNode(Opcodes.ANEWARRAY, "java/lang/Object"));
+
+        insns.add(new InsnNode(Opcodes.DUP));
+        InstructionsUtil.pushInt(insns, 0);
+        insns.add(new InsnNode(Opcodes.ACONST_NULL));
+        insns.add(new InsnNode(Opcodes.AASTORE));
+
+        insns.add(new InsnNode(Opcodes.DUP));
+        InstructionsUtil.pushInt(insns, 1);
+        insns.add(new LdcInsnNode(Type.getType("L" + cn.name + ";")));
+        insns.add(new InsnNode(Opcodes.AASTORE));
+
+        insns.add(new MethodInsnNode(
+                Opcodes.INVOKESTATIC,
+                bridgeClass,
+                "executeVoid",
+                "(I[Ljava/lang/Object;)V",
+                false
+        ));
+        insns.add(new InsnNode(Opcodes.RETURN));
+
+        mn.instructions.clear();
+        mn.instructions.add(insns);
+        mn.tryCatchBlocks.clear();
+        if (mn.localVariables != null) mn.localVariables.clear();
+        mn.maxStack = 0;
+        mn.maxLocals = 0;
+    }
+
+    private String getLegacyExecuteMethodName(Type retType) {
         switch (retType.getSort()) {
             case Type.VOID:
                 return "executeVoid";
-            case Type.BOOLEAN:
-            case Type.BYTE:
-            case Type.CHAR:
-            case Type.SHORT:
-            case Type.INT:
-                return "executeInt";
             case Type.LONG:
                 return "executeLong";
             case Type.FLOAT:
                 return "executeFloat";
             case Type.DOUBLE:
                 return "executeDouble";
-            default:
+            case Type.OBJECT:
+            case Type.ARRAY:
                 return "executeObject";
+            default:
+                return "executeInt";
         }
     }
 
-    /**
-     * Gets method descriptor based on return type
-     */
-    private String getExecuteDesc(Type retType) {
+    private String getLegacyExecuteDesc(Type retType) {
         switch (retType.getSort()) {
             case Type.VOID:
-                return EXECUTE_VOID_DESC;
-            case Type.BOOLEAN:
-            case Type.BYTE:
-            case Type.CHAR:
-            case Type.SHORT:
-            case Type.INT:
-                return EXECUTE_INT_DESC;
+                return "(I[Ljava/lang/Object;)V";
             case Type.LONG:
-                return EXECUTE_LONG_DESC;
+                return "(I[Ljava/lang/Object;)J";
             case Type.FLOAT:
-                return EXECUTE_FLOAT_DESC;
+                return "(I[Ljava/lang/Object;)F";
             case Type.DOUBLE:
-                return EXECUTE_DOUBLE_DESC;
+                return "(I[Ljava/lang/Object;)D";
+            case Type.OBJECT:
+            case Type.ARRAY:
+                return "(I[Ljava/lang/Object;)Ljava/lang/Object;";
             default:
-                return EXECUTE_OBJECT_DESC;
+                return "(I[Ljava/lang/Object;)I";
         }
     }
 

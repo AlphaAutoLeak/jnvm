@@ -6,7 +6,9 @@ import com.alphaautoleak.jnvm.utils.MethodKeyUtil;
 import org.objectweb.asm.ClassReader;
 import org.objectweb.asm.ClassWriter;
 import org.objectweb.asm.Opcodes;
+import org.objectweb.asm.tree.AbstractInsnNode;
 import org.objectweb.asm.tree.ClassNode;
+import org.objectweb.asm.tree.MethodInsnNode;
 import org.objectweb.asm.tree.MethodNode;
 
 import java.io.*;
@@ -22,14 +24,20 @@ public class JarPatcher {
     private final Set<String> affectedClasses;
     private final String bridgeClass;
     private final int methodIdXorKey;
+    private final boolean directNativeRewrite;
     private final Map<String, Integer> methodIdMap = new HashMap<>();
+    private final Set<String> classesWithDirectNativeMethods = new HashSet<>();
+    private final Set<String> classesWithProtectedClinit = new HashSet<>();
 
     private final MethodBodyRewriter rewriter;
     private final BridgeClassGenerator bridgeGenerator;
 
-    public JarPatcher(List<MethodInfo> protectedMethods, Set<String> affectedClasses) {
+    public JarPatcher(List<MethodInfo> protectedMethods,
+                      Set<String> affectedClasses,
+                      boolean directNativeRewrite) {
         this.affectedClasses = affectedClasses;
         this.bridgeClass = BridgePackageNameGenerator.generate();
+        this.directNativeRewrite = directNativeRewrite;
 
         Random rand = new Random();
         int key;
@@ -41,9 +49,16 @@ public class JarPatcher {
         for (MethodInfo m : protectedMethods) {
             String k = MethodKeyUtil.of(m.getOwner(), m.getName(), m.getDescriptor());
             methodIdMap.put(k, m.getMethodId());
+            if (directNativeRewrite) {
+                if (m.isClassInit()) {
+                    classesWithProtectedClinit.add(m.getOwner());
+                } else if (!m.isConstructor()) {
+                    classesWithDirectNativeMethods.add(m.getOwner());
+                }
+            }
         }
 
-        this.rewriter = new MethodBodyRewriter(bridgeClass, methodIdXorKey);
+        this.rewriter = new MethodBodyRewriter(bridgeClass, methodIdXorKey, directNativeRewrite);
         this.bridgeGenerator = new BridgeClassGenerator(bridgeClass);
     }
 
@@ -117,18 +132,61 @@ public class JarPatcher {
         ClassReader cr = new ClassReader(classBytes);
         ClassNode cn = new ClassNode(Opcodes.ASM9);
         cr.accept(cn, 0);
+        boolean classHasDirectNativeMethods = directNativeRewrite && classesWithDirectNativeMethods.contains(cn.name);
 
         for (MethodNode mn : cn.methods) {
             String key = MethodKeyUtil.of(cn.name, mn.name, mn.desc);
             Integer methodId = methodIdMap.get(key);
             if (methodId == null) continue;
 
-            rewriter.rewrite(cn, mn, methodId);
+            rewriter.rewrite(cn, mn, methodId, classHasDirectNativeMethods);
+        }
+
+        if (directNativeRewrite && classHasDirectNativeMethods
+                && !classesWithProtectedClinit.contains(cn.name)) {
+            ensureClinitRegistersClassNatives(cn);
         }
 
         ClassWriter cw = new ClassWriter(ClassWriter.COMPUTE_FRAMES | ClassWriter.COMPUTE_MAXS);
         cn.accept(cw);
         return cw.toByteArray();
+    }
+
+    private void ensureClinitRegistersClassNatives(ClassNode cn) {
+        MethodNode clinit = null;
+        for (MethodNode method : cn.methods) {
+            if ("<clinit>".equals(method.name) && "()V".equals(method.desc)) {
+                clinit = method;
+                break;
+            }
+        }
+        if (clinit == null) {
+            cn.methods.add(rewriter.createSyntheticRegisterOnlyClinit(cn.name));
+            return;
+        }
+        if (hasRegisterPreludeCall(clinit)) {
+            return;
+        }
+        rewriter.prependRegisterCallToClinit(cn, clinit);
+    }
+
+    private boolean hasRegisterPreludeCall(MethodNode clinit) {
+        AbstractInsnNode cur = clinit.instructions.getFirst();
+        int inspected = 0;
+        while (cur != null && inspected < 16) {
+            if (cur instanceof MethodInsnNode) {
+                MethodInsnNode mi = (MethodInsnNode) cur;
+                if (mi.getOpcode() == Opcodes.INVOKESTATIC
+                        && bridgeClass.equals(mi.owner)
+                        && MethodBodyRewriter.REGISTER_NATIVE_METHOD_NAME.equals(mi.name)
+                        && MethodBodyRewriter.REGISTER_NATIVE_METHOD_DESC.equals(mi.desc)) {
+                    return true;
+                }
+            }
+            cur = cur.getNext();
+            inspected++;
+        }
+        return false;
     }
 
     private byte[] readAll(InputStream is) throws IOException {

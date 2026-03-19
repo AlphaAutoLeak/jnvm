@@ -4,3 +4,4 @@ protect:
   - "**"
 encrypt-strings: false
 debug: false
+direct-native-rewrite: false

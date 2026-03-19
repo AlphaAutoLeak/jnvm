@@ -23,57 +23,8 @@ class BridgeClassGenerator {
                 "java/lang/Object",
                 null);
 
-        // Declare 6 type-specialized native methods
-        // Note: declared as native but actually registered via RegisterNatives
-        // New format: args[0]=instance, args[1..n]=params, args[n+1]=callerClass
-
-        // static native void executeVoid(int, Object[])
-        cw.visitMethod(
-                Opcodes.ACC_PUBLIC | Opcodes.ACC_STATIC | Opcodes.ACC_NATIVE,
-                "executeVoid",
-                "(I[Ljava/lang/Object;)V",
-                null,
-                null).visitEnd();
-
-        // static native int executeInt(int, Object[])
-        cw.visitMethod(
-                Opcodes.ACC_PUBLIC | Opcodes.ACC_STATIC | Opcodes.ACC_NATIVE,
-                "executeInt",
-                "(I[Ljava/lang/Object;)I",
-                null,
-                null).visitEnd();
-
-        // static native long executeLong(int, Object[])
-        cw.visitMethod(
-                Opcodes.ACC_PUBLIC | Opcodes.ACC_STATIC | Opcodes.ACC_NATIVE,
-                "executeLong",
-                "(I[Ljava/lang/Object;)J",
-                null,
-                null).visitEnd();
-
-        // static native float executeFloat(int, Object[])
-        cw.visitMethod(
-                Opcodes.ACC_PUBLIC | Opcodes.ACC_STATIC | Opcodes.ACC_NATIVE,
-                "executeFloat",
-                "(I[Ljava/lang/Object;)F",
-                null,
-                null).visitEnd();
-
-        // static native double executeDouble(int, Object[])
-        cw.visitMethod(
-                Opcodes.ACC_PUBLIC | Opcodes.ACC_STATIC | Opcodes.ACC_NATIVE,
-                "executeDouble",
-                "(I[Ljava/lang/Object;)D",
-                null,
-                null).visitEnd();
-
-        // static native Object executeObject(int, Object[])
-        cw.visitMethod(
-                Opcodes.ACC_PUBLIC | Opcodes.ACC_STATIC | Opcodes.ACC_NATIVE,
-                "executeObject",
-                "(I[Ljava/lang/Object;)Ljava/lang/Object;",
-                null,
-                null).visitEnd();
+        // Legacy bridge native methods
+        generateLegacyNativeMethods(cw);
 
         generateClinit(cw);
         generateExtractAndLoadMethod(cw);
@@ -83,6 +34,51 @@ class BridgeClassGenerator {
 
         cw.visitEnd();
         return cw.toByteArray();
+    }
+
+    private void generateLegacyNativeMethods(ClassWriter cw) {
+        cw.visitMethod(
+                Opcodes.ACC_PUBLIC | Opcodes.ACC_STATIC | Opcodes.ACC_NATIVE,
+                "__jnvm$registerClassNatives",
+                "(Ljava/lang/Class;)V",
+                null,
+                null).visitEnd();
+        cw.visitMethod(
+                Opcodes.ACC_PUBLIC | Opcodes.ACC_STATIC | Opcodes.ACC_NATIVE,
+                "executeVoid",
+                "(I[Ljava/lang/Object;)V",
+                null,
+                null).visitEnd();
+        cw.visitMethod(
+                Opcodes.ACC_PUBLIC | Opcodes.ACC_STATIC | Opcodes.ACC_NATIVE,
+                "executeInt",
+                "(I[Ljava/lang/Object;)I",
+                null,
+                null).visitEnd();
+        cw.visitMethod(
+                Opcodes.ACC_PUBLIC | Opcodes.ACC_STATIC | Opcodes.ACC_NATIVE,
+                "executeLong",
+                "(I[Ljava/lang/Object;)J",
+                null,
+                null).visitEnd();
+        cw.visitMethod(
+                Opcodes.ACC_PUBLIC | Opcodes.ACC_STATIC | Opcodes.ACC_NATIVE,
+                "executeFloat",
+                "(I[Ljava/lang/Object;)F",
+                null,
+                null).visitEnd();
+        cw.visitMethod(
+                Opcodes.ACC_PUBLIC | Opcodes.ACC_STATIC | Opcodes.ACC_NATIVE,
+                "executeDouble",
+                "(I[Ljava/lang/Object;)D",
+                null,
+                null).visitEnd();
+        cw.visitMethod(
+                Opcodes.ACC_PUBLIC | Opcodes.ACC_STATIC | Opcodes.ACC_NATIVE,
+                "executeObject",
+                "(I[Ljava/lang/Object;)Ljava/lang/Object;",
+                null,
+                null).visitEnd();
     }
 
     private void generateClinit(ClassWriter cw) {

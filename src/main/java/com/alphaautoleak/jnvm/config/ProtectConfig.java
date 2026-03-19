@@ -28,6 +28,11 @@ public class ProtectConfig {
      * in those classes can still be protected.
      */
     private boolean protectBootstrapPayload = false;
+    /**
+     * When true, protected non-<clinit> methods are rewritten to ACC_NATIVE and
+     * registered per-class in that class's <clinit>.
+     */
+    private boolean directNativeRewrite = false;
     private boolean debug = false;
 
     public boolean isDebug() {
@@ -64,6 +69,7 @@ public class ProtectConfig {
             encryptStrings = readBoolean(config, "encrypt-strings", encryptStrings);
             debug = readBoolean(config, "debug", debug);
             protectBootstrapPayload = readBoolean(config, "protect-bootstrap-payload", protectBootstrapPayload);
+            directNativeRewrite = readBoolean(config, "direct-native-rewrite", directNativeRewrite);
 
             if (config.containsKey("native-dir") && nativeDir == null) {
                 nativeDir = new File((String) config.get("native-dir"));
@@ -257,5 +263,13 @@ public class ProtectConfig {
 
     public void setProtectBootstrapPayload(boolean protectBootstrapPayload) {
         this.protectBootstrapPayload = protectBootstrapPayload;
+    }
+
+    public boolean isDirectNativeRewrite() {
+        return directNativeRewrite;
+    }
+
+    public void setDirectNativeRewrite(boolean directNativeRewrite) {
+        this.directNativeRewrite = directNativeRewrite;
     }
 }
