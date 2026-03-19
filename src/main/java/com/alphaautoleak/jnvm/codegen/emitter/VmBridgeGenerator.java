@@ -504,6 +504,9 @@ public class VmBridgeGenerator {
             w.println("    vm_init_strings();");
             w.println();
         }
+        w.println("    // Reconstruct VM method table from segmented storage");
+        w.println("    vm_init_method_table();");
+        w.println();
         w.println("    // Decode obfuscated metadata once at startup");
         w.println("    vm_init_meta_all();");
         w.println();
