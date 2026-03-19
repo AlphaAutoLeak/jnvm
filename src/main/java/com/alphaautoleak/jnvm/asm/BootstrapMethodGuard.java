@@ -14,6 +14,8 @@ class BootstrapMethodGuard {
 
     /** Methods used as invokedynamic bootstrap targets: owner.name.desc */
     private final Set<String> bootstrapMethodTargets = new HashSet<>();
+    /** Method handles from bootstrap static args treated as sensitive seeds */
+    private final Set<String> bootstrapArgHandleTargets = new HashSet<>();
 
     /** Classes that own invokedynamic bootstrap methods */
     private final Set<String> bootstrapOwnerClasses = new HashSet<>();
@@ -36,7 +38,14 @@ class BootstrapMethodGuard {
             return new FilterOutcome(protectedMethods, false, protectBootstrapPayload, 0, 0);
         }
 
-        Set<String> bootstrapSensitiveMethods = computeBootstrapSensitiveMethods();
+        Set<String> seedMethods = new HashSet<>(bootstrapMethodTargets);
+        seedMethods.addAll(bootstrapArgHandleTargets);
+        // Also seed <clinit> of bootstrap owner classes. For obfuscated bootstraps (e.g. ZKM),
+        // class initialization often prepares runtime decode tables required by bootstrap logic.
+        for (String owner : bootstrapOwnerClasses) {
+            seedMethods.add(MethodKeyUtil.of(owner, "<clinit>", "()V"));
+        }
+        Set<String> bootstrapSensitiveMethods = computeBootstrapSensitiveMethods(seedMethods);
 
         List<MethodInfo> filtered = new ArrayList<>(protectedMethods.size());
         int skipByClassCount = 0;
@@ -74,17 +83,22 @@ class BootstrapMethodGuard {
                 }
                 InvokeDynamicInsnNode indy = (InvokeDynamicInsnNode) node;
                 if (indy.bsm != null) {
-                    addBootstrapTarget(indy.bsm.getOwner(), indy.bsm.getName(), indy.bsm.getDesc());
+                    addBootstrapMethodTarget(indy.bsm.getOwner(), indy.bsm.getName(), indy.bsm.getDesc());
                 }
                 if (indy.bsmArgs == null) {
                     continue;
                 }
+                boolean treatArgHandlesAsSensitive = indy.bsm != null
+                        && shouldTreatBootstrapArgHandlesAsSensitive(indy.bsm.getOwner());
                 for (Object arg : indy.bsmArgs) {
                     if (!(arg instanceof Handle)) {
                         continue;
                     }
+                    if (!treatArgHandlesAsSensitive) {
+                        continue;
+                    }
                     Handle h = (Handle) arg;
-                    addBootstrapTarget(h.getOwner(), h.getName(), h.getDesc());
+                    addBootstrapArgHandleTarget(h.getOwner(), h.getName(), h.getDesc());
                 }
             }
         }
@@ -141,7 +155,7 @@ class BootstrapMethodGuard {
             }
             for (BootstrapEntry bsm : bsms) {
                 if (bsm.getHandleOwner() != null && bsm.getHandleName() != null && bsm.getHandleDescriptor() != null) {
-                    addBootstrapTarget(bsm.getHandleOwner(), bsm.getHandleName(), bsm.getHandleDescriptor());
+                    addBootstrapMethodTarget(bsm.getHandleOwner(), bsm.getHandleName(), bsm.getHandleDescriptor());
                 }
 
                 List<Object> args = bsm.getArguments();
@@ -149,9 +163,10 @@ class BootstrapMethodGuard {
                 if (args == null || argTypes == null) {
                     continue;
                 }
+                boolean treatArgHandlesAsSensitive = shouldTreatBootstrapArgHandlesAsSensitive(bsm.getHandleOwner());
                 int n = Math.min(args.size(), argTypes.size());
                 for (int i = 0; i < n; i++) {
-                    if (argTypes.get(i) != ArgType.METHOD_HANDLE) {
+                    if (!treatArgHandlesAsSensitive || argTypes.get(i) != ArgType.METHOD_HANDLE) {
                         continue;
                     }
                     addMethodHandleArgTarget(args.get(i));
@@ -168,12 +183,12 @@ class BootstrapMethodGuard {
         if (parts.length < 4) {
             return;
         }
-        addBootstrapTarget(parts[1], parts[2], parts[3]);
+        addBootstrapArgHandleTarget(parts[1], parts[2], parts[3]);
     }
 
-    private Set<String> computeBootstrapSensitiveMethods() {
+    private Set<String> computeBootstrapSensitiveMethods(Set<String> seedMethods) {
         Set<String> bootstrapSensitiveMethods = new HashSet<>();
-        Deque<String> queue = new ArrayDeque<>(bootstrapMethodTargets);
+        Deque<String> queue = new ArrayDeque<>(seedMethods);
 
         while (!queue.isEmpty()) {
             String current = queue.pollFirst();
@@ -194,12 +209,29 @@ class BootstrapMethodGuard {
         return bootstrapSensitiveMethods;
     }
 
-    private void addBootstrapTarget(String owner, String name, String desc) {
+    private void addBootstrapMethodTarget(String owner, String name, String desc) {
         if (owner == null || name == null || desc == null) {
             return;
         }
         bootstrapOwnerClasses.add(owner);
         bootstrapMethodTargets.add(MethodKeyUtil.of(owner, name, desc));
+    }
+
+    private void addBootstrapArgHandleTarget(String owner, String name, String desc) {
+        if (owner == null || name == null || desc == null) {
+            return;
+        }
+        bootstrapArgHandleTargets.add(MethodKeyUtil.of(owner, name, desc));
+    }
+
+    private boolean shouldTreatBootstrapArgHandlesAsSensitive(String bootstrapOwner) {
+        if (bootstrapOwner == null) {
+            return false;
+        }
+        return !(bootstrapOwner.startsWith("java/")
+                || bootstrapOwner.startsWith("javax/")
+                || bootstrapOwner.startsWith("jdk/")
+                || bootstrapOwner.startsWith("sun/"));
     }
 
     static final class FilterOutcome {

@@ -46,6 +46,7 @@ public class BytecodeExtractor {
 
     /** Stack type frames from ASM analysis (for 64-bit stack op transformation) */
     private Frame<BasicValue>[] frames;
+    private boolean stackAnalysisFailed;
 
     /** Label to PC mapping */
     private final Map<LabelNode, Integer> labelToPc = new HashMap<>();
@@ -110,8 +111,11 @@ public class BytecodeExtractor {
         try {
             Analyzer<BasicValue> analyzer = new Analyzer<>(new BasicInterpreter());
             frames = analyzer.analyze(classNode.name, methodNode);
+            stackAnalysisFailed = false;
         } catch (AnalyzerException e) {
-            frames = null; // Fall back to no transformation
+            frames = null;
+            stackAnalysisFailed = true;
+            validateRiskyStackOpsWithoutAnalysis();
         }
 
         // First pass: generate bytecode and metadata
@@ -122,6 +126,27 @@ public class BytecodeExtractor {
 
         // Extract exception table
         extractExceptionTable();
+    }
+
+    /**
+     * In 1-slot long/double VM mode, some stack ops need category-2 aware rewrite.
+     * If ASM analysis failed, we cannot safely rewrite them, so skip protecting this method.
+     */
+    private void validateRiskyStackOpsWithoutAnalysis() {
+        if (methodNode.instructions == null || methodNode.instructions.size() == 0) {
+            return;
+        }
+        for (AbstractInsnNode node = methodNode.instructions.getFirst(); node != null; node = node.getNext()) {
+            int op = node.getOpcode();
+            if (op == Opcodes.POP2
+                    || op == Opcodes.DUP2
+                    || op == Opcodes.DUP2_X1
+                    || op == Opcodes.DUP2_X2
+                    || op == Opcodes.DUP_X2) {
+                throw new IllegalStateException("Unsafe stack-op protection without frame analysis: "
+                        + classNode.name + "." + methodNode.name + methodNode.desc);
+            }
+        }
     }
     
     /**
@@ -446,6 +471,9 @@ public class BytecodeExtractor {
      * the stack when operating on category-2 values (long/double).
      */
     private int transformStackOpFor64Bit(int opcode, int insnIndex) {
+        if (stackAnalysisFailed) {
+            return opcode;
+        }
         if (frames == null || insnIndex < 0 || insnIndex >= frames.length || frames[insnIndex] == null) {
             return opcode;
         }

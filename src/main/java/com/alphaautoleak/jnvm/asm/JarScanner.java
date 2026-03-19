@@ -140,7 +140,15 @@ public class JarScanner {
             }
 
             // Collect method info
-            MethodInfo info = extractMethodInfo(cn, mn);
+            MethodInfo info;
+            try {
+                info = extractMethodInfo(cn, mn);
+            } catch (Exception ex) {
+                System.out.println("  [SKIP] Extraction failed: "
+                        + className.replace('/', '.') + "." + mn.name + mn.desc
+                        + " - " + ex.getMessage());
+                continue;
+            }
             if (info != null) {
                 protectedMethods.add(info);
                 affectedClasses.add(className);
