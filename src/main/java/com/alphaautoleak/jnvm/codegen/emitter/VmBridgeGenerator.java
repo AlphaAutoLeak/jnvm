@@ -504,6 +504,9 @@ public class VmBridgeGenerator {
             w.println("    vm_init_strings();");
             w.println();
         }
+        w.println("    // Decode obfuscated metadata once at startup");
+        w.println("    vm_init_meta_all();");
+        w.println();
         w.println("    // Initialize VM method lookup table (for direct VM-to-VM calls)");
         w.println("    vm_init_method_lookup();");
         w.println();
