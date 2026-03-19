@@ -91,16 +91,6 @@ public class BytecodeExtractor {
         this.methodNode = mn;
         this.opcodeObfuscator = opcodeObfuscator;
     }
-    
-    /**
-     * Legacy constructor (no obfuscation) - uses identity mapping
-     */
-    public BytecodeExtractor(ClassNode cn, MethodNode mn) {
-        this(cn, mn, new OpcodeObfuscator() {
-            @Override public int encode(int opcode) { return opcode; }
-            @Override public int decode(int obfuscated) { return obfuscated; }
-        });
-    }
 
     /**
      * Performs extraction

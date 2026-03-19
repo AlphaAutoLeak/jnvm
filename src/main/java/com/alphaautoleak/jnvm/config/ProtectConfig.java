@@ -19,7 +19,6 @@ public class ProtectConfig {
     private List<String> excludeRules = new ArrayList<>();
     private File configFile; // protect.conf or config.yml
     private List<String> targets = new ArrayList<>();
-    private boolean antiDebug = true;
     private File nativeDir;
     private boolean encryptStrings = true;
     /**
@@ -223,14 +222,6 @@ public class ProtectConfig {
 
     public void setTargets(List<String> targets) {
         this.targets = targets;
-    }
-
-    public boolean isAntiDebug() {
-        return antiDebug;
-    }
-
-    public void setAntiDebug(boolean antiDebug) {
-        this.antiDebug = antiDebug;
     }
 
     public File getNativeDir() {
