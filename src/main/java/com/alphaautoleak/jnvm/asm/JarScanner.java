@@ -40,11 +40,13 @@ public class JarScanner {
 
     /** Annotation rule descriptor list */
     private final List<String> annotationDescs;
+    private final boolean protectBootstrapPayload;
 
     public JarScanner(ProtectConfig config, OpcodeObfuscator opcodeObfuscator) {
         this.config = config;
         this.opcodeObfuscator = opcodeObfuscator;
         this.annotationDescs = config.getAnnotationRules();
+        this.protectBootstrapPayload = config.isProtectBootstrapPayload();
     }
     
     /**
@@ -79,8 +81,10 @@ public class JarScanner {
             }
         }
 
-        // Never protect bootstrap methods referenced by invokedynamic.
-        // They execute inside JVM linkage path and are extremely sensitive.
+        // Never protect bootstrap-sensitive methods referenced by invokedynamic.
+        // Strategy:
+        // - default: skip all methods in bootstrap owner classes (safest)
+        // - payload mode: only skip bootstrap-sensitive closure
         filterOutBootstrapMethods();
 
         System.out.println("[SCAN] Found " + protectedMethods.size() + " methods to protect in "
@@ -306,11 +310,6 @@ public class JarScanner {
             return;
         }
 
-        Set<String> protectedMethodKeys = new HashSet<>();
-        for (MethodInfo info : protectedMethods) {
-            protectedMethodKeys.add(info.getOwner() + "." + info.getName() + "." + info.getDescriptor());
-        }
-
         // Closure from bootstrap methods through direct calls / MethodHandle constants.
         Set<String> bootstrapSensitiveMethods = new HashSet<>();
         Deque<String> queue = new ArrayDeque<>(bootstrapMethodTargets);
@@ -336,7 +335,7 @@ public class JarScanner {
         int skipByMethodCount = 0;
         for (MethodInfo info : protectedMethods) {
             String key = info.getOwner() + "." + info.getName() + "." + info.getDescriptor();
-            boolean skipByClass = bootstrapOwnerClasses.contains(info.getOwner());
+            boolean skipByClass = !protectBootstrapPayload && bootstrapOwnerClasses.contains(info.getOwner());
             boolean skipByMethod = bootstrapSensitiveMethods.contains(key);
             if (skipByClass || skipByMethod) {
                 if (skipByClass) {
@@ -367,9 +366,12 @@ public class JarScanner {
         nextMethodId = id;
 
         int skipped = before - filtered.size();
+        String mode = protectBootstrapPayload ? "payload-only" : "owner-class-safe";
         System.out.println("[SCAN] Skipped " + skipped +
                 " bootstrap-sensitive methods used by invokedynamic." +
-                " (class-owner=" + skipByClassCount + ", dependency=" + skipByMethodCount + ")");
+                " (mode=" + mode +
+                ", class-owner=" + skipByClassCount +
+                ", dependency=" + skipByMethodCount + ")");
     }
 
     private void addBootstrapTarget(String owner, String name, String desc) {

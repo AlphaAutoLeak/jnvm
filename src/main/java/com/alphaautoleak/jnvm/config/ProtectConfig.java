@@ -22,6 +22,12 @@ public class ProtectConfig {
     private boolean antiDebug = true;
     private File nativeDir;
     private boolean encryptStrings = true;
+    /**
+     * When false (default), all methods in bootstrap owner classes are skipped for safety.
+     * When true, only bootstrap-sensitive closure is skipped, and non-sensitive payload methods
+     * in those classes can still be protected.
+     */
+    private boolean protectBootstrapPayload = false;
 
     private boolean debug = false;
 
@@ -106,6 +112,11 @@ public class ProtectConfig {
             // debug
             if (config.containsKey("debug")) {
                 debug = Boolean.TRUE.equals(config.get("debug"));
+            }
+
+            // protect-bootstrap-payload
+            if (config.containsKey("protect-bootstrap-payload")) {
+                protectBootstrapPayload = Boolean.TRUE.equals(config.get("protect-bootstrap-payload"));
             }
 
             // native-dir
@@ -276,5 +287,13 @@ public class ProtectConfig {
 
     public void setEncryptStrings(boolean encryptStrings) {
         this.encryptStrings = encryptStrings;
+    }
+
+    public boolean isProtectBootstrapPayload() {
+        return protectBootstrapPayload;
+    }
+
+    public void setProtectBootstrapPayload(boolean protectBootstrapPayload) {
+        this.protectBootstrapPayload = protectBootstrapPayload;
     }
 }

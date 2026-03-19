@@ -42,6 +42,7 @@ targets:
 # Options
 debug: false
 native-dir: native
+protect-bootstrap-payload: false
 ```
 
 ### Run
@@ -58,6 +59,10 @@ java -jar jnvm.jar config.yml
 | `ClassName` | Protect all methods in class |
 | `ClassName#methodName` | Protect specific method |
 | `@annotation` | Protect methods with annotation |
+
+`protect-bootstrap-payload`:
+- `false` (default): Skip all methods in invokedynamic bootstrap owner classes (safer).
+- `true`: Only skip bootstrap-sensitive closure, allowing non-sensitive payload methods in those classes to be protected.
 
 ## Before/After Example
 
