@@ -29,6 +29,9 @@ public class JarScanner {
     /** Records which classes contain protected methods (for patching) */
     private final Set<String> affectedClasses = new HashSet<>();
 
+    /** Methods used as invokedynamic bootstrap targets: owner.name.desc */
+    private final Set<String> bootstrapMethodTargets = new HashSet<>();
+
     /** Annotation rule descriptor list */
     private final List<String> annotationDescs;
 
@@ -70,6 +73,10 @@ public class JarScanner {
             }
         }
 
+        // Never protect bootstrap methods referenced by invokedynamic.
+        // They execute inside JVM linkage path and are extremely sensitive.
+        filterOutBootstrapMethods();
+
         System.out.println("[SCAN] Found " + protectedMethods.size() + " methods to protect in "
                 + affectedClasses.size() + " classes.");
         return protectedMethods;
@@ -84,6 +91,8 @@ public class JarScanner {
         cr.accept(cn, 0); // do not skip anything
 
         String className = cn.name; // internal format
+
+        collectBootstrapMethodTargets(cn);
 
         // Skip interfaces (no method body) and synthetic classes
         if ((cn.access & Opcodes.ACC_INTERFACE) != 0 &&
@@ -186,5 +195,85 @@ public class JarScanner {
 
     public Set<String> getAffectedClasses() {
         return affectedClasses;
+    }
+
+    private void collectBootstrapMethodTargets(ClassNode cn) {
+        for (MethodNode mn : cn.methods) {
+            if (mn.instructions == null || mn.instructions.size() == 0) {
+                continue;
+            }
+            for (AbstractInsnNode node = mn.instructions.getFirst(); node != null; node = node.getNext()) {
+                if (node instanceof InvokeDynamicInsnNode) {
+                    InvokeDynamicInsnNode indy = (InvokeDynamicInsnNode) node;
+                    if (indy.bsm != null) {
+                        Handle bsm = indy.bsm;
+                        String key = bsm.getOwner() + "." + bsm.getName() + "." + bsm.getDesc();
+                        bootstrapMethodTargets.add(key);
+                    }
+                }
+            }
+        }
+    }
+
+    private void filterOutBootstrapMethods() {
+        if (protectedMethods.isEmpty()) {
+            return;
+        }
+
+        // Also collect bootstrap targets from extracted method metadata as a fallback,
+        // so we don't depend on class-level pre-scan only.
+        for (MethodInfo info : protectedMethods) {
+            List<BootstrapEntry> bsms = info.getBootstrapMethods();
+            if (bsms == null) continue;
+            for (BootstrapEntry bsm : bsms) {
+                if (bsm.getHandleOwner() == null || bsm.getHandleName() == null || bsm.getHandleDescriptor() == null) {
+                    continue;
+                }
+                String key = bsm.getHandleOwner() + "." + bsm.getHandleName() + "." + bsm.getHandleDescriptor();
+                bootstrapMethodTargets.add(key);
+            }
+        }
+
+        if (bootstrapMethodTargets.isEmpty()) {
+            return;
+        }
+
+        // Conservative strategy: do not protect any method in bootstrap owner classes.
+        Set<String> bootstrapOwners = new HashSet<>();
+        for (String key : bootstrapMethodTargets) {
+            int firstDot = key.indexOf('.');
+            if (firstDot > 0) {
+                bootstrapOwners.add(key.substring(0, firstDot));
+            }
+        }
+
+        int before = protectedMethods.size();
+        List<MethodInfo> filtered = new ArrayList<>(before);
+        for (MethodInfo info : protectedMethods) {
+            String key = info.getOwner() + "." + info.getName() + "." + info.getDescriptor();
+            if (bootstrapOwners.contains(info.getOwner())) {
+                System.out.println("  [SKIP] Bootstrap owner class method: " + key);
+                continue;
+            }
+            filtered.add(info);
+        }
+
+        if (filtered.size() == before) {
+            return;
+        }
+
+        protectedMethods.clear();
+        protectedMethods.addAll(filtered);
+
+        affectedClasses.clear();
+        int id = 0;
+        for (MethodInfo info : protectedMethods) {
+            info.setMethodId(id++);
+            affectedClasses.add(info.getOwner());
+        }
+        nextMethodId = id;
+
+        System.out.println("[SCAN] Skipped " + (before - filtered.size()) +
+                " bootstrap methods used by invokedynamic.");
     }
 }

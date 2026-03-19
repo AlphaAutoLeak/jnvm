@@ -210,10 +210,11 @@ public class VmDataGenerator {
                                 break;
                             case METHOD_HANDLE:
                                 // Format: "tag:owner:name:desc"
-                                String[] parts = arg.toString().split(":");
+                                String[] parts = arg.toString().split(":", 4);
                                 if (parts.length >= 4) {
-                                    // Store full method reference string (owner.name + desc)
-                                    allStrings.add(parts[1] + "." + parts[2] + parts[3]);
+                                    allStrings.add(parts[1]); // owner
+                                    allStrings.add(parts[2]); // name
+                                    allStrings.add(parts[3]); // descriptor
                                 }
                                 break;
                         }
@@ -412,10 +413,15 @@ public class VmDataGenerator {
                             break;
                         case METHOD_HANDLE:
                             // Format: "tag:owner:name:desc"
-                            String[] parts = arg.toString().split(":");
+                            String[] parts = arg.toString().split(":", 4);
                             if (parts.length >= 4) {
-                                w.printf(".handleTag=%s, .strIdx=%d", parts[0], 
-                                    getOrAddStringIndex(parts[1] + "." + parts[2] + parts[3]));
+                                w.printf(".handleTag=%s, .ownerIdx=%d, .nameIdx=%d, .descIdx=%d",
+                                    parts[0],
+                                    getOrAddStringIndex(parts[1]),
+                                    getOrAddStringIndex(parts[2]),
+                                    getOrAddStringIndex(parts[3]));
+                            } else {
+                                w.printf(".handleTag=0, .ownerIdx=-1, .nameIdx=-1, .descIdx=-1");
                             }
                             break;
                     }

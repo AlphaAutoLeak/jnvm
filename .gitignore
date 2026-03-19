@@ -49,3 +49,6 @@ calculations.txt
 /test_invokedynamic/
 /test/
 /test
+*.md
+/.iflow
+/samples/zkm/classes

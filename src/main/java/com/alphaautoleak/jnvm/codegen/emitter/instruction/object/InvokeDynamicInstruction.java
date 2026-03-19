@@ -20,9 +20,14 @@ public class InvokeDynamicInstruction extends Instruction {
     @Override
     protected void generateBody(PrintWriter w) {
         w.println("                { int invokePc = frame.pc;  // Save PC before invocation");
-        w.println("                  // INVOKEDYNAMIC - Lambda support");
+        w.println("                  // INVOKEDYNAMIC - generic bootstrap resolution");
         w.println("                  jobject result = vm_invoke_dynamic(env, &frame, meta);");
-        w.println("                  if (result != NULL) frame.stack[frame.sp++].l = result;");
+        w.println("                  if (!vm_indy_push_return(env, &frame, meta, result)) {");
+        w.println("                      if (!(*env)->ExceptionCheck(env)) {");
+        w.println("                          jclass bsmErrCls = vm_find_class(env, \"java/lang/BootstrapMethodError\");");
+        w.println("                          if (bsmErrCls) (*env)->ThrowNew(env, bsmErrCls, \"Failed to apply invokedynamic return value\");");
+        w.println("                      }");
+        w.println("                  }");
         // Check exception immediately after method call with correct PC
         w.println("                  if ((*env)->ExceptionCheck(env)) {");
         w.println("                      const char* _owner = vm_get_string(m->ownerIdx);");
@@ -51,7 +56,12 @@ public class InvokeDynamicInstruction extends Instruction {
         w.printf("        OP_%02x:  /* %s */\n", opcode, comment);
         w.println("            { int invokePc = frame.pc;");
         w.println("              jobject result = vm_invoke_dynamic(env, &frame, meta);");
-        w.println("              if (result != NULL) frame.stack[frame.sp++].l = result;");
+        w.println("              if (!vm_indy_push_return(env, &frame, meta, result)) {");
+        w.println("                  if (!(*env)->ExceptionCheck(env)) {");
+        w.println("                      jclass bsmErrCls = vm_find_class(env, \"java/lang/BootstrapMethodError\");");
+        w.println("                      if (bsmErrCls) (*env)->ThrowNew(env, bsmErrCls, \"Failed to apply invokedynamic return value\");");
+        w.println("                  }");
+        w.println("              }");
         w.println("              if ((*env)->ExceptionCheck(env)) {");
         w.println("                  const char* _owner = vm_get_string(m->ownerIdx);");
         w.println("                  const char* _name  = vm_get_string(m->nameIdx);");

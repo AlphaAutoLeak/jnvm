@@ -31,14 +31,17 @@ public class BootstrapType {
 
     private static void emitBsmArg(PrintWriter w) {
         w.println("/* Bootstrap method argument */");
-        w.println("typedef struct __attribute__((packed)) {  // only primitive types, safe to pack");
+        w.println("typedef struct __attribute__((packed)) {");
         w.println("    BsmArgType type;");
-        w.println("    int strIdx;       // string index for String/MethodType/MethodHandle");
+        w.println("    int strIdx;       // string index for String/MethodType/Class");
         w.println("    int intVal;");
         w.println("    long longVal;");
         w.println("    float floatVal;");
         w.println("    double doubleVal;");
-        w.println("    int handleTag;    // MethodHandle tag (only for METHOD_HANDLE)");
+        w.println("    int handleTag;    // MethodHandle tag (for METHOD_HANDLE)");
+        w.println("    int ownerIdx;     // METHOD_HANDLE owner class internal name");
+        w.println("    int nameIdx;      // METHOD_HANDLE member name");
+        w.println("    int descIdx;      // METHOD_HANDLE descriptor");
         w.println("} BsmArg;");
         w.println();
     }
