@@ -32,6 +32,12 @@ public class JarScanner {
     /** Methods used as invokedynamic bootstrap targets: owner.name.desc */
     private final Set<String> bootstrapMethodTargets = new HashSet<>();
 
+    /** Classes that own invokedynamic bootstrap methods */
+    private final Set<String> bootstrapOwnerClasses = new HashSet<>();
+
+    /** Method dependency graph: method -> directly referenced methods/handles */
+    private final Map<String, Set<String>> methodDependencies = new HashMap<>();
+
     /** Annotation rule descriptor list */
     private final List<String> annotationDescs;
 
@@ -93,6 +99,7 @@ public class JarScanner {
         String className = cn.name; // internal format
 
         collectBootstrapMethodTargets(cn);
+        collectMethodDependencies(cn);
 
         // Skip interfaces (no method body) and synthetic classes
         if ((cn.access & Opcodes.ACC_INTERFACE) != 0 &&
@@ -206,9 +213,56 @@ public class JarScanner {
                 if (node instanceof InvokeDynamicInsnNode) {
                     InvokeDynamicInsnNode indy = (InvokeDynamicInsnNode) node;
                     if (indy.bsm != null) {
+                        addBootstrapTarget(indy.bsm.getOwner(), indy.bsm.getName(), indy.bsm.getDesc());
+                    }
+                    if (indy.bsmArgs != null) {
+                        for (Object arg : indy.bsmArgs) {
+                            if (arg instanceof Handle) {
+                                Handle h = (Handle) arg;
+                                addBootstrapTarget(h.getOwner(), h.getName(), h.getDesc());
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private void collectMethodDependencies(ClassNode cn) {
+        for (MethodNode mn : cn.methods) {
+            if (mn.instructions == null || mn.instructions.size() == 0) {
+                continue;
+            }
+            String srcKey = cn.name + "." + mn.name + "." + mn.desc;
+            Set<String> deps = methodDependencies.computeIfAbsent(srcKey, k -> new HashSet<>());
+
+            for (AbstractInsnNode node = mn.instructions.getFirst(); node != null; node = node.getNext()) {
+                if (node instanceof MethodInsnNode) {
+                    MethodInsnNode mi = (MethodInsnNode) node;
+                    deps.add(mi.owner + "." + mi.name + "." + mi.desc);
+                    continue;
+                }
+                if (node instanceof LdcInsnNode) {
+                    Object cst = ((LdcInsnNode) node).cst;
+                    if (cst instanceof Handle) {
+                        Handle h = (Handle) cst;
+                        deps.add(h.getOwner() + "." + h.getName() + "." + h.getDesc());
+                    }
+                    continue;
+                }
+                if (node instanceof InvokeDynamicInsnNode) {
+                    InvokeDynamicInsnNode indy = (InvokeDynamicInsnNode) node;
+                    if (indy.bsm != null) {
                         Handle bsm = indy.bsm;
-                        String key = bsm.getOwner() + "." + bsm.getName() + "." + bsm.getDesc();
-                        bootstrapMethodTargets.add(key);
+                        deps.add(bsm.getOwner() + "." + bsm.getName() + "." + bsm.getDesc());
+                    }
+                    if (indy.bsmArgs != null) {
+                        for (Object arg : indy.bsmArgs) {
+                            if (arg instanceof Handle) {
+                                Handle h = (Handle) arg;
+                                deps.add(h.getOwner() + "." + h.getName() + "." + h.getDesc());
+                            }
+                        }
                     }
                 }
             }
@@ -221,7 +275,7 @@ public class JarScanner {
         }
 
         // Also collect bootstrap targets from extracted method metadata as a fallback,
-        // so we don't depend on class-level pre-scan only.
+        // including METHOD_HANDLE static args.
         for (MethodInfo info : protectedMethods) {
             List<BootstrapEntry> bsms = info.getBootstrapMethods();
             if (bsms == null) continue;
@@ -229,8 +283,22 @@ public class JarScanner {
                 if (bsm.getHandleOwner() == null || bsm.getHandleName() == null || bsm.getHandleDescriptor() == null) {
                     continue;
                 }
-                String key = bsm.getHandleOwner() + "." + bsm.getHandleName() + "." + bsm.getHandleDescriptor();
-                bootstrapMethodTargets.add(key);
+                addBootstrapTarget(bsm.getHandleOwner(), bsm.getHandleName(), bsm.getHandleDescriptor());
+
+                List<Object> args = bsm.getArguments();
+                List<ArgType> argTypes = bsm.getArgumentTypes();
+                if (args == null || argTypes == null) continue;
+                int n = Math.min(args.size(), argTypes.size());
+                for (int i = 0; i < n; i++) {
+                    if (argTypes.get(i) != ArgType.METHOD_HANDLE) {
+                        continue;
+                    }
+                    Object raw = args.get(i);
+                    if (raw == null) continue;
+                    String[] parts = raw.toString().split(":", 4);
+                    if (parts.length < 4) continue;
+                    addBootstrapTarget(parts[1], parts[2], parts[3]);
+                }
             }
         }
 
@@ -238,21 +306,46 @@ public class JarScanner {
             return;
         }
 
-        // Conservative strategy: do not protect any method in bootstrap owner classes.
-        Set<String> bootstrapOwners = new HashSet<>();
-        for (String key : bootstrapMethodTargets) {
-            int firstDot = key.indexOf('.');
-            if (firstDot > 0) {
-                bootstrapOwners.add(key.substring(0, firstDot));
+        Set<String> protectedMethodKeys = new HashSet<>();
+        for (MethodInfo info : protectedMethods) {
+            protectedMethodKeys.add(info.getOwner() + "." + info.getName() + "." + info.getDescriptor());
+        }
+
+        // Closure from bootstrap methods through direct calls / MethodHandle constants.
+        Set<String> bootstrapSensitiveMethods = new HashSet<>();
+        Deque<String> queue = new ArrayDeque<>(bootstrapMethodTargets);
+        while (!queue.isEmpty()) {
+            String current = queue.pollFirst();
+            if (!bootstrapSensitiveMethods.add(current)) {
+                continue;
+            }
+            Set<String> deps = methodDependencies.get(current);
+            if (deps == null || deps.isEmpty()) {
+                continue;
+            }
+            for (String dep : deps) {
+                if (!bootstrapSensitiveMethods.contains(dep)) {
+                    queue.addLast(dep);
+                }
             }
         }
 
         int before = protectedMethods.size();
         List<MethodInfo> filtered = new ArrayList<>(before);
+        int skipByClassCount = 0;
+        int skipByMethodCount = 0;
         for (MethodInfo info : protectedMethods) {
             String key = info.getOwner() + "." + info.getName() + "." + info.getDescriptor();
-            if (bootstrapOwners.contains(info.getOwner())) {
-                System.out.println("  [SKIP] Bootstrap owner class method: " + key);
+            boolean skipByClass = bootstrapOwnerClasses.contains(info.getOwner());
+            boolean skipByMethod = bootstrapSensitiveMethods.contains(key);
+            if (skipByClass || skipByMethod) {
+                if (skipByClass) {
+                    skipByClassCount++;
+                    System.out.println("  [SKIP] Bootstrap-owner class method: " + key);
+                } else {
+                    skipByMethodCount++;
+                    System.out.println("  [SKIP] Bootstrap-sensitive method: " + key);
+                }
                 continue;
             }
             filtered.add(info);
@@ -273,7 +366,17 @@ public class JarScanner {
         }
         nextMethodId = id;
 
-        System.out.println("[SCAN] Skipped " + (before - filtered.size()) +
-                " bootstrap methods used by invokedynamic.");
+        int skipped = before - filtered.size();
+        System.out.println("[SCAN] Skipped " + skipped +
+                " bootstrap-sensitive methods used by invokedynamic." +
+                " (class-owner=" + skipByClassCount + ", dependency=" + skipByMethodCount + ")");
+    }
+
+    private void addBootstrapTarget(String owner, String name, String desc) {
+        if (owner == null || name == null || desc == null) {
+            return;
+        }
+        bootstrapOwnerClasses.add(owner);
+        bootstrapMethodTargets.add(owner + "." + name + "." + desc);
     }
 }
