@@ -27,6 +27,8 @@ public class VMMethodType {
         w.println("/* Method definition */");
         w.println("typedef struct __attribute__((aligned(16))) {  // cache-line friendly alignment");
         w.println("    int methodId;");
+        w.println("    uint32_t metaKey;         // per-method metadata decode key");
+        w.println("    uint8_t metaDecoded;      // 0=encoded, 1=decoded");
         w.println("    int maxStack;");
         w.println("    int maxLocals;");
         w.println("    uint8_t* bytecode;       // instruction sequence");
