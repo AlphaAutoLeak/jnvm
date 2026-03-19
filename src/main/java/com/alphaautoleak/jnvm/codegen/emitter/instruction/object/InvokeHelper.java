@@ -71,6 +71,7 @@ public class InvokeHelper {
         w.println("                  }");
         }
 
+        w.println("                  #if VM_DEBUG_ENABLED");
         w.println("                  const char* _cowner = vm_get_string(m->ownerIdx);");
         w.println("                  const char* _cname  = vm_get_string(m->nameIdx);");
         w.println("                  const char* _cdesc  = vm_get_string(m->descIdx);");
@@ -84,7 +85,8 @@ public class InvokeHelper {
             w.println("                      VM_LOG(\"asCollector recv=%p arg0=%p arg1=%d sp=%d\\n\", (void*)receiver, (void*)args[0].l, args[1].i, frame.sp);");
             w.println("                  }");
         }
-        w.println("                  fflush(stdout);");
+        w.println("                  #endif");
+        w.println("                  VM_LOG_FLUSH();");
 
         w.println("                  switch (returnType) {");
         w.println("                      case 'V':");
@@ -226,6 +228,7 @@ public class InvokeHelper {
             w.println("              }");
         }
 
+        w.println("              #if VM_DEBUG_ENABLED");
         w.println("              const char* _cowner = vm_get_string(m->ownerIdx);");
         w.println("              const char* _cname  = vm_get_string(m->nameIdx);");
         w.println("              const char* _cdesc  = vm_get_string(m->descIdx);");
@@ -239,7 +242,8 @@ public class InvokeHelper {
             w.println("                  VM_LOG(\"asCollector recv=%p arg0=%p arg1=%d sp=%d\\n\", (void*)receiver, (void*)args[0].l, args[1].i, frame.sp);");
             w.println("              }");
         }
-        w.println("              fflush(stdout);");
+        w.println("              #endif");
+        w.println("              VM_LOG_FLUSH();");
 
         w.println("              switch (returnType) {");
         w.println("                  case 'V':");

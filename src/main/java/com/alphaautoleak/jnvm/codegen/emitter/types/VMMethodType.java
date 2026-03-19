@@ -42,6 +42,7 @@ public class VMMethodType {
         w.println("    // pre-parsed method argument info (performance optimization)");
         w.println("    int argCount;            // argument count");
         w.println("    int argTypesIdx;         // argument types string index (e.g. \"IJDL\")");
+        w.println("    char returnTypeChar;     // return type char (e.g. 'V','I','L')");
         w.println("    // method identity (for direct VM-to-VM call optimization)");
         w.println("    int ownerIdx;            // owner class name string index");
         w.println("    int nameIdx;             // method name string index");

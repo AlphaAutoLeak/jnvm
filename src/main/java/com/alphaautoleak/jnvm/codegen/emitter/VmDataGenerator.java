@@ -296,13 +296,15 @@ public class VmDataGenerator {
                 w.printf(".exceptionTable=NULL, .exceptionTableLength=0, ");
             }
 
-            String argTypes = MethodDescriptorParser.parseArgTypes(desc);
-            int argCount = argTypes.length();
+            MethodDescriptorParser.DescriptorInfo descriptorInfo = MethodDescriptorParser.parse(desc);
+            String argTypes = descriptorInfo.getArgTypes();
+            int argCount = descriptorInfo.getArgCount();
             int argTypesIdx = argCount > 0 ? getOrAddStringIndex(argTypes) : -1;
+            char returnTypeChar = descriptorInfo.getReturnTypeChar();
             int methodOwnerIdx = method.getOwner() != null ? getOrAddStringIndex(method.getOwner()) : -1;
             int methodNameIdx = method.getName() != null ? getOrAddStringIndex(method.getName()) : -1;
-            w.printf(".isStatic=%d, .argCount=%d, .argTypesIdx=%d, .ownerIdx=%d, .nameIdx=%d },\n",
-                    method.isStatic() ? 1 : 0, argCount, argTypesIdx, methodOwnerIdx, methodNameIdx);
+            w.printf(".isStatic=%d, .argCount=%d, .argTypesIdx=%d, .returnTypeChar='%c', .ownerIdx=%d, .nameIdx=%d },\n",
+                    method.isStatic() ? 1 : 0, argCount, argTypesIdx, returnTypeChar, methodOwnerIdx, methodNameIdx);
         }
         w.println("};");
     }

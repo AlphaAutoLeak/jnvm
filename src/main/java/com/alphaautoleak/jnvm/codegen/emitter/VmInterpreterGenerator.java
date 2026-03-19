@@ -149,9 +149,13 @@ public class VmInterpreterGenerator {
             if (debug) {
                 w.println("#define VM_LOG(fmt, ...) printf(\"[VM] \" fmt, ##__VA_ARGS__)");
                 w.println("#define VM_DEBUG_LOG(fmt, ...) printf(\"[VM-DEBUG] \" fmt, ##__VA_ARGS__)");
+                w.println("#define VM_DEBUG_ENABLED 1");
+                w.println("#define VM_LOG_FLUSH() fflush(stdout)");
             } else {
                 w.println("#define VM_LOG(fmt, ...)");
                 w.println("#define VM_DEBUG_LOG(fmt, ...)");
+                w.println("#define VM_DEBUG_ENABLED 0");
+                w.println("#define VM_LOG_FLUSH() ((void)0)");
             }
             w.println();
             
@@ -217,9 +221,12 @@ public class VmInterpreterGenerator {
         w.println();
 
         w.println("    jobject instance = NULL;");
+        w.println("    jsize argsLen = 0;");
         w.println("    if (!directLocals && args) {");
-        w.println("        jsize argsLen = (*env)->GetArrayLength(env, args);");
-        w.println("        instance = (argsLen > 0) ? (*env)->GetObjectArrayElement(env, args, 0) : NULL;");
+        w.println("        argsLen = (*env)->GetArrayLength(env, args);");
+        w.println("        if (!m->isStatic && argsLen > 0) {");
+        w.println("            instance = (*env)->GetObjectArrayElement(env, args, 0);");
+        w.println("        }");
         w.println("        callerClass = (argsLen > 1 && m->argCount + 1 < argsLen) ?");
         w.println("            (jclass)(*env)->GetObjectArrayElement(env, args, argsLen - 1) : callerClass;");
         w.println("    }");
@@ -229,7 +236,6 @@ public class VmInterpreterGenerator {
         w.println("    frame.stack = frame_pool_push(m->maxStack);");
         w.println();
 
-        w.println("    const char* methodDesc = (m->descIdx >= 0) ? vm_get_string(m->descIdx) : NULL;");
         w.println("    if (directLocals) {");
         w.println("        frame.locals = directLocals;  // reuse caller's buffer directly (zero copy)");
         w.println("    } else {");
@@ -238,7 +244,6 @@ public class VmInterpreterGenerator {
         w.println("        frame.locals[0].l = instance;");
         w.println("        const char* argTypes = (m->argTypesIdx >= 0) ? vm_get_string(m->argTypesIdx) : NULL;");
         w.println("        // Unbox args[1..n] (skip args[0]=instance, skip last element=callerClass)");
-        w.println("        jsize argsLen = args ? (*env)->GetArrayLength(env, args) : 0;");
         w.println("        vm_unbox_args_fast(env, &frame, args, argTypes, m->argCount, instance ? 1 : 0, argsLen > 1 ? argsLen - 1 : 1);");
         w.println("    }");
         w.println();
@@ -322,12 +327,8 @@ public class VmInterpreterGenerator {
         w.println("    if (UNLIKELY(_hasException)) {");
         w.println("        execResult.returnType = 'X';  // signal unhandled exception");
         w.println("    } else {");
-        w.println("        // Get return type from method descriptor");
-        w.println("        if (methodDesc) {");
-        w.println("            const char* p = methodDesc;");
-        w.println("            while (*p && *p != ')') p++;");
-        w.println("            if (*p == ')') execResult.returnType = *(p + 1);");
-        w.println("        }");
+        w.println("        // Return type is precomputed in VMMethod metadata");
+        w.println("        execResult.returnType = m->returnTypeChar;");
         w.println("        // Get return value from top of stack");
         w.println("        if (frame.sp > 0) {");
         w.println("            execResult.value = frame.stack[frame.sp - 1];");

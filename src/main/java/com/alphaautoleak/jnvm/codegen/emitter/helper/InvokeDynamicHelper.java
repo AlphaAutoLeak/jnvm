@@ -185,34 +185,18 @@ public class InvokeDynamicHelper extends VMHelper {
         w.println("}");
         w.println();
 
-        w.println("static int vm_indy_parse_arg_types(const char* desc, char* outTypes, int maxTypes) {");
-        w.println("    int count = 0;");
-        w.println("    const char* p = desc + 1;");
-        w.println("    while (*p && *p != ')' && count < maxTypes) {");
-        w.println("        if (*p == 'L') { outTypes[count++] = 'L'; while (*p && *p != ';') p++; if (*p) p++; }");
-        w.println("        else if (*p == '[') { outTypes[count++] = 'L'; while (*p == '[') p++; if (*p == 'L') { while (*p && *p != ';') p++; } if (*p) p++; }");
-        w.println("        else { outTypes[count++] = *p; p++; }");
-        w.println("    }");
-        w.println("    return count;");
-        w.println("}");
-        w.println();
-
-        w.println("static jobjectArray vm_indy_pop_args(JNIEnv* env, VMFrame* frame, const char* desc, int capturedCount) {");
+        w.println("static jobjectArray vm_indy_pop_args(JNIEnv* env, VMFrame* frame, const char* argTypes, int capturedCount) {");
         w.println("    if (capturedCount <= 0) return (*env)->NewObjectArray(env, 0, id_objectClass, NULL);");
-        w.println("    TMP_SAVE;");
-        w.println("    int argTypesSize = capturedCount + 8;");
-        w.println("    char* argTypes = tmp_buf_alloc(argTypesSize);");
-        w.println("    vm_indy_parse_arg_types(desc, argTypes, argTypesSize);");
         w.println("    jobjectArray arr = (*env)->NewObjectArray(env, capturedCount, id_objectClass, NULL);");
-        w.println("    if (!arr) { TMP_RESTORE; return NULL; }");
+        w.println("    if (!arr) { return NULL; }");
         w.println("    for (int i = capturedCount - 1; i >= 0; i--) {");
         w.println("        VMValue val = frame->stack[--frame->sp];");
-        w.println("        jobject boxed = vm_indy_box(env, argTypes[i], val);");
-        w.println("        if ((*env)->ExceptionCheck(env)) { TMP_RESTORE; return NULL; }");
+        w.println("        char t = argTypes ? argTypes[i] : 'L';");
+        w.println("        jobject boxed = vm_indy_box(env, t, val);");
+        w.println("        if ((*env)->ExceptionCheck(env)) { return NULL; }");
         w.println("        (*env)->SetObjectArrayElement(env, arr, i, boxed);");
-        w.println("        if ((*env)->ExceptionCheck(env)) { TMP_RESTORE; return NULL; }");
+        w.println("        if ((*env)->ExceptionCheck(env)) { return NULL; }");
         w.println("    }");
-        w.println("    TMP_RESTORE;");
         w.println("    return arr;");
         w.println("}");
         w.println();
@@ -410,10 +394,9 @@ public class InvokeDynamicHelper extends VMHelper {
         w.println("        return NULL;");
         w.println("    }");
         w.println();
-        w.println("    int descLen = (int)strlen(methodDesc);");
-        w.println("    int capturedTypesSize = descLen + 8;");
-        w.println("    char* capturedTypes = tmp_buf_alloc(capturedTypesSize);");
-        w.println("    int capturedCount = vm_indy_parse_arg_types(methodDesc, capturedTypes, capturedTypesSize);");
+        w.println("    int capturedCount = meta->argCount;");
+        w.println("    const char* capturedTypes = (meta->argTypesIdx >= 0) ? vm_get_string(meta->argTypesIdx) : NULL;");
+        w.println("    if (capturedCount < 0) capturedCount = 0;");
         w.println("    if (frame->sp < capturedCount) {");
         w.println("        vm_indy_throw_bsm_error(env, \"InvokeDynamic stack underflow before callsite invocation\");");
         w.println("        TMP_RESTORE;");
@@ -527,7 +510,7 @@ public class InvokeDynamicHelper extends VMHelper {
     }
 
     private void emitMainFunctionInvokeTarget(PrintWriter w) {
-        w.println("    jobjectArray invokeArgs = vm_indy_pop_args(env, frame, methodDesc, capturedCount);");
+        w.println("    jobjectArray invokeArgs = vm_indy_pop_args(env, frame, capturedTypes, capturedCount);");
         w.println("    if ((*env)->ExceptionCheck(env)) { TMP_RESTORE; return NULL; }");
         w.println("    if (!invokeArgs && capturedCount > 0) {");
         w.println("        vm_indy_throw_bsm_error(env, \"Failed to box invokedynamic captured arguments\");");
