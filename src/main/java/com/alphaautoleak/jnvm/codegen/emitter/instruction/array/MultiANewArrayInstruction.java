@@ -20,7 +20,7 @@ public class MultiANewArrayInstruction extends Instruction {
     @Override
     protected void generateBody(PrintWriter w) {
         w.println("                {");
-        w.println("                    const char* className = vm_get_string(meta->classIdx);");
+        w.println("                    const char* className = meta->classStr ? meta->classStr : vm_get_string(meta->classIdx);");
         w.println("                    int dims = meta->dims;");
         w.println();
         w.println("                    jint* sizes = (jint*)malloc(dims * sizeof(jint));");
@@ -92,7 +92,7 @@ public class MultiANewArrayInstruction extends Instruction {
     public void generateComputedGoto(PrintWriter w) {
         w.printf("        OP_%02x:  /* %s */\n", opcode, comment);
         w.println("            {");
-        w.println("                const char* className = vm_get_string(meta->classIdx);");
+        w.println("                const char* className = meta->classStr ? meta->classStr : vm_get_string(meta->classIdx);");
         w.println("                int dims = meta->dims;");
         w.println("                jint* sizes = (jint*)malloc(dims * sizeof(jint));");
         w.println("                for (int i = dims - 1; i >= 0; i--) {");

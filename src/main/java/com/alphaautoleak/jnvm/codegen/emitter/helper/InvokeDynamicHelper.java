@@ -386,8 +386,8 @@ public class InvokeDynamicHelper extends VMHelper {
         w.println("        return NULL;");
         w.println("    }");
         w.println();
-        w.println("    const char* methodName = vm_get_string(meta->nameIdx);");
-        w.println("    const char* methodDesc = vm_get_string(meta->descIdx);");
+        w.println("    const char* methodName = meta->nameStr ? meta->nameStr : vm_get_string(meta->nameIdx);");
+        w.println("    const char* methodDesc = meta->descStr ? meta->descStr : vm_get_string(meta->descIdx);");
         w.println("    if (!methodName || !methodDesc) {");
         w.println("        vm_indy_throw_bsm_error(env, \"InvokeDynamic metadata missing name/descriptor\");");
         w.println("        TMP_RESTORE;");
@@ -395,7 +395,7 @@ public class InvokeDynamicHelper extends VMHelper {
         w.println("    }");
         w.println();
         w.println("    int capturedCount = meta->argCount;");
-        w.println("    const char* capturedTypes = (meta->argTypesIdx >= 0) ? vm_get_string(meta->argTypesIdx) : NULL;");
+        w.println("    const char* capturedTypes = meta->argTypesStr ? meta->argTypesStr : ((meta->argTypesIdx >= 0) ? vm_get_string(meta->argTypesIdx) : NULL);");
         w.println("    if (capturedCount < 0) capturedCount = 0;");
         w.println("    if (frame->sp < capturedCount) {");
         w.println("        vm_indy_throw_bsm_error(env, \"InvokeDynamic stack underflow before callsite invocation\");");

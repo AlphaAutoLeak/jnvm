@@ -27,9 +27,9 @@ public class PutFieldInstruction extends Instruction {
         w.println("                      if (npeClass) (*env)->ThrowNew(env, npeClass, \"\");");
         w.println("                      _hasException = 1; goto method_exit;");
         w.println("                  }");
-        w.println("                  const char* owner = vm_get_string(meta->ownerIdx);");
-        w.println("                  const char* name = vm_get_string(meta->nameIdx);");
-        w.println("                  const char* desc = vm_get_string(meta->descIdx);");
+        w.println("                  const char* owner = meta->ownerStr ? meta->ownerStr : vm_get_string(meta->ownerIdx);");
+        w.println("                  const char* name = meta->nameStr ? meta->nameStr : vm_get_string(meta->nameIdx);");
+        w.println("                  const char* desc = meta->descStr ? meta->descStr : vm_get_string(meta->descIdx);");
         w.println("                  jclass cls = vm_find_class(env, owner);");
         w.println("                  if (!cls) { VM_LOG(\"PUTFIELD: Class not found: %s\\n\", owner); frame.pc++; break; }");
         w.println("                  jfieldID fid = vm_get_field_id(env, cls, owner, name, desc);");  // cached version
@@ -59,9 +59,9 @@ public class PutFieldInstruction extends Instruction {
         w.println("                  if (npeClass) (*env)->ThrowNew(env, npeClass, \"\");");
         w.println("                  _hasException = 1; goto method_exit;");
         w.println("              }");
-        w.println("              const char* owner = vm_get_string(meta->ownerIdx);");
-        w.println("              const char* name = vm_get_string(meta->nameIdx);");
-        w.println("              const char* desc = vm_get_string(meta->descIdx);");
+        w.println("              const char* owner = meta->ownerStr ? meta->ownerStr : vm_get_string(meta->ownerIdx);");
+        w.println("              const char* name = meta->nameStr ? meta->nameStr : vm_get_string(meta->nameIdx);");
+        w.println("              const char* desc = meta->descStr ? meta->descStr : vm_get_string(meta->descIdx);");
         w.println("              jclass cls = vm_find_class(env, owner);");
         w.println("              if (!cls) { VM_LOG(\"PUTFIELD: Class not found: %s\\n\", owner); frame.pc++; DISPATCH_NEXT; }");
         w.println("              jfieldID fid = vm_get_field_id(env, cls, owner, name, desc);");  // cached version

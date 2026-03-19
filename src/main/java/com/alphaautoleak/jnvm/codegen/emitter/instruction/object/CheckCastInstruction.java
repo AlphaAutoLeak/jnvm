@@ -30,7 +30,7 @@ public class CheckCastInstruction extends Instruction {
         w.println("                    if (!meta) { frame.pc++; break; }");
         w.println("                    jobject obj = frame.stack[frame.sp - 1].l;");
         w.println("                    if (obj) {");
-        w.println("                        const char* clsName = vm_get_string(meta->classIdx);");
+        w.println("                        const char* clsName = meta->classStr ? meta->classStr : vm_get_string(meta->classIdx);");
         w.println("                        jclass cls = vm_find_class(env, clsName);");
         w.println("                        if (!cls) {");
         emitSwitchExceptionRouting(w, "                            ");
@@ -55,7 +55,7 @@ public class CheckCastInstruction extends Instruction {
         w.println("                if (!meta) { frame.pc++; DISPATCH_NEXT; }");
         w.println("                jobject obj = frame.stack[frame.sp - 1].l;");
         w.println("                if (obj) {");
-        w.println("                    const char* clsName = vm_get_string(meta->classIdx);");
+        w.println("                    const char* clsName = meta->classStr ? meta->classStr : vm_get_string(meta->classIdx);");
         w.println("                    jclass cls = vm_find_class(env, clsName);");
         w.println("                    if (!cls) {");
         emitComputedGotoExceptionRouting(w, "                        ");

@@ -19,9 +19,9 @@ public class PutStaticInstruction extends Instruction {
 
     @Override
     protected void generateBody(PrintWriter w) {
-        w.println("                { const char* owner = vm_get_string(meta->ownerIdx);");
-        w.println("                  const char* name = vm_get_string(meta->nameIdx);");
-        w.println("                  const char* desc = vm_get_string(meta->descIdx);");
+        w.println("                { const char* owner = meta->ownerStr ? meta->ownerStr : vm_get_string(meta->ownerIdx);");
+        w.println("                  const char* name = meta->nameStr ? meta->nameStr : vm_get_string(meta->nameIdx);");
+        w.println("                  const char* desc = meta->descStr ? meta->descStr : vm_get_string(meta->descIdx);");
         w.println("                  jclass cls = vm_find_class(env, owner);");
         w.println("                  if (!cls) { frame.pc++; break; }");
         w.println("                  jfieldID fid = vm_get_static_field_id(env, cls, owner, name, desc);");  // cached version
@@ -45,11 +45,11 @@ public class PutStaticInstruction extends Instruction {
         w.printf("        OP_%02x:  /* %s */\n", opcode, comment);
         w.println("            { jclass cls; jfieldID fid; const char* desc;");
         w.println("              if (LIKELY(meta->cachedFid != NULL)) {");
-        w.println("                  cls = meta->cachedClass; fid = meta->cachedFid; desc = vm_get_string(meta->descIdx);");
+        w.println("                  cls = meta->cachedClass; fid = meta->cachedFid; desc = meta->descStr ? meta->descStr : vm_get_string(meta->descIdx);");
         w.println("              } else {");
-        w.println("              const char* owner = vm_get_string(meta->ownerIdx);");
-        w.println("              const char* name = vm_get_string(meta->nameIdx);");
-        w.println("              desc = vm_get_string(meta->descIdx);");
+        w.println("              const char* owner = meta->ownerStr ? meta->ownerStr : vm_get_string(meta->ownerIdx);");
+        w.println("              const char* name = meta->nameStr ? meta->nameStr : vm_get_string(meta->nameIdx);");
+        w.println("              desc = meta->descStr ? meta->descStr : vm_get_string(meta->descIdx);");
         w.println("              cls = vm_find_class(env, owner);");
         w.println("              if (!cls) { frame.pc++; DISPATCH_NEXT; }");
         w.println("              fid = vm_get_static_field_id(env, cls, owner, name, desc);");

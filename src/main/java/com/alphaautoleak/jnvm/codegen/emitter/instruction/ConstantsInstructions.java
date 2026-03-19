@@ -35,7 +35,7 @@ public class ConstantsInstructions {
             w.println(indent + "        frame.stack[frame.sp++].l = (*env)->NewStringUTF(env, str); break;"); 
             w.println(indent + "    }");
             w.println(indent + "    case META_CLASS: {");
-            w.println(indent + "        const char* cls = vm_get_string(meta->classIdx);");
+            w.println(indent + "        const char* cls = meta->classStr ? meta->classStr : vm_get_string(meta->classIdx);");
             w.println(indent + "        jclass resultClass = NULL;");
             w.println(indent + "        if (frame.callerClass != NULL) {");
             w.println(indent + "            static jclass classClass_cached = NULL;");
@@ -74,9 +74,9 @@ public class ConstantsInstructions {
             w.println(indent + "            classLoader = (*env)->CallObjectMethod(env, frame.callerClass, id_getClassLoaderMid);");
             w.println(indent + "            if ((*env)->ExceptionCheck(env)) { vm_indy_clear_if_exception(env); classLoader = NULL; }");
             w.println(indent + "        }");
-            w.println(indent + "        const char* owner = vm_get_string(meta->ownerIdx);");
-            w.println(indent + "        const char* name = vm_get_string(meta->nameIdx);");
-            w.println(indent + "        const char* desc = vm_get_string(meta->descIdx);");
+            w.println(indent + "        const char* owner = meta->ownerStr ? meta->ownerStr : vm_get_string(meta->ownerIdx);");
+            w.println(indent + "        const char* name = meta->nameStr ? meta->nameStr : vm_get_string(meta->nameIdx);");
+            w.println(indent + "        const char* desc = meta->descStr ? meta->descStr : vm_get_string(meta->descIdx);");
             w.println(indent + "        jobject lookup = vm_indy_get_lookup(env, frame.callerClass);");
             w.println(indent + "        if (!lookup || !owner || !name || !desc) {");
             w.println(indent + "            jclass err = vm_find_class(env, \"java/lang/LinkageError\");");

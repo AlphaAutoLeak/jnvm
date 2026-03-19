@@ -68,6 +68,7 @@ public class VmDataGenerator {
     private static final int FIELD_ARG_TYPES_IDX = 82;
     private static final int FIELD_ARG_LOCAL_SLOTS = 83;
     private static final int FIELD_ARG_WIDE_MASK = 84;
+    private static final int FIELD_ARG_POP_MAP_BASE = 5000;
     private static final int FIELD_METHOD_DESC_IDX = 900;
     private static final int FIELD_METHOD_DESC_LEN = 901;
     private static final int FIELD_METHOD_ARG_COUNT = 902;
@@ -781,7 +782,7 @@ public class VmDataGenerator {
         List<MetaEntry> metaList = method.getMetadata();
         if (!metaList.isEmpty()) {
             for (int i = 0; i < metaList.size(); i++) {
-                emitMetaEntry(w, id, i, metaList.get(i), metaKey);
+                emitMetaEntry(w, id, i, metaList.get(i), metaKey, localPool);
             }
             
             w.printf("static MetaEntry m%d_meta[] = {", id);
@@ -840,6 +841,10 @@ public class VmDataGenerator {
                         }
                         // Add pre-computed invocation metadata
                         emitInvokeMetaSuffix(w, id, i, localPool, m, metaKey);
+                        MethodDescriptorParser.DescriptorInfo methodInfo = resolveInvokeMetaInfo(id, i, localPool, m);
+                        if (methodInfo != null && methodInfo.getArgCount() > 0) {
+                            w.printf(", .argPopMap=m%d_meta%d_argpop", id, i);
+                        }
                         break;
                     case META_INVOKE_DYNAMIC:
                         // Map local bsmIdx to global index
@@ -853,6 +858,10 @@ public class VmDataGenerator {
                         w.printf(", .bsmIdx=%d",
                                 encodeInt(globalBsmIdx, metaKey, FIELD_BSM_IDX));
                         emitInvokeMetaSuffix(w, id, i, localPool, m, metaKey);
+                        MethodDescriptorParser.DescriptorInfo indyInfo = resolveInvokeMetaInfo(id, i, localPool, m);
+                        if (indyInfo != null && indyInfo.getArgCount() > 0) {
+                            w.printf(", .argPopMap=m%d_meta%d_argpop", id, i);
+                        }
                         break;
                     case META_JUMP:
                         w.printf(".jumpOffset=%d", encodeInt(m.jumpOffset, metaKey, FIELD_JUMP_OFFSET));
@@ -919,7 +928,7 @@ public class VmDataGenerator {
         }
     }
     
-    private void emitMetaEntry(PrintWriter w, int methodId, int idx, MetaEntry m, int metaKey) {
+    private void emitMetaEntry(PrintWriter w, int methodId, int idx, MetaEntry m, int metaKey, List<String> localPool) {
         if (m.type == MetaType.META_SWITCH && m.switchOffsets != null) {
             // Emit switchOffsets array
             w.printf("static int m%d_meta%d_offs[] = {", methodId, idx);
@@ -937,6 +946,30 @@ public class VmDataGenerator {
                     w.printf("%d%s", enc, (i < m.switchKeys.length - 1 ? ", " : ""));
                 }
                 w.println("};");
+            }
+        }
+        if ((m.type == MetaType.META_METHOD || m.type == MetaType.META_INVOKE_DYNAMIC) && localPool != null) {
+            MethodDescriptorParser.DescriptorInfo info = resolveInvokeMetaInfo(methodId, idx, localPool, m);
+            if (info != null && info.getArgCount() > 0) {
+                String argTypes = info.getArgTypes();
+                if (argTypes != null && !argTypes.isEmpty()) {
+                    int argLocalSlots = 0;
+                    for (int i = 0; i < argTypes.length(); i++) {
+                        char t = argTypes.charAt(i);
+                        argLocalSlots += (t == 'J' || t == 'D') ? 2 : 1;
+                    }
+                    w.printf("static int m%d_meta%d_argpop[] = {", methodId, idx);
+                    int cursor = argLocalSlots;
+                    int popIdx = 0;
+                    for (int i = argTypes.length() - 1; i >= 0; i--) {
+                        char t = argTypes.charAt(i);
+                        cursor -= (t == 'J' || t == 'D') ? 2 : 1;
+                        int encoded = encodeInt(cursor, metaKey, FIELD_ARG_POP_MAP_BASE + popIdx);
+                        w.printf("%d%s", encoded, (i > 0 ? ", " : ""));
+                        popIdx++;
+                    }
+                    w.println("};");
+                }
             }
         }
     }
@@ -1057,6 +1090,11 @@ public class VmDataGenerator {
         w.println("                me->argTypesIdx = vm_meta_dec_i32(me->argTypesIdx, key, " + FIELD_ARG_TYPES_IDX + "u);");
         w.println("                me->argLocalSlots = vm_meta_dec_i32(me->argLocalSlots, key, " + FIELD_ARG_LOCAL_SLOTS + "u);");
         w.println("                me->argWideMask = vm_meta_dec_u64(me->argWideMask, key, " + FIELD_ARG_WIDE_MASK + "u);");
+        w.println("                if (me->argPopMap != NULL && me->argCount > 0) {");
+        w.println("                    for (int k = 0; k < me->argCount; k++) {");
+        w.println("                        me->argPopMap[k] = vm_meta_dec_i32(me->argPopMap[k], key, " + FIELD_ARG_POP_MAP_BASE + "u + (uint32_t)k);");
+        w.println("                    }");
+        w.println("                }");
         w.println("                break;");
         w.println("            case META_INVOKE_DYNAMIC:");
         w.println("                me->bsmIdx = vm_meta_dec_i32(me->bsmIdx, key, " + FIELD_BSM_IDX + "u);");
@@ -1069,6 +1107,11 @@ public class VmDataGenerator {
         w.println("                me->argTypesIdx = vm_meta_dec_i32(me->argTypesIdx, key, " + FIELD_ARG_TYPES_IDX + "u);");
         w.println("                me->argLocalSlots = vm_meta_dec_i32(me->argLocalSlots, key, " + FIELD_ARG_LOCAL_SLOTS + "u);");
         w.println("                me->argWideMask = vm_meta_dec_u64(me->argWideMask, key, " + FIELD_ARG_WIDE_MASK + "u);");
+        w.println("                if (me->argPopMap != NULL && me->argCount > 0) {");
+        w.println("                    for (int k = 0; k < me->argCount; k++) {");
+        w.println("                        me->argPopMap[k] = vm_meta_dec_i32(me->argPopMap[k], key, " + FIELD_ARG_POP_MAP_BASE + "u + (uint32_t)k);");
+        w.println("                    }");
+        w.println("                }");
         w.println("                break;");
         w.println("            case META_JUMP:");
         w.println("                me->jumpOffset = vm_meta_dec_i32(me->jumpOffset, key, " + FIELD_JUMP_OFFSET + "u);");

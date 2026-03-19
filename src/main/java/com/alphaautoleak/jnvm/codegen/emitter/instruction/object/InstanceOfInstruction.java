@@ -23,7 +23,7 @@ public class InstanceOfInstruction extends Instruction {
         w.println("                  if (!obj) {");
         w.println("                      frame.stack[frame.sp - 1].i = 0;");
         w.println("                  } else {");
-        w.println("                      const char* clsName = vm_get_string(meta->classIdx);");
+        w.println("                      const char* clsName = meta->classStr ? meta->classStr : vm_get_string(meta->classIdx);");
         w.println("                      jclass cls = vm_find_class(env, clsName);");
         w.println("                      frame.stack[frame.sp - 1].i = (*env)->IsInstanceOf(env, obj, cls);");
         w.println("                  }");

@@ -295,6 +295,7 @@ class VmCachingSectionEmitter {
         w.println("    memset(vmMethodLookup, 0, sizeof(vmMethodLookup));");
         w.println("    for (int i = 0; i < vm_method_count; i++) {");
         w.println("        VMMethod* m = &vm_methods[i];");
+        w.println("        m->argTypesStr = (m->argTypesIdx >= 0) ? vm_get_string(m->argTypesIdx) : NULL;");
         w.println("        if (m->ownerIdx < 0 || m->nameIdx < 0 || m->descIdx < 0) continue;");
         w.println("        const char* o = vm_get_string(m->ownerIdx);");
         w.println("        const char* n = vm_get_string(m->nameIdx);");
@@ -316,8 +317,18 @@ class VmCachingSectionEmitter {
         w.println("        VMMethod* m = &vm_methods[i];");
         w.println("        for (int j = 0; j < m->metadataCount; j++) {");
         w.println("            MetaEntry* me = &m->metadata[j];");
-        w.println("            if (me->type == META_METHOD && me->ownerIdx >= 0 && me->nameIdx >= 0 && me->descIdx >= 0) {");
-        w.println("                me->vmTargetId = vm_lookup_method(vm_get_string(me->ownerIdx), vm_get_string(me->nameIdx), vm_get_string(me->descIdx));");
+        w.println("            me->flags = 0;");
+        w.println("            me->classStr = (me->classIdx >= 0) ? vm_get_string(me->classIdx) : NULL;");
+        w.println("            me->ownerStr = (me->ownerIdx >= 0) ? vm_get_string(me->ownerIdx) : NULL;");
+        w.println("            me->nameStr = (me->nameIdx >= 0) ? vm_get_string(me->nameIdx) : NULL;");
+        w.println("            me->descStr = (me->descIdx >= 0) ? vm_get_string(me->descIdx) : NULL;");
+        w.println("            me->argTypesStr = (me->argTypesIdx >= 0) ? vm_get_string(me->argTypesIdx) : NULL;");
+        w.println("            if (me->type == META_METHOD && me->ownerStr && me->nameStr && me->descStr) {");
+        w.println("                me->vmTargetId = vm_lookup_method(me->ownerStr, me->nameStr, me->descStr);");
+        w.println("                if (strcmp(me->ownerStr, \"java/lang/invoke/MethodHandle\") == 0 &&");
+        w.println("                    (strcmp(me->nameStr, \"invoke\") == 0 || strcmp(me->nameStr, \"invokeExact\") == 0)) {");
+        w.println("                    me->flags |= META_FLAG_MH_POLY_INVOKE;");
+        w.println("                }");
         w.println("            } else {");
         w.println("                me->vmTargetId = -1;");
         w.println("            }");

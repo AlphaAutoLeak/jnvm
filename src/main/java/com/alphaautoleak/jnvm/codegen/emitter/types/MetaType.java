@@ -55,6 +55,7 @@ public class MetaType {
         w.println("    // META_CLASS: class name index and length");
         w.println("    int classIdx;");
         w.println("    int classLen;");
+        w.println("    const char* classStr;   // cached class string pointer");
         w.println("    // META_FIELD, META_METHOD: reference info");
         w.println("    int ownerIdx;");
         w.println("    int ownerLen;");
@@ -67,8 +68,14 @@ public class MetaType {
         w.println("    int argCount;           // argument count (pre-computed)");
         w.println("    char returnTypeChar;    // return type char (pre-computed)");
         w.println("    int argTypesIdx;        // pre-parsed arg types string index (e.g., \"IJB\" for int, long, boolean)");
+        w.println("    uint8_t flags;          // precomputed fast flags (META_FLAG_*)");
+        w.println("    const char* ownerStr;   // cached owner string pointer");
+        w.println("    const char* nameStr;    // cached name string pointer");
+        w.println("    const char* descStr;    // cached desc string pointer");
+        w.println("    const char* argTypesStr;// cached arg-types string pointer");
         w.println("    int argLocalSlots;      // JVM local slots consumed by args (long/double count as 2)");
         w.println("    uint64_t argWideMask;   // bit i=1 if arg i is long/double (first 64 args)");
+        w.println("    int* argPopMap;         // direct-call template: pop-order -> callee local index");
         w.println("    int vmTargetId;         // pre-cached VM method ID for direct calls (-1 if not VM method)");
         w.println("    jclass cachedClass;     // lazily cached class ref for JNI calls");
         w.println("    jmethodID cachedMid;    // lazily cached method ID for JNI calls");

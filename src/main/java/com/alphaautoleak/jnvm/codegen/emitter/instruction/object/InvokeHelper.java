@@ -19,17 +19,19 @@ public class InvokeHelper {
     public static void generate(PrintWriter w, boolean isStatic, boolean directCallEnabled, boolean requireExactReceiverOwner) {
         w.println("                { int invokePc = frame.pc;");
         w.println("                  if (!meta) { VM_LOG(\"INVOKE: meta is NULL at pc=%d\\n\", frame.pc); frame.pc++; break; }");
-        w.println("                  const char* owner = vm_get_string(meta->ownerIdx);");
-        w.println("                  const char* name = vm_get_string(meta->nameIdx);");
-        w.println("                  const char* desc = vm_get_string(meta->descIdx);");
+        w.println("                  const char* owner = meta->ownerStr ? meta->ownerStr : vm_get_string(meta->ownerIdx);");
+        w.println("                  const char* name = meta->nameStr ? meta->nameStr : vm_get_string(meta->nameIdx);");
+        w.println("                  const char* desc = meta->descStr ? meta->descStr : vm_get_string(meta->descIdx);");
         // Use pre-computed metadata
         w.println("                  int argCount = meta->argCount;");
         w.println("                  char returnType = meta->returnTypeChar;");
-        w.println("                  const char* argTypes = (meta->argTypesIdx >= 0) ? vm_get_string(meta->argTypesIdx) : NULL;");
+        w.println("                  const char* argTypes = meta->argTypesStr ? meta->argTypesStr : ((meta->argTypesIdx >= 0) ? vm_get_string(meta->argTypesIdx) : NULL);");
+        w.println("                  VM_PERF_INVOKE_BEGIN();");
 
         if (directCallEnabled) {
             // Direct VM-to-VM call path
             w.println("                  int vmTargetId = meta->vmTargetId;");
+            w.println("                  if (vmTargetId >= 0) { VM_PERF_DIRECT_CANDIDATE(); }");
             if (!isStatic && requireExactReceiverOwner) {
                 w.println("                      int _canDirectCall = 0;");
                 w.println("                      if (LIKELY(vmTargetId >= 0 && frame.sp > argCount)) {");
@@ -59,6 +61,7 @@ public class InvokeHelper {
                 w.println("                      if (vmTargetId >= 0 && _canDirectCall) {");
                 emitDirectCallBody(w, isStatic, false);
                 w.println("                      } else {");
+                w.println("                      if (vmTargetId >= 0 && !_canDirectCall) { VM_PERF_DIRECT_REJECT(); }");
             } else {
                 w.println("                  if (vmTargetId >= 0) {");
                 emitDirectCallBody(w, isStatic, false);
@@ -67,6 +70,7 @@ public class InvokeHelper {
         }
 
         // Original JNI path (with lazy cached method ID)
+        w.println("                  VM_PERF_JNI_PATH();");
         w.println("                  jclass cls; jmethodID mid;");
         w.println("                  if (meta->cachedMid != NULL) {");
         w.println("                      cls = meta->cachedClass;");
@@ -83,19 +87,7 @@ public class InvokeHelper {
         w.println("                  meta->cachedClass = cls;");
         w.println("                  meta->cachedMid = mid;");
         w.println("                  }");
-        w.println("                  int _argc = argCount > 0 ? argCount : 1;");
-        w.println("                  jvalue args[_argc];");
-        w.println("                  for (int i = argCount - 1; i >= 0; i--) {");
-        w.println("                      char t = argTypes ? argTypes[i] : 'L';");
-        w.println("                      switch (t) {");
-        w.println("                          case 'I': case 'B': case 'C': case 'S': case 'Z':");
-        w.println("                              args[i].i = frame.stack[--frame.sp].i; break;");
-        w.println("                          case 'J': args[i].j = frame.stack[--frame.sp].j; break;");
-        w.println("                          case 'F': args[i].f = frame.stack[--frame.sp].f; break;");
-        w.println("                          case 'D': args[i].d = frame.stack[--frame.sp].d; break;");
-        w.println("                          default: args[i].l = frame.stack[--frame.sp].l; break;");
-        w.println("                      }");
-        w.println("                  }");
+        emitBuildJniArgsFromStack(w, "                  ");
 
         if (!isStatic) {
             w.println("                  jobject receiver = frame.stack[--frame.sp].l;");
@@ -212,17 +204,19 @@ public class InvokeHelper {
         w.printf("        OP_%02x:  /* %s */\n", opcode, comment);
         w.println("            { int invokePc = frame.pc;");
         w.println("              if (UNLIKELY(!meta)) { VM_LOG(\"INVOKE: meta is NULL at pc=%d\\n\", frame.pc); frame.pc++; DISPATCH_NEXT; }");
-        w.println("              const char* owner = vm_get_string(meta->ownerIdx);");
-        w.println("              const char* name = vm_get_string(meta->nameIdx);");
-        w.println("              const char* desc = vm_get_string(meta->descIdx);");
+        w.println("              const char* owner = meta->ownerStr ? meta->ownerStr : vm_get_string(meta->ownerIdx);");
+        w.println("              const char* name = meta->nameStr ? meta->nameStr : vm_get_string(meta->nameIdx);");
+        w.println("              const char* desc = meta->descStr ? meta->descStr : vm_get_string(meta->descIdx);");
         // Use pre-computed metadata
         w.println("              int argCount = meta->argCount;");
         w.println("              char returnType = meta->returnTypeChar;");
-        w.println("              const char* argTypes = (meta->argTypesIdx >= 0) ? vm_get_string(meta->argTypesIdx) : NULL;");
+        w.println("              const char* argTypes = meta->argTypesStr ? meta->argTypesStr : ((meta->argTypesIdx >= 0) ? vm_get_string(meta->argTypesIdx) : NULL);");
+        w.println("              VM_PERF_INVOKE_BEGIN();");
 
         if (directCallEnabled) {
             // Direct VM-to-VM call path
             w.println("              int vmTargetId = meta->vmTargetId;");
+            w.println("              if (vmTargetId >= 0) { VM_PERF_DIRECT_CANDIDATE(); }");
             if (!isStatic && requireExactReceiverOwner) {
                 w.println("                  int _canDirectCall = 0;");
                 w.println("                  if (LIKELY(vmTargetId >= 0 && frame.sp > argCount)) {");
@@ -252,6 +246,7 @@ public class InvokeHelper {
                 w.println("                  if (vmTargetId >= 0 && _canDirectCall) {");
                 emitDirectCallBody(w, isStatic, true);
                 w.println("                  } else {");
+                w.println("                  if (vmTargetId >= 0 && !_canDirectCall) { VM_PERF_DIRECT_REJECT(); }");
             } else {
                 w.println("              if (vmTargetId >= 0) {");
                 emitDirectCallBody(w, isStatic, true);
@@ -260,6 +255,7 @@ public class InvokeHelper {
         }
 
         // Original JNI path (with lazy cached method ID)
+        w.println("              VM_PERF_JNI_PATH();");
         w.println("              jclass cls; jmethodID mid;");
         w.println("              if (LIKELY(meta->cachedMid != NULL)) {");
         w.println("                  cls = meta->cachedClass;");
@@ -276,19 +272,7 @@ public class InvokeHelper {
         w.println("                  meta->cachedClass = cls;");
         w.println("                  meta->cachedMid = mid;");
         w.println("              }");
-        w.println("              int _argc = argCount > 0 ? argCount : 1;");
-        w.println("              jvalue args[_argc];");
-        w.println("              for (int i = argCount - 1; i >= 0; i--) {");
-        w.println("                  char t = argTypes ? argTypes[i] : 'L';");
-        w.println("                  switch (t) {");
-        w.println("                      case 'I': case 'B': case 'C': case 'S': case 'Z':");
-        w.println("                          args[i].i = frame.stack[--frame.sp].i; break;");
-        w.println("                      case 'J': args[i].j = frame.stack[--frame.sp].j; break;");
-        w.println("                      case 'F': args[i].f = frame.stack[--frame.sp].f; break;");
-        w.println("                      case 'D': args[i].d = frame.stack[--frame.sp].d; break;");
-        w.println("                      default: args[i].l = frame.stack[--frame.sp].l; break;");
-        w.println("                  }");
-        w.println("              }");
+        emitBuildJniArgsFromStack(w, "              ");
 
         if (!isStatic) {
             w.println("              jobject receiver = frame.stack[--frame.sp].l;");
@@ -391,6 +375,47 @@ public class InvokeHelper {
         w.println("            DISPATCH_NEXT;");
     }
 
+    private static void emitBuildJniArgsFromStack(PrintWriter w, String indent) {
+        w.println(indent + "int _argc = argCount > 0 ? argCount : 1;");
+        w.println(indent + "jvalue args[_argc];");
+        w.println(indent + "switch (argCount) {");
+        w.println(indent + "    case 0:");
+        w.println(indent + "        break;");
+        emitOneArgCase(w, indent, 1);
+        emitOneArgCase(w, indent, 2);
+        emitOneArgCase(w, indent, 3);
+        emitOneArgCase(w, indent, 4);
+        w.println(indent + "    default:");
+        w.println(indent + "        for (int i = argCount - 1; i >= 0; i--) {");
+        w.println(indent + "            char t = argTypes ? argTypes[i] : 'L';");
+        emitArgExtractSwitch(w, indent + "            ", "t", "i");
+        w.println(indent + "        }");
+        w.println(indent + "        break;");
+        w.println(indent + "}");
+    }
+
+    private static void emitOneArgCase(PrintWriter w, String indent, int count) {
+        w.println(indent + "    case " + count + ": {");
+        for (int idx = count - 1; idx >= 0; idx--) {
+            String tVar = "_t" + idx;
+            w.println(indent + "        char " + tVar + " = argTypes ? argTypes[" + idx + "] : 'L';");
+            emitArgExtractSwitch(w, indent + "        ", tVar, Integer.toString(idx));
+        }
+        w.println(indent + "        break;");
+        w.println(indent + "    }");
+    }
+
+    private static void emitArgExtractSwitch(PrintWriter w, String indent, String typeExpr, String argIndexExpr) {
+        w.println(indent + "switch (" + typeExpr + ") {");
+        w.println(indent + "    case 'I': case 'B': case 'C': case 'S': case 'Z':");
+        w.println(indent + "        args[" + argIndexExpr + "].i = frame.stack[--frame.sp].i; break;");
+        w.println(indent + "    case 'J': args[" + argIndexExpr + "].j = frame.stack[--frame.sp].j; break;");
+        w.println(indent + "    case 'F': args[" + argIndexExpr + "].f = frame.stack[--frame.sp].f; break;");
+        w.println(indent + "    case 'D': args[" + argIndexExpr + "].d = frame.stack[--frame.sp].d; break;");
+        w.println(indent + "    default: args[" + argIndexExpr + "].l = frame.stack[--frame.sp].l; break;");
+        w.println(indent + "}");
+    }
+
     /**
      * Signature-polymorphic MethodHandle.invoke/invokeExact cannot be called through
      * reflective/JNI virtual dispatch directly. Route them via invokeWithArguments(Object[]).
@@ -402,8 +427,7 @@ public class InvokeHelper {
         String indent = computedGoto ? "              " : "                  ";
         String dispatchOrContinue = computedGoto ? "DISPATCH_NEXT" : "continue";
 
-        w.println(indent + "if (owner && name && desc && strcmp(owner, \"java/lang/invoke/MethodHandle\") == 0 &&");
-        w.println(indent + "    (strcmp(name, \"invoke\") == 0 || strcmp(name, \"invokeExact\") == 0)) {");
+        w.println(indent + "if (UNLIKELY(meta->flags & META_FLAG_MH_POLY_INVOKE)) {");
         w.println(indent + "    static jmethodID mhInvokeWithArgsMid = NULL;");
         w.println(indent + "    static jclass mhObjectClass = NULL;");
         w.println(indent + "    if (!mhInvokeWithArgsMid) {");
@@ -477,25 +501,58 @@ public class InvokeHelper {
         String dispatchOrContinue = computedGoto ? "DISPATCH_NEXT" : "continue";
 
         // Build callee locals directly from caller's stack
+        w.println(indent + "VM_PERF_DIRECT_HIT();");
         w.println(indent + "int targetMaxLocals = vm_methods[vmTargetId].maxLocals;");
-        w.println(indent + "VMValue tempLocals[targetMaxLocals];");
-        w.println(indent + "memset(tempLocals, 0, targetMaxLocals * sizeof(VMValue));");
+        w.println(indent + "int localCap = targetMaxLocals > 0 ? targetMaxLocals : 1;");
+        w.println(indent + "VMValue tempLocals[localCap];");
 
         // Pop args from caller stack (reverse order) into callee locals.
-        // Uses precomputed argLocalSlots/argWideMask to avoid per-call slotMap allocation.
-        if (isStatic) {
-            w.println(indent + "int localCursor = meta->argLocalSlots;");
-        } else {
-            w.println(indent + "int localCursor = 1 + meta->argLocalSlots;");
-        }
-        w.println(indent + "for (int i = argCount - 1; i >= 0; i--) {");
-        w.println(indent + "    int _wide = (i < 64) ? (int)((meta->argWideMask >> i) & 1ULL) : 0;");
-        w.println(indent + "    if (UNLIKELY(i >= 64 && argTypes != NULL)) {");
-        w.println(indent + "        char _t = argTypes[i];");
-        w.println(indent + "        _wide = (_t == 'J' || _t == 'D') ? 1 : 0;");
+        // Fast path uses precomputed pop-order template (argPopMap).
+        w.println(indent + "if (LIKELY(meta->argPopMap != NULL)) {");
+        w.println(indent + "    int argBase = " + (isStatic ? "0" : "1") + ";");
+        w.println(indent + "    int* popMap = meta->argPopMap;");
+        w.println(indent + "    switch (argCount) {");
+        w.println(indent + "        case 0:");
+        w.println(indent + "            break;");
+        w.println(indent + "        case 1:");
+        w.println(indent + "            tempLocals[popMap[0] + argBase] = frame.stack[--frame.sp];");
+        w.println(indent + "            break;");
+        w.println(indent + "        case 2:");
+        w.println(indent + "            tempLocals[popMap[0] + argBase] = frame.stack[--frame.sp];");
+        w.println(indent + "            tempLocals[popMap[1] + argBase] = frame.stack[--frame.sp];");
+        w.println(indent + "            break;");
+        w.println(indent + "        case 3:");
+        w.println(indent + "            tempLocals[popMap[0] + argBase] = frame.stack[--frame.sp];");
+        w.println(indent + "            tempLocals[popMap[1] + argBase] = frame.stack[--frame.sp];");
+        w.println(indent + "            tempLocals[popMap[2] + argBase] = frame.stack[--frame.sp];");
+        w.println(indent + "            break;");
+        w.println(indent + "        case 4:");
+        w.println(indent + "            tempLocals[popMap[0] + argBase] = frame.stack[--frame.sp];");
+        w.println(indent + "            tempLocals[popMap[1] + argBase] = frame.stack[--frame.sp];");
+        w.println(indent + "            tempLocals[popMap[2] + argBase] = frame.stack[--frame.sp];");
+        w.println(indent + "            tempLocals[popMap[3] + argBase] = frame.stack[--frame.sp];");
+        w.println(indent + "            break;");
+        w.println(indent + "        default:");
+        w.println(indent + "            for (int pi = 0; pi < argCount; pi++) {");
+        w.println(indent + "                tempLocals[popMap[pi] + argBase] = frame.stack[--frame.sp];");
+        w.println(indent + "            }");
+        w.println(indent + "            break;");
         w.println(indent + "    }");
-        w.println(indent + "    localCursor -= _wide ? 2 : 1;");
-        w.println(indent + "    tempLocals[localCursor] = frame.stack[--frame.sp];");
+        w.println(indent + "} else {");
+        if (isStatic) {
+            w.println(indent + "    int localCursor = meta->argLocalSlots;");
+        } else {
+            w.println(indent + "    int localCursor = 1 + meta->argLocalSlots;");
+        }
+        w.println(indent + "    for (int i = argCount - 1; i >= 0; i--) {");
+        w.println(indent + "        int _wide = (i < 64) ? (int)((meta->argWideMask >> i) & 1ULL) : 0;");
+        w.println(indent + "        if (UNLIKELY(i >= 64 && argTypes != NULL)) {");
+        w.println(indent + "            char _t = argTypes[i];");
+        w.println(indent + "            _wide = (_t == 'J' || _t == 'D') ? 1 : 0;");
+        w.println(indent + "        }");
+        w.println(indent + "        localCursor -= _wide ? 2 : 1;");
+        w.println(indent + "        tempLocals[localCursor] = frame.stack[--frame.sp];");
+        w.println(indent + "    }");
         w.println(indent + "}");
 
         if (!isStatic) {
@@ -514,11 +571,15 @@ public class InvokeHelper {
         // caller-sensitive logic (e.g., invokedynamic Lookup context) may break.
         w.println(indent + "jclass directCallerClass = frame.callerClass;");
         w.println(indent + "if (owner) {");
-        w.println(indent + "    jclass _calleeOwnerClass = vm_find_class(env, owner);");
+        w.println(indent + "    jclass _calleeOwnerClass = meta->directOwnerClass;");
+        w.println(indent + "    if (_calleeOwnerClass == NULL) {");
+        w.println(indent + "        _calleeOwnerClass = vm_find_class(env, owner);");
+        w.println(indent + "        if (_calleeOwnerClass != NULL) meta->directOwnerClass = _calleeOwnerClass;");
+        w.println(indent + "    }");
         w.println(indent + "    if (_calleeOwnerClass) directCallerClass = _calleeOwnerClass;");
         w.println(indent + "}");
         w.println(indent + "int obfTargetId = vmTargetId ^ METHOD_ID_XOR_KEY;");
-        w.println(indent + "ExecuteResult directResult = vm_execute_common(env, obfTargetId, NULL, tempLocals, targetMaxLocals, directCallerClass);");
+        w.println(indent + "ExecuteResult directResult = vm_execute_common(env, obfTargetId, NULL, tempLocals, localCap, directCallerClass);");
 
         // Check for exceptions from direct call (use returnType flag, no JNI ExceptionCheck needed)
         w.println(indent + "if (UNLIKELY(directResult.returnType == 'X')) {");

@@ -158,11 +158,41 @@ public class VmInterpreterGenerator {
                 w.println("#define VM_LOG_FLUSH() ((void)0)");
             }
             w.println();
+
+            if (debug) {
+                w.println("// === Invoke path perf counters (debug only, thread-local) ===");
+                w.println("static __thread unsigned long long vm_perf_invoke_total = 0ULL;");
+                w.println("static __thread unsigned long long vm_perf_direct_candidate = 0ULL;");
+                w.println("static __thread unsigned long long vm_perf_direct_hit = 0ULL;");
+                w.println("static __thread unsigned long long vm_perf_jni_path = 0ULL;");
+                w.println("static __thread unsigned long long vm_perf_direct_reject = 0ULL;");
+                w.println("static inline void vm_perf_invoke_maybe_dump(void) {");
+                w.println("    if ((vm_perf_invoke_total & 0x3FFFULL) == 0ULL) {");
+                w.println("        VM_LOG(\"PERF invoke: total=%llu candidate=%llu direct=%llu jni=%llu reject=%llu\\n\",");
+                w.println("               vm_perf_invoke_total, vm_perf_direct_candidate, vm_perf_direct_hit,");
+                w.println("               vm_perf_jni_path, vm_perf_direct_reject);");
+                w.println("        VM_LOG_FLUSH();");
+                w.println("    }");
+                w.println("}");
+                w.println("#define VM_PERF_INVOKE_BEGIN() do { ++vm_perf_invoke_total; vm_perf_invoke_maybe_dump(); } while(0)");
+                w.println("#define VM_PERF_DIRECT_CANDIDATE() do { ++vm_perf_direct_candidate; } while(0)");
+                w.println("#define VM_PERF_DIRECT_HIT() do { ++vm_perf_direct_hit; } while(0)");
+                w.println("#define VM_PERF_JNI_PATH() do { ++vm_perf_jni_path; } while(0)");
+                w.println("#define VM_PERF_DIRECT_REJECT() do { ++vm_perf_direct_reject; } while(0)");
+            } else {
+                w.println("#define VM_PERF_INVOKE_BEGIN() ((void)0)");
+                w.println("#define VM_PERF_DIRECT_CANDIDATE() ((void)0)");
+                w.println("#define VM_PERF_DIRECT_HIT() ((void)0)");
+                w.println("#define VM_PERF_JNI_PATH() ((void)0)");
+                w.println("#define VM_PERF_DIRECT_REJECT() ((void)0)");
+            }
+            w.println();
             
             // === Branch prediction hint macros ===
             w.println("// === Branch prediction hints ===");
             w.println("#define LIKELY(x)   __builtin_expect(!!(x), 1)");
             w.println("#define UNLIKELY(x) __builtin_expect(!!(x), 0)");
+            w.println("#define META_FLAG_MH_POLY_INVOKE 0x01u");
             w.println();
 
             // === Class and method cache system ===
@@ -244,7 +274,7 @@ public class VmInterpreterGenerator {
         w.println("        frame.locals = frame_pool_push(m->maxLocals);");
         w.println("        memset(frame.locals, 0, m->maxLocals * sizeof(VMValue));");
         w.println("        frame.locals[0].l = instance;");
-        w.println("        const char* argTypes = (m->argTypesIdx >= 0) ? vm_get_string(m->argTypesIdx) : NULL;");
+        w.println("        const char* argTypes = m->argTypesStr ? m->argTypesStr : ((m->argTypesIdx >= 0) ? vm_get_string(m->argTypesIdx) : NULL);");
         w.println("        // Unbox args[1..n] (skip args[0]=instance, skip last element=callerClass)");
         w.println("        vm_unbox_args_fast(env, &frame, args, argTypes, m->argCount, m->isStatic ? 0 : 1, argsLen > 1 ? argsLen - 1 : 1, argsLen);");
         w.println("    }");
