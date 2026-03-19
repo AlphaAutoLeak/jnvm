@@ -25,6 +25,7 @@ public class JarPatcher {
     private final String bridgeClass;
     private final int methodIdXorKey;
     private final boolean directNativeRewrite;
+    private final Set<String> bootstrapMethodKeys;
     private final Map<String, Integer> methodIdMap = new HashMap<>();
     private final Set<String> classesWithDirectNativeMethods = new HashSet<>();
     private final Set<String> classesWithProtectedClinit = new HashSet<>();
@@ -34,8 +35,10 @@ public class JarPatcher {
 
     public JarPatcher(List<MethodInfo> protectedMethods,
                       Set<String> affectedClasses,
+                      Set<String> bootstrapMethodKeys,
                       boolean directNativeRewrite) {
         this.affectedClasses = affectedClasses;
+        this.bootstrapMethodKeys = bootstrapMethodKeys != null ? bootstrapMethodKeys : Collections.emptySet();
         this.bridgeClass = BridgePackageNameGenerator.generate();
         this.directNativeRewrite = directNativeRewrite;
 
@@ -133,13 +136,22 @@ public class JarPatcher {
         ClassNode cn = new ClassNode(Opcodes.ASM9);
         cr.accept(cn, 0);
         boolean classHasDirectNativeMethods = directNativeRewrite && classesWithDirectNativeMethods.contains(cn.name);
+        List<MethodNode> appendedMethods = new ArrayList<>();
 
         for (MethodNode mn : cn.methods) {
             String key = MethodKeyUtil.of(cn.name, mn.name, mn.desc);
             Integer methodId = methodIdMap.get(key);
             if (methodId == null) continue;
 
+            if (isBootstrapEntryMethod(cn.name, mn)) {
+                MethodNode impl = rewriter.rewriteBootstrapEntryAsTrampoline(cn, mn, methodId);
+                appendedMethods.add(impl);
+                continue;
+            }
             rewriter.rewrite(cn, mn, methodId, classHasDirectNativeMethods);
+        }
+        if (!appendedMethods.isEmpty()) {
+            cn.methods.addAll(appendedMethods);
         }
 
         if (directNativeRewrite && classHasDirectNativeMethods
@@ -150,6 +162,14 @@ public class JarPatcher {
         ClassWriter cw = new ClassWriter(ClassWriter.COMPUTE_FRAMES | ClassWriter.COMPUTE_MAXS);
         cn.accept(cw);
         return cw.toByteArray();
+    }
+
+    private boolean isBootstrapEntryMethod(String owner, MethodNode mn) {
+        if ("<clinit>".equals(mn.name) || "<init>".equals(mn.name)) {
+            return false;
+        }
+        String key = MethodKeyUtil.of(owner, mn.name, mn.desc);
+        return bootstrapMethodKeys.contains(key);
     }
 
     private void ensureClinitRegistersClassNatives(ClassNode cn) {

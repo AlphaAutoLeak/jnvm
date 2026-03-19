@@ -33,16 +33,65 @@ public class DivInstruction extends Instruction {
             w.println("                    frame.stack[frame.sp-2]." + type + " = " + fmodFunc + "(v1, v2);");
             w.println("                    frame.sp--;");
             w.println("                }");
+        } else if (isFloat) {
+            w.println("                frame.stack[frame.sp-2]." + type + " /= frame.stack[frame.sp-1]." + type + ";");
+            w.println("                frame.sp--;");
         } else if (isRem) {
-            w.println("                if (frame.stack[frame.sp-1]." + type + " != 0) {");
-            w.println("                    frame.stack[frame.sp-2]." + type + " %= frame.stack[frame.sp-1]." + type + ";");
-            w.println("                }");
-            w.println("                frame.sp--;");
+            if ("i".equals(type)) {
+                w.println("                {");
+                w.println("                    jint v2 = frame.stack[frame.sp-1].i;");
+                w.println("                    jint v1 = frame.stack[frame.sp-2].i;");
+                w.println("                    if (UNLIKELY(v2 == 0)) {");
+                w.println("                        jclass ae = vm_find_class(env, \"java/lang/ArithmeticException\");");
+                w.println("                        if (ae) (*env)->ThrowNew(env, ae, \"/ by zero\");");
+                w.println("                        _hasException = 1; goto method_exit;");
+                w.println("                    }");
+                w.println("                    if (v1 == (jint)0x80000000 && v2 == -1) frame.stack[frame.sp-2].i = 0;");
+                w.println("                    else frame.stack[frame.sp-2].i = v1 % v2;");
+                w.println("                    frame.sp--;");
+                w.println("                }");
+            } else {
+                w.println("                {");
+                w.println("                    jlong v2 = frame.stack[frame.sp-1].j;");
+                w.println("                    jlong v1 = frame.stack[frame.sp-2].j;");
+                w.println("                    if (UNLIKELY(v2 == 0)) {");
+                w.println("                        jclass ae = vm_find_class(env, \"java/lang/ArithmeticException\");");
+                w.println("                        if (ae) (*env)->ThrowNew(env, ae, \"/ by zero\");");
+                w.println("                        _hasException = 1; goto method_exit;");
+                w.println("                    }");
+                w.println("                    if (v1 == (jlong)0x8000000000000000LL && v2 == -1LL) frame.stack[frame.sp-2].j = 0LL;");
+                w.println("                    else frame.stack[frame.sp-2].j = v1 % v2;");
+                w.println("                    frame.sp--;");
+                w.println("                }");
+            }
         } else {
-            w.println("                if (frame.stack[frame.sp-1]." + type + " != 0) {");
-            w.println("                    frame.stack[frame.sp-2]." + type + " /= frame.stack[frame.sp-1]." + type + ";");
-            w.println("                }");
-            w.println("                frame.sp--;");
+            if ("i".equals(type)) {
+                w.println("                {");
+                w.println("                    jint v2 = frame.stack[frame.sp-1].i;");
+                w.println("                    jint v1 = frame.stack[frame.sp-2].i;");
+                w.println("                    if (UNLIKELY(v2 == 0)) {");
+                w.println("                        jclass ae = vm_find_class(env, \"java/lang/ArithmeticException\");");
+                w.println("                        if (ae) (*env)->ThrowNew(env, ae, \"/ by zero\");");
+                w.println("                        _hasException = 1; goto method_exit;");
+                w.println("                    }");
+                w.println("                    if (v1 == (jint)0x80000000 && v2 == -1) frame.stack[frame.sp-2].i = (jint)0x80000000;");
+                w.println("                    else frame.stack[frame.sp-2].i = v1 / v2;");
+                w.println("                    frame.sp--;");
+                w.println("                }");
+            } else {
+                w.println("                {");
+                w.println("                    jlong v2 = frame.stack[frame.sp-1].j;");
+                w.println("                    jlong v1 = frame.stack[frame.sp-2].j;");
+                w.println("                    if (UNLIKELY(v2 == 0)) {");
+                w.println("                        jclass ae = vm_find_class(env, \"java/lang/ArithmeticException\");");
+                w.println("                        if (ae) (*env)->ThrowNew(env, ae, \"/ by zero\");");
+                w.println("                        _hasException = 1; goto method_exit;");
+                w.println("                    }");
+                w.println("                    if (v1 == (jlong)0x8000000000000000LL && v2 == -1LL) frame.stack[frame.sp-2].j = (jlong)0x8000000000000000LL;");
+                w.println("                    else frame.stack[frame.sp-2].j = v1 / v2;");
+                w.println("                    frame.sp--;");
+                w.println("                }");
+            }
         }
         pcIncBreak(w);
     }

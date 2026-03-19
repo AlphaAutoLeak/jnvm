@@ -234,6 +234,10 @@ class BootstrapMethodGuard {
                 || bootstrapOwner.startsWith("sun/"));
     }
 
+    Set<String> getBootstrapMethodTargetsSnapshot() {
+        return new HashSet<>(bootstrapMethodTargets);
+    }
+
     static final class FilterOutcome {
         private final List<MethodInfo> filteredMethods;
         private final boolean changed;

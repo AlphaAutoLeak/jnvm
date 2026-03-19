@@ -338,10 +338,11 @@ public class BytecodeExtractor {
             meta.classIdx = getStringIndex(internalName);
             meta.classLen = internalName.length();
         } else if (cst instanceof Handle) {
-            // MethodHandle - temporarily stored as string
+            // LDC MethodHandle constant
             Handle h = (Handle) cst;
             meta.type = MetaType.META_METHOD;
             fillMemberMeta(meta, h.getOwner(), h.getName(), h.getDesc());
+            meta.handleTag = h.getTag();
         } else {
             throw new RuntimeException("Unsupported LDC constant: " + cst.getClass());
         }

@@ -20,6 +20,7 @@ public class Converter {
     private OpcodeObfuscator opcodeObfuscator;
     private List<MethodInfo> protectedMethods;
     private Set<String> affectedClasses;
+    private Set<String> bootstrapMethodKeys;
     private List<EncryptedMethodData> encryptedMethods;
 
     public Converter(ProtectConfig config) {
@@ -70,6 +71,7 @@ public class Converter {
         JarScanner scanner = new JarScanner(config, opcodeObfuscator);
         protectedMethods = scanner.scan(config.getInputJar());
         affectedClasses = scanner.getAffectedClasses();
+        bootstrapMethodKeys = scanner.getBootstrapMethodKeys();
     }
 
     private void printProtectionSummary() {
@@ -100,6 +102,7 @@ public class Converter {
         return new JarPatcher(
                 protectedMethods,
                 affectedClasses,
+                bootstrapMethodKeys,
                 config.isDirectNativeRewrite()
         );
     }

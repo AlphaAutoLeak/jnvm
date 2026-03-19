@@ -24,7 +24,12 @@ public class IfAcmpInstruction extends Instruction {
     @Override
     protected void generateBody(PrintWriter w) {
         w.println("                { jobject b = frame.stack[--frame.sp].l, a = frame.stack[--frame.sp].l;");
-        w.println("                  if (a " + op + " b) frame.pc = meta->jumpOffset;");
+        w.println("                  jboolean same = (*env)->IsSameObject(env, a, b);");
+        if ("==".equals(op)) {
+            w.println("                  if (same) frame.pc = meta->jumpOffset;");
+        } else {
+            w.println("                  if (!same) frame.pc = meta->jumpOffset;");
+        }
         w.println("                  else frame.pc++; }");
         w.println("                break;");
     }
@@ -44,7 +49,12 @@ public class IfAcmpInstruction extends Instruction {
     public void generateComputedGoto(PrintWriter w) {
         w.printf("        OP_%02x:  /* %s */\n", opcode, comment);
         w.println("            { jobject b = frame.stack[--frame.sp].l, a = frame.stack[--frame.sp].l;");
-        w.println("              if (a " + op + " b) { frame.pc = meta->jumpOffset; DISPATCH_NEXT; }");
+        w.println("              jboolean same = (*env)->IsSameObject(env, a, b);");
+        if ("==".equals(op)) {
+            w.println("              if (same) { frame.pc = meta->jumpOffset; DISPATCH_NEXT; }");
+        } else {
+            w.println("              if (!same) { frame.pc = meta->jumpOffset; DISPATCH_NEXT; }");
+        }
         w.println("              else { frame.pc++; DISPATCH_NEXT; } }");
     }
 }

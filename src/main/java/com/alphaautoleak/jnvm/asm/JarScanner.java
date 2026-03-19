@@ -30,6 +30,7 @@ public class JarScanner {
     private final Set<String> affectedClasses = new HashSet<>();
 
     private final BootstrapMethodGuard bootstrapGuard = new BootstrapMethodGuard();
+    private Set<String> bootstrapMethodKeys = Collections.emptySet();
 
     /** Annotation rule descriptor list */
     private final List<String> annotationDescs;
@@ -74,11 +75,13 @@ public class JarScanner {
             }
         }
 
-        // Never protect bootstrap-sensitive methods referenced by invokedynamic.
-        // Strategy:
-        // - default: skip all methods in bootstrap owner classes (safest)
-        // - payload mode: only skip bootstrap-sensitive closure
-        filterOutBootstrapMethods();
+        // Record real bootstrap entry methods. We no longer perform bootstrap-sensitive
+        // skip filtering here; bootstrap entries are handled by trampoline rewrite later.
+        bootstrapMethodKeys = bootstrapGuard.getBootstrapMethodTargetsSnapshot();
+        if (!bootstrapMethodKeys.isEmpty()) {
+            System.out.println("[SCAN] Detected " + bootstrapMethodKeys.size()
+                    + " invokedynamic bootstrap entry methods.");
+        }
 
         System.out.println("[SCAN] Found " + protectedMethods.size() + " methods to protect in "
                 + affectedClasses.size() + " classes.");
@@ -191,6 +194,10 @@ public class JarScanner {
 
     public Set<String> getAffectedClasses() {
         return affectedClasses;
+    }
+
+    public Set<String> getBootstrapMethodKeys() {
+        return bootstrapMethodKeys;
     }
 
     private void filterOutBootstrapMethods() {

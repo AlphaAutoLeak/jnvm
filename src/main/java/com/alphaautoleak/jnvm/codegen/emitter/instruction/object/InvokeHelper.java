@@ -9,7 +9,7 @@ import java.io.PrintWriter;
 public class InvokeHelper {
 
     public static void generate(PrintWriter w, boolean isStatic) {
-        generate(w, isStatic, true);
+        generate(w, isStatic, false);
     }
 
     public static void generate(PrintWriter w, boolean isStatic, boolean directCallEnabled) {
@@ -70,6 +70,7 @@ public class InvokeHelper {
         w.println("                      _hasException = 1; goto method_exit;");
         w.println("                  }");
         }
+        emitMethodHandleInvokeSpecialCase(w, isStatic, false);
 
         w.println("                  #if VM_DEBUG_ENABLED");
         w.println("                  const char* _cowner = vm_get_string(m->ownerIdx);");
@@ -165,7 +166,7 @@ public class InvokeHelper {
      * Generate computed goto version
      */
     public static void generateComputedGoto(PrintWriter w, boolean isStatic, int opcode, String comment) {
-        generateComputedGoto(w, isStatic, opcode, comment, true);
+        generateComputedGoto(w, isStatic, opcode, comment, false);
     }
 
     public static void generateComputedGoto(PrintWriter w, boolean isStatic, int opcode, String comment, boolean directCallEnabled) {
@@ -227,6 +228,7 @@ public class InvokeHelper {
             w.println("                  _hasException = 1; goto method_exit;");
             w.println("              }");
         }
+        emitMethodHandleInvokeSpecialCase(w, isStatic, true);
 
         w.println("              #if VM_DEBUG_ENABLED");
         w.println("              const char* _cowner = vm_get_string(m->ownerIdx);");
@@ -317,6 +319,80 @@ public class InvokeHelper {
         w.println("            }");
         w.println("            frame.pc++;");
         w.println("            DISPATCH_NEXT;");
+    }
+
+    /**
+     * Signature-polymorphic MethodHandle.invoke/invokeExact cannot be called through
+     * reflective/JNI virtual dispatch directly. Route them via invokeWithArguments(Object[]).
+     */
+    private static void emitMethodHandleInvokeSpecialCase(PrintWriter w, boolean isStatic, boolean computedGoto) {
+        if (isStatic) {
+            return;
+        }
+        String indent = computedGoto ? "              " : "                  ";
+        String dispatchOrContinue = computedGoto ? "DISPATCH_NEXT" : "continue";
+
+        w.println(indent + "if (owner && name && desc && strcmp(owner, \"java/lang/invoke/MethodHandle\") == 0 &&");
+        w.println(indent + "    (strcmp(name, \"invoke\") == 0 || strcmp(name, \"invokeExact\") == 0)) {");
+        w.println(indent + "    static jmethodID mhInvokeWithArgsMid = NULL;");
+        w.println(indent + "    if (!mhInvokeWithArgsMid) {");
+        w.println(indent + "        jclass mhCls = vm_find_class(env, \"java/lang/invoke/MethodHandle\");");
+        w.println(indent + "        if (mhCls) mhInvokeWithArgsMid = vm_get_method_id(env, mhCls, \"java/lang/invoke/MethodHandle\", \"invokeWithArguments\", \"([Ljava/lang/Object;)Ljava/lang/Object;\");");
+        w.println(indent + "    }");
+        w.println(indent + "    if (!mhInvokeWithArgsMid) {");
+        w.println(indent + "        jclass le = vm_find_class(env, \"java/lang/LinkageError\");");
+        w.println(indent + "        if (le) (*env)->ThrowNew(env, le, \"MethodHandle.invokeWithArguments not found\");");
+        w.println(indent + "        _hasException = 1; goto method_exit;");
+        w.println(indent + "    }");
+        w.println(indent + "    jclass objCls = vm_find_class(env, \"java/lang/Object\");");
+        w.println(indent + "    jobjectArray mhArgs = (*env)->NewObjectArray(env, argCount, objCls, NULL);");
+        w.println(indent + "    for (int mi = 0; mi < argCount && !(*env)->ExceptionCheck(env); mi++) {");
+        w.println(indent + "        char t = argTypes ? argTypes[mi] : 'L';");
+        w.println(indent + "        jobject boxed = NULL;");
+        w.println(indent + "        switch (t) {");
+        w.println(indent + "            case 'I': case 'B': case 'C': case 'S': case 'Z': { VMValue v; v.i = args[mi].i; boxed = vm_indy_box(env, t, v); break; }");
+        w.println(indent + "            case 'J': { VMValue v; v.j = args[mi].j; boxed = vm_indy_box(env, t, v); break; }");
+        w.println(indent + "            case 'F': { VMValue v; v.f = args[mi].f; boxed = vm_indy_box(env, t, v); break; }");
+        w.println(indent + "            case 'D': { VMValue v; v.d = args[mi].d; boxed = vm_indy_box(env, t, v); break; }");
+        w.println(indent + "            default: boxed = args[mi].l; break;");
+        w.println(indent + "        }");
+        w.println(indent + "        (*env)->SetObjectArrayElement(env, mhArgs, mi, boxed);");
+        w.println(indent + "    }");
+        w.println(indent + "    jobject mhResult = NULL;");
+        w.println(indent + "    if (!(*env)->ExceptionCheck(env)) {");
+        w.println(indent + "        mhResult = (*env)->CallObjectMethod(env, receiver, mhInvokeWithArgsMid, mhArgs);");
+        w.println(indent + "    }");
+        w.println(indent + "    if ((*env)->ExceptionCheck(env)) {");
+        w.println(indent + "        jthrowable exc = (*env)->ExceptionOccurred(env);");
+        w.println(indent + "        (*env)->ExceptionClear(env);");
+        w.println(indent + "        int hPc = vm_find_exception_handler(env, m, invokePc, exc);");
+        w.println(indent + "        if (hPc >= 0) {");
+        w.println(indent + "            frame.sp = 0;");
+        w.println(indent + "            frame.stack[frame.sp++].l = exc;");
+        w.println(indent + "            frame.pc = hPc;");
+        w.println(indent + "            " + dispatchOrContinue + ";");
+        w.println(indent + "        }");
+        w.println(indent + "        (*env)->Throw(env, exc);");
+        w.println(indent + "        _hasException = 1; goto method_exit;");
+        w.println(indent + "    }");
+        w.println(indent + "    if (!vm_indy_push_return(env, &frame, meta, mhResult)) {");
+        w.println(indent + "        if ((*env)->ExceptionCheck(env)) {");
+        w.println(indent + "            jthrowable exc = (*env)->ExceptionOccurred(env);");
+        w.println(indent + "            (*env)->ExceptionClear(env);");
+        w.println(indent + "            int hPc = vm_find_exception_handler(env, m, invokePc, exc);");
+        w.println(indent + "            if (hPc >= 0) {");
+        w.println(indent + "                frame.sp = 0;");
+        w.println(indent + "                frame.stack[frame.sp++].l = exc;");
+        w.println(indent + "                frame.pc = hPc;");
+        w.println(indent + "                " + dispatchOrContinue + ";");
+        w.println(indent + "            }");
+        w.println(indent + "            (*env)->Throw(env, exc);");
+        w.println(indent + "        }");
+        w.println(indent + "        _hasException = 1; goto method_exit;");
+        w.println(indent + "    }");
+        w.println(indent + "    frame.pc++;");
+        w.println(indent + "    " + dispatchOrContinue + ";");
+        w.println(indent + "}");
     }
 
     /**

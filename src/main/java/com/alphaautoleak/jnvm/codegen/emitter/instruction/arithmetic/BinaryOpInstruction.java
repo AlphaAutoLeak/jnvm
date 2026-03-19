@@ -19,8 +19,16 @@ public class BinaryOpInstruction extends Instruction {
 
     @Override
     protected void generateBody(PrintWriter w) {
-        w.println("                frame.stack[frame.sp-2]." + type + " " + op + "= frame.stack[frame.sp-1]." + type + ";");
-        w.println("                frame.sp--;");
+        if (("i".equals(type) || "j".equals(type)) && ("+".equals(op) || "-".equals(op) || "*".equals(op))) {
+            if ("i".equals(type)) {
+                w.println("                frame.stack[frame.sp-2].i = (jint)((uint32_t)frame.stack[frame.sp-2].i " + op + " (uint32_t)frame.stack[frame.sp-1].i);");
+            } else {
+                w.println("                frame.stack[frame.sp-2].j = (jlong)((uint64_t)frame.stack[frame.sp-2].j " + op + " (uint64_t)frame.stack[frame.sp-1].j);");
+            }
+        } else {
+            w.println("                frame.stack[frame.sp-2]." + type + " " + op + "= frame.stack[frame.sp-1]." + type + ";");
+        }
+        w.println("                frame.sp--;"); 
         pcIncBreak(w);
     }
 }

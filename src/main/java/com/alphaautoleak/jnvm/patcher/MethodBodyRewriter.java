@@ -18,6 +18,7 @@ public class MethodBodyRewriter {
     private final String bridgeClass;
     private final int methodIdXorKey;
     private final boolean directNativeRewrite;
+    private int bootstrapImplSeq = 0;
 
     MethodBodyRewriter(String bridgeClass, int methodIdXorKey, boolean directNativeRewrite) {
         this.bridgeClass = bridgeClass;
@@ -35,6 +36,69 @@ public class MethodBodyRewriter {
             return;
         }
         rewriteLegacyObjectArray(cn, mn, methodId);
+    }
+
+    MethodNode rewriteBootstrapEntryAsTrampoline(ClassNode cn, MethodNode bootstrapEntry, int methodId) {
+        String implName = "__jnvm$bootstrap$impl$" + (bootstrapImplSeq++);
+        MethodNode impl = cloneAsBootstrapImpl(bootstrapEntry, implName);
+        // Bootstrap entry compatibility: always protect impl with legacy bridge rewrite.
+        rewriteLegacyObjectArray(cn, impl, methodId);
+        rewriteBootstrapTrampolineBody(cn.name, bootstrapEntry, implName);
+        return impl;
+    }
+
+    private MethodNode cloneAsBootstrapImpl(MethodNode source, String implName) {
+        int implAccess = (source.access & ~(Opcodes.ACC_PUBLIC | Opcodes.ACC_PROTECTED))
+                | Opcodes.ACC_PRIVATE
+                | Opcodes.ACC_SYNTHETIC;
+        MethodNode impl = new MethodNode(
+                Opcodes.ASM9,
+                implAccess,
+                implName,
+                source.desc,
+                source.signature,
+                source.exceptions == null ? null : source.exceptions.toArray(new String[0])
+        );
+        source.accept(impl);
+        return impl;
+    }
+
+    private void rewriteBootstrapTrampolineBody(String owner, MethodNode entry, String implName) {
+        boolean isStatic = (entry.access & Opcodes.ACC_STATIC) != 0;
+        Type[] argTypes = Type.getArgumentTypes(entry.desc);
+        Type retType = Type.getReturnType(entry.desc);
+
+        InsnList insns = new InsnList();
+        int localIdx = 0;
+        int invokeOpcode;
+        if (isStatic) {
+            invokeOpcode = Opcodes.INVOKESTATIC;
+        } else {
+            invokeOpcode = Opcodes.INVOKESPECIAL;
+            insns.add(new VarInsnNode(Opcodes.ALOAD, 0));
+            localIdx = 1;
+        }
+
+        for (Type argType : argTypes) {
+            InstructionsUtil.loadRaw(insns, argType, localIdx);
+            localIdx += argType.getSize();
+        }
+
+        insns.add(new MethodInsnNode(
+                invokeOpcode,
+                owner,
+                implName,
+                entry.desc,
+                false
+        ));
+        appendReturn(insns, retType);
+
+        entry.instructions.clear();
+        entry.instructions.add(insns);
+        entry.tryCatchBlocks.clear();
+        if (entry.localVariables != null) entry.localVariables.clear();
+        entry.maxStack = 0;
+        entry.maxLocals = 0;
     }
 
     private void rewriteLegacyObjectArray(ClassNode cn, MethodNode mn, int methodId) {
@@ -253,6 +317,32 @@ public class MethodBodyRewriter {
             default:
                 insns.add(new InsnNode(Opcodes.ARETURN));
                 break;
+        }
+    }
+
+    private void appendReturn(InsnList insns, Type retType) {
+        switch (retType.getSort()) {
+            case Type.VOID:
+                insns.add(new InsnNode(Opcodes.RETURN));
+                return;
+            case Type.BOOLEAN:
+            case Type.BYTE:
+            case Type.CHAR:
+            case Type.SHORT:
+            case Type.INT:
+                insns.add(new InsnNode(Opcodes.IRETURN));
+                return;
+            case Type.LONG:
+                insns.add(new InsnNode(Opcodes.LRETURN));
+                return;
+            case Type.FLOAT:
+                insns.add(new InsnNode(Opcodes.FRETURN));
+                return;
+            case Type.DOUBLE:
+                insns.add(new InsnNode(Opcodes.DRETURN));
+                return;
+            default:
+                insns.add(new InsnNode(Opcodes.ARETURN));
         }
     }
 }

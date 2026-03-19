@@ -34,6 +34,8 @@ public class MetaEntry {
     public int nameLen;
     public int descIdx;
     public int descLen;
+    // META_METHOD (LDC MethodHandle): ASM Handle tag (REF_getField..REF_invokeInterface)
+    public int handleTag;
     
     // META_INVOKE_DYNAMIC
     public int bsmIdx;

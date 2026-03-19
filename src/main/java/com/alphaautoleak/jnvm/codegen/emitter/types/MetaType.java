@@ -62,6 +62,7 @@ public class MetaType {
         w.println("    int nameLen;");
         w.println("    int descIdx;");
         w.println("    int descLen;");
+        w.println("    int handleTag;          // META_METHOD when sourced from LDC MethodHandle");
         w.println("    // META_METHOD: pre-parsed invoke meta (optimization)");
         w.println("    int argCount;           // argument count (pre-computed)");
         w.println("    char returnTypeChar;    // return type char (pre-computed)");

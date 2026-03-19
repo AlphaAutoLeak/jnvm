@@ -502,6 +502,13 @@ public class VmDataGenerator {
                             mapStringIndex(localPool, m.classIdx), m.classLen);
                         break;
                     case META_FIELD:
+                        w.printf(".ownerIdx=%d, .ownerLen=%d, ",
+                            mapStringIndex(localPool, m.ownerIdx), m.ownerLen);
+                        w.printf(".nameIdx=%d, .nameLen=%d, ",
+                            mapStringIndex(localPool, m.nameIdx), m.nameLen);
+                        w.printf(".descIdx=%d, .descLen=%d",
+                            mapStringIndex(localPool, m.descIdx), m.descLen);
+                        break;
                     case META_METHOD:
                         w.printf(".ownerIdx=%d, .ownerLen=%d, ",
                             mapStringIndex(localPool, m.ownerIdx), m.ownerLen);
@@ -509,10 +516,11 @@ public class VmDataGenerator {
                             mapStringIndex(localPool, m.nameIdx), m.nameLen);
                         w.printf(".descIdx=%d, .descLen=%d",
                             mapStringIndex(localPool, m.descIdx), m.descLen);
-                        // Add pre-computed invocation metadata
-                        if (m.type == MetaType.META_METHOD) {
-                            emitInvokeMetaSuffix(w, id, i, localPool, m);
+                        if (m.handleTag > 0) {
+                            w.printf(", .handleTag=%d", m.handleTag);
                         }
+                        // Add pre-computed invocation metadata
+                        emitInvokeMetaSuffix(w, id, i, localPool, m);
                         break;
                     case META_INVOKE_DYNAMIC:
                         // Map local bsmIdx to global index
