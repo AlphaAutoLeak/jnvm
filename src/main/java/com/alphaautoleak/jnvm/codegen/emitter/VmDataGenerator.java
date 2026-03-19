@@ -434,9 +434,26 @@ public class VmDataGenerator {
         if (info == null) {
             return;
         }
-        w.printf(", .argCount=%d, .returnTypeChar='%c'", info.getArgCount(), info.getReturnTypeChar());
-        if (info.getArgTypes() != null && !info.getArgTypes().isEmpty()) {
-            w.printf(", .argTypesIdx=%d", getOrAddStringIndex(info.getArgTypes()));
+        String argTypes = info.getArgTypes();
+        int argLocalSlots = 0;
+        long argWideMask = 0L;
+        if (argTypes != null && !argTypes.isEmpty()) {
+            for (int i = 0; i < argTypes.length(); i++) {
+                char t = argTypes.charAt(i);
+                argLocalSlots++;
+                if (t == 'J' || t == 'D') {
+                    argLocalSlots++;
+                    if (i < 64) {
+                        argWideMask |= (1L << i);
+                    }
+                }
+            }
+        }
+
+        w.printf(", .argCount=%d, .returnTypeChar='%c', .argLocalSlots=%d, .argWideMask=0x%xULL",
+                info.getArgCount(), info.getReturnTypeChar(), argLocalSlots, argWideMask);
+        if (argTypes != null && !argTypes.isEmpty()) {
+            w.printf(", .argTypesIdx=%d", getOrAddStringIndex(argTypes));
         } else {
             w.printf(", .argTypesIdx=-1");
         }

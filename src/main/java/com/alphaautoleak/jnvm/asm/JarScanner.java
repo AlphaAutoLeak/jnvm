@@ -34,13 +34,11 @@ public class JarScanner {
 
     /** Annotation rule descriptor list */
     private final List<String> annotationDescs;
-    private final boolean protectBootstrapPayload;
 
     public JarScanner(ProtectConfig config, OpcodeObfuscator opcodeObfuscator) {
         this.config = config;
         this.opcodeObfuscator = opcodeObfuscator;
         this.annotationDescs = config.getAnnotationRules();
-        this.protectBootstrapPayload = config.isProtectBootstrapPayload();
     }
     
     /**
@@ -198,30 +196,6 @@ public class JarScanner {
 
     public Set<String> getBootstrapMethodKeys() {
         return bootstrapMethodKeys;
-    }
-
-    private void filterOutBootstrapMethods() {
-        BootstrapMethodGuard.FilterOutcome outcome = bootstrapGuard.filter(protectedMethods, protectBootstrapPayload);
-        if (!outcome.isChanged()) {
-            return;
-        }
-
-        protectedMethods.clear();
-        protectedMethods.addAll(outcome.getFilteredMethods());
-
-        affectedClasses.clear();
-        int id = 0;
-        for (MethodInfo info : protectedMethods) {
-            info.setMethodId(id++);
-            affectedClasses.add(info.getOwner());
-        }
-        nextMethodId = id;
-
-        System.out.println("[SCAN] Skipped " + outcome.getTotalSkippedCount() +
-                " bootstrap-sensitive methods used by invokedynamic." +
-                " (mode=" + outcome.getModeName() +
-                ", class-owner=" + outcome.getSkipByClassCount() +
-                ", dependency=" + outcome.getSkipByDependencyCount() + ")");
     }
 
     private boolean shouldProtectMethod(String className, boolean classAnnotated, MethodNode mn) {

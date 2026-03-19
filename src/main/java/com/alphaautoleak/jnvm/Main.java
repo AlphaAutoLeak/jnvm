@@ -54,7 +54,6 @@ public class Main {
         System.out.println("  Targets:      " + config.getTargets());
         System.out.println("  Protect rules:" + config.getProtectRules());
         System.out.println("  Debug mode:   " + config.isDebug());
-        System.out.println("  Indy payload: " + config.isProtectBootstrapPayload());
         System.out.println("  Direct native:" + config.isDirectNativeRewrite());
         System.out.println();
     }

@@ -23,12 +23,6 @@ public class ProtectConfig {
     private File nativeDir;
     private boolean encryptStrings = true;
     /**
-     * When false (default), all methods in bootstrap owner classes are skipped for safety.
-     * When true, only bootstrap-sensitive closure is skipped, and non-sensitive payload methods
-     * in those classes can still be protected.
-     */
-    private boolean protectBootstrapPayload = false;
-    /**
      * When true, protected non-<clinit> methods are rewritten to ACC_NATIVE and
      * registered per-class in that class's <clinit>.
      */
@@ -46,7 +40,6 @@ public class ProtectConfig {
     /**
      * Loads config from YAML file.
      */
-    @SuppressWarnings("unchecked")
     public void loadFromYaml(File yamlFile) throws IOException {
         if (yamlFile == null || !yamlFile.exists()) {
             return;
@@ -68,7 +61,6 @@ public class ProtectConfig {
 
             encryptStrings = readBoolean(config, "encrypt-strings", encryptStrings);
             debug = readBoolean(config, "debug", debug);
-            protectBootstrapPayload = readBoolean(config, "protect-bootstrap-payload", protectBootstrapPayload);
             directNativeRewrite = readBoolean(config, "direct-native-rewrite", directNativeRewrite);
 
             if (config.containsKey("native-dir") && nativeDir == null) {
@@ -255,14 +247,6 @@ public class ProtectConfig {
 
     public void setEncryptStrings(boolean encryptStrings) {
         this.encryptStrings = encryptStrings;
-    }
-
-    public boolean isProtectBootstrapPayload() {
-        return protectBootstrapPayload;
-    }
-
-    public void setProtectBootstrapPayload(boolean protectBootstrapPayload) {
-        this.protectBootstrapPayload = protectBootstrapPayload;
     }
 
     public boolean isDirectNativeRewrite() {

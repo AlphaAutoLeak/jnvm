@@ -67,10 +67,15 @@ public class MetaType {
         w.println("    int argCount;           // argument count (pre-computed)");
         w.println("    char returnTypeChar;    // return type char (pre-computed)");
         w.println("    int argTypesIdx;        // pre-parsed arg types string index (e.g., \"IJB\" for int, long, boolean)");
+        w.println("    int argLocalSlots;      // JVM local slots consumed by args (long/double count as 2)");
+        w.println("    uint64_t argWideMask;   // bit i=1 if arg i is long/double (first 64 args)");
         w.println("    int vmTargetId;         // pre-cached VM method ID for direct calls (-1 if not VM method)");
         w.println("    jclass cachedClass;     // lazily cached class ref for JNI calls");
         w.println("    jmethodID cachedMid;    // lazily cached method ID for JNI calls");
         w.println("    jfieldID cachedFid;     // lazily cached field ID for JNI field access");
+        w.println("    // INVOKEVIRTUAL exact-owner guard cache (direct-call fast path)");
+        w.println("    jclass directOwnerClass;      // global ref to owner class for exact checks");
+        w.println("    jclass directRecvExactClass;  // global ref to first exact-hit receiver class");
         w.println("    // META_INVOKE_DYNAMIC");
         w.println("    int bsmIdx;");
         w.println("    jobject cachedIndyResult;  // cached invokedynamic CallSite target result (MethodHandle)");

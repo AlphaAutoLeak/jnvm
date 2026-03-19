@@ -152,25 +152,35 @@ class VmCachingSectionEmitter {
     private void emitClassLookupFunction(PrintWriter w) {
         w.println("__attribute__((const, hot))");
         w.println("static jclass vm_find_class(JNIEnv* env, const char* className) {");
-        w.println("    uint32_t idx = ptr_hash(className) & (CLASS_CACHE_SIZE - 1);");
-        w.println("    ClassCacheEntry* e = &classCache[idx];");
-        w.println("    jclass cached = atomic_load_explicit(&e->value, memory_order_relaxed);");
-        w.println("    if (LIKELY(e->key == className && cached != NULL)) {");
-        w.println("        return cached;");
+        w.println("    uint32_t hash = ptr_hash(className);");
+        w.println("    for (int probe = 0; probe < 8; probe++) {");
+            w.println("        uint32_t idx = (hash + probe) & (CLASS_CACHE_SIZE - 1);");
+            w.println("        ClassCacheEntry* e = &classCache[idx];");
+        w.println("        jclass cached = atomic_load_explicit(&e->value, memory_order_relaxed);");
+        w.println("        if (LIKELY(e->key == className && cached != NULL)) {");
+        w.println("            return cached;");
+        w.println("        }");
+        w.println("        if (e->key == NULL) {");
+        w.println("            jclass localCls = (*env)->FindClass(env, className);");
+        w.println("            if (!localCls) return NULL;");
+        w.println("            jclass globalCls = (*env)->NewGlobalRef(env, localCls);");
+        w.println("            if (!globalCls) return NULL;  // never return local refs");
+        w.println("            jclass expected = NULL;");
+        w.println("            if (atomic_compare_exchange_strong_explicit(&e->value, &expected, globalCls, memory_order_relaxed, memory_order_relaxed)) {");
+        w.println("                e->key = className;");
+        w.println("                return globalCls;");
+        w.println("            }");
+        w.println("            (*env)->DeleteGlobalRef(env, globalCls);");
+        w.println("            cached = atomic_load_explicit(&e->value, memory_order_relaxed);");
+        w.println("            if (e->key == className && cached != NULL) {");
+        w.println("                return cached;");
+        w.println("            }");
+        w.println("        }");
         w.println("    }");
+        w.println("    // Fallback when probe budget is exhausted: no cache insert, but still return global ref");
         w.println("    jclass localCls = (*env)->FindClass(env, className);");
         w.println("    if (!localCls) return NULL;");
-        w.println("    jclass globalCls = (*env)->NewGlobalRef(env, localCls);");
-        w.println("    if (!globalCls) return localCls;");
-        w.println("    if (e->key != className && e->key != NULL) {");
-        w.println("        return globalCls;");
-        w.println("    }");
-        w.println("    if (atomic_compare_exchange_strong_explicit(&e->value, &cached, globalCls, memory_order_relaxed, memory_order_relaxed)) {");
-        w.println("        e->key = className;");
-        w.println("        return globalCls;");
-        w.println("    }");
-        w.println("    (*env)->DeleteGlobalRef(env, globalCls);");
-        w.println("    return cached;");
+        w.println("    return (*env)->NewGlobalRef(env, localCls);");
         w.println("}");
         w.println();
     }
@@ -257,7 +267,7 @@ class VmCachingSectionEmitter {
 
     private void emitVmMethodLookupCache(PrintWriter w) {
         w.println("// === VM method lookup (direct VM-to-VM calls) ===");
-        w.println("#define VM_METHOD_LOOKUP_SIZE 256");
+        w.println("#define VM_METHOD_LOOKUP_SIZE 1024");
         w.println();
         w.println("typedef struct {");
         w.println("    const char* owner;");

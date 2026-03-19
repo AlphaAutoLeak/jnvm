@@ -19,11 +19,11 @@ public class InvokeSpecialInstruction extends Instruction {
 
     @Override
     protected void generateBody(PrintWriter w) {
-        InvokeHelper.generate(w, false);
+        InvokeHelper.generate(w, false, true);
     }
 
     @Override
     public void generateComputedGoto(PrintWriter w) {
-        InvokeHelper.generateComputedGoto(w, false, opcode, comment);
+        InvokeHelper.generateComputedGoto(w, false, opcode, comment, true);
     }
 }

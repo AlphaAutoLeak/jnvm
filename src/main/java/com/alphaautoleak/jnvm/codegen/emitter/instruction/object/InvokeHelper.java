@@ -13,6 +13,10 @@ public class InvokeHelper {
     }
 
     public static void generate(PrintWriter w, boolean isStatic, boolean directCallEnabled) {
+        generate(w, isStatic, directCallEnabled, false);
+    }
+
+    public static void generate(PrintWriter w, boolean isStatic, boolean directCallEnabled, boolean requireExactReceiverOwner) {
         w.println("                { int invokePc = frame.pc;");
         w.println("                  if (!meta) { VM_LOG(\"INVOKE: meta is NULL at pc=%d\\n\", frame.pc); frame.pc++; break; }");
         w.println("                  const char* owner = vm_get_string(meta->ownerIdx);");
@@ -26,9 +30,40 @@ public class InvokeHelper {
         if (directCallEnabled) {
             // Direct VM-to-VM call path
             w.println("                  int vmTargetId = meta->vmTargetId;");
-            w.println("                  if (vmTargetId >= 0) {");
-            emitDirectCallBody(w, isStatic, false);
-            w.println("                  } else {");
+            if (!isStatic && requireExactReceiverOwner) {
+                w.println("                      int _canDirectCall = 0;");
+                w.println("                      if (LIKELY(vmTargetId >= 0 && frame.sp > argCount)) {");
+                w.println("                          jobject _peekReceiver = frame.stack[frame.sp - argCount - 1].l;");
+                w.println("                          if (_peekReceiver != NULL) {");
+                w.println("                              jclass _recvCls = (*env)->GetObjectClass(env, _peekReceiver);");
+                w.println("                              if (_recvCls != NULL) {");
+                w.println("                                  if (meta->directRecvExactClass != NULL && (*env)->IsSameObject(env, _recvCls, meta->directRecvExactClass)) {");
+                w.println("                                      _canDirectCall = 1;");
+                w.println("                                  } else {");
+                w.println("                                      jclass _ownerCls = meta->directOwnerClass;");
+                w.println("                                      if (_ownerCls == NULL) {");
+                w.println("                                          _ownerCls = vm_find_class(env, owner);");
+                w.println("                                          if (_ownerCls != NULL) meta->directOwnerClass = _ownerCls;");
+                w.println("                                      }");
+                w.println("                                      if (_ownerCls != NULL && (*env)->IsSameObject(env, _recvCls, _ownerCls)) {");
+                w.println("                                          _canDirectCall = 1;");
+                w.println("                                          if (meta->directRecvExactClass == NULL) {");
+                w.println("                                              meta->directRecvExactClass = (*env)->NewGlobalRef(env, _recvCls);");
+                w.println("                                          }");
+                w.println("                                      }");
+                w.println("                                  }");
+                w.println("                                  (*env)->DeleteLocalRef(env, _recvCls);");
+                w.println("                              }");
+                w.println("                          }");
+                w.println("                      }");
+                w.println("                      if (vmTargetId >= 0 && _canDirectCall) {");
+                emitDirectCallBody(w, isStatic, false);
+                w.println("                      } else {");
+            } else {
+                w.println("                  if (vmTargetId >= 0) {");
+                emitDirectCallBody(w, isStatic, false);
+                w.println("                  } else {");
+            }
         }
 
         // Original JNI path (with lazy cached method ID)
@@ -170,6 +205,10 @@ public class InvokeHelper {
     }
 
     public static void generateComputedGoto(PrintWriter w, boolean isStatic, int opcode, String comment, boolean directCallEnabled) {
+        generateComputedGoto(w, isStatic, opcode, comment, directCallEnabled, false);
+    }
+
+    public static void generateComputedGoto(PrintWriter w, boolean isStatic, int opcode, String comment, boolean directCallEnabled, boolean requireExactReceiverOwner) {
         w.printf("        OP_%02x:  /* %s */\n", opcode, comment);
         w.println("            { int invokePc = frame.pc;");
         w.println("              if (UNLIKELY(!meta)) { VM_LOG(\"INVOKE: meta is NULL at pc=%d\\n\", frame.pc); frame.pc++; DISPATCH_NEXT; }");
@@ -184,9 +223,40 @@ public class InvokeHelper {
         if (directCallEnabled) {
             // Direct VM-to-VM call path
             w.println("              int vmTargetId = meta->vmTargetId;");
-            w.println("              if (vmTargetId >= 0) {");
-            emitDirectCallBody(w, isStatic, true);
-            w.println("              } else {");
+            if (!isStatic && requireExactReceiverOwner) {
+                w.println("                  int _canDirectCall = 0;");
+                w.println("                  if (LIKELY(vmTargetId >= 0 && frame.sp > argCount)) {");
+                w.println("                      jobject _peekReceiver = frame.stack[frame.sp - argCount - 1].l;");
+                w.println("                      if (_peekReceiver != NULL) {");
+                w.println("                          jclass _recvCls = (*env)->GetObjectClass(env, _peekReceiver);");
+                w.println("                          if (_recvCls != NULL) {");
+                w.println("                              if (meta->directRecvExactClass != NULL && (*env)->IsSameObject(env, _recvCls, meta->directRecvExactClass)) {");
+                w.println("                                  _canDirectCall = 1;");
+                w.println("                              } else {");
+                w.println("                                  jclass _ownerCls = meta->directOwnerClass;");
+                w.println("                                  if (_ownerCls == NULL) {");
+                w.println("                                      _ownerCls = vm_find_class(env, owner);");
+                w.println("                                      if (_ownerCls != NULL) meta->directOwnerClass = _ownerCls;");
+                w.println("                                  }");
+                w.println("                                  if (_ownerCls != NULL && (*env)->IsSameObject(env, _recvCls, _ownerCls)) {");
+                w.println("                                      _canDirectCall = 1;");
+                w.println("                                      if (meta->directRecvExactClass == NULL) {");
+                w.println("                                          meta->directRecvExactClass = (*env)->NewGlobalRef(env, _recvCls);");
+                w.println("                                      }");
+                w.println("                                  }");
+                w.println("                              }");
+                w.println("                              (*env)->DeleteLocalRef(env, _recvCls);");
+                w.println("                          }");
+                w.println("                      }");
+                w.println("                  }");
+                w.println("                  if (vmTargetId >= 0 && _canDirectCall) {");
+                emitDirectCallBody(w, isStatic, true);
+                w.println("                  } else {");
+            } else {
+                w.println("              if (vmTargetId >= 0) {");
+                emitDirectCallBody(w, isStatic, true);
+                w.println("              } else {");
+            }
         }
 
         // Original JNI path (with lazy cached method ID)
@@ -335,17 +405,20 @@ public class InvokeHelper {
         w.println(indent + "if (owner && name && desc && strcmp(owner, \"java/lang/invoke/MethodHandle\") == 0 &&");
         w.println(indent + "    (strcmp(name, \"invoke\") == 0 || strcmp(name, \"invokeExact\") == 0)) {");
         w.println(indent + "    static jmethodID mhInvokeWithArgsMid = NULL;");
+        w.println(indent + "    static jclass mhObjectClass = NULL;");
         w.println(indent + "    if (!mhInvokeWithArgsMid) {");
         w.println(indent + "        jclass mhCls = vm_find_class(env, \"java/lang/invoke/MethodHandle\");");
         w.println(indent + "        if (mhCls) mhInvokeWithArgsMid = vm_get_method_id(env, mhCls, \"java/lang/invoke/MethodHandle\", \"invokeWithArguments\", \"([Ljava/lang/Object;)Ljava/lang/Object;\");");
+        w.println(indent + "    }");
+        w.println(indent + "    if (!mhObjectClass) {");
+        w.println(indent + "        mhObjectClass = vm_find_class(env, \"java/lang/Object\");");
         w.println(indent + "    }");
         w.println(indent + "    if (!mhInvokeWithArgsMid) {");
         w.println(indent + "        jclass le = vm_find_class(env, \"java/lang/LinkageError\");");
         w.println(indent + "        if (le) (*env)->ThrowNew(env, le, \"MethodHandle.invokeWithArguments not found\");");
         w.println(indent + "        _hasException = 1; goto method_exit;");
         w.println(indent + "    }");
-        w.println(indent + "    jclass objCls = vm_find_class(env, \"java/lang/Object\");");
-        w.println(indent + "    jobjectArray mhArgs = (*env)->NewObjectArray(env, argCount, objCls, NULL);");
+        w.println(indent + "    jobjectArray mhArgs = (*env)->NewObjectArray(env, argCount, mhObjectClass, NULL);");
         w.println(indent + "    for (int mi = 0; mi < argCount && !(*env)->ExceptionCheck(env); mi++) {");
         w.println(indent + "        char t = argTypes ? argTypes[mi] : 'L';");
         w.println(indent + "        jobject boxed = NULL;");
@@ -408,24 +481,21 @@ public class InvokeHelper {
         w.println(indent + "VMValue tempLocals[targetMaxLocals];");
         w.println(indent + "memset(tempLocals, 0, targetMaxLocals * sizeof(VMValue));");
 
-        // Calculate local slot positions for each argument
-        w.println(indent + "int _argc = argCount > 0 ? argCount : 1;");
-        w.println(indent + "int slotMap[_argc];");
+        // Pop args from caller stack (reverse order) into callee locals.
+        // Uses precomputed argLocalSlots/argWideMask to avoid per-call slotMap allocation.
         if (isStatic) {
-            w.println(indent + "int nextSlot = 0;");
+            w.println(indent + "int localCursor = meta->argLocalSlots;");
         } else {
-            w.println(indent + "int nextSlot = 1;");
+            w.println(indent + "int localCursor = 1 + meta->argLocalSlots;");
         }
-        w.println(indent + "for (int i = 0; i < argCount; i++) {");
-        w.println(indent + "    slotMap[i] = nextSlot;");
-        w.println(indent + "    nextSlot++;");
-        w.println(indent + "    char t = argTypes ? argTypes[i] : 'L';");
-        w.println(indent + "    if (t == 'J' || t == 'D') nextSlot++;  // long/double occupy 2 slots in bytecode");
-        w.println(indent + "}");
-
-        // Pop args from caller stack (reverse order) into callee locals
         w.println(indent + "for (int i = argCount - 1; i >= 0; i--) {");
-        w.println(indent + "    tempLocals[slotMap[i]] = frame.stack[--frame.sp];");
+        w.println(indent + "    int _wide = (i < 64) ? (int)((meta->argWideMask >> i) & 1ULL) : 0;");
+        w.println(indent + "    if (UNLIKELY(i >= 64 && argTypes != NULL)) {");
+        w.println(indent + "        char _t = argTypes[i];");
+        w.println(indent + "        _wide = (_t == 'J' || _t == 'D') ? 1 : 0;");
+        w.println(indent + "    }");
+        w.println(indent + "    localCursor -= _wide ? 2 : 1;");
+        w.println(indent + "    tempLocals[localCursor] = frame.stack[--frame.sp];");
         w.println(indent + "}");
 
         if (!isStatic) {
@@ -439,9 +509,16 @@ public class InvokeHelper {
             w.println(indent + "tempLocals[0].l = directReceiver;");
         }
 
-        // Call vm_execute_common directly with pre-built locals
+        // Call vm_execute_common directly with pre-built locals.
+        // callerClass must match callee owner class (same as bridge path), otherwise
+        // caller-sensitive logic (e.g., invokedynamic Lookup context) may break.
+        w.println(indent + "jclass directCallerClass = frame.callerClass;");
+        w.println(indent + "if (owner) {");
+        w.println(indent + "    jclass _calleeOwnerClass = vm_find_class(env, owner);");
+        w.println(indent + "    if (_calleeOwnerClass) directCallerClass = _calleeOwnerClass;");
+        w.println(indent + "}");
         w.println(indent + "int obfTargetId = vmTargetId ^ METHOD_ID_XOR_KEY;");
-        w.println(indent + "ExecuteResult directResult = vm_execute_common(env, obfTargetId, NULL, tempLocals, targetMaxLocals, frame.callerClass);");
+        w.println(indent + "ExecuteResult directResult = vm_execute_common(env, obfTargetId, NULL, tempLocals, targetMaxLocals, directCallerClass);");
 
         // Check for exceptions from direct call (use returnType flag, no JNI ExceptionCheck needed)
         w.println(indent + "if (UNLIKELY(directResult.returnType == 'X')) {");

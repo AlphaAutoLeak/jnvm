@@ -19,11 +19,11 @@ public class InvokeStaticInstruction extends Instruction {
 
     @Override
     protected void generateBody(PrintWriter w) {
-        InvokeHelper.generate(w, true);
+        InvokeHelper.generate(w, true, true);
     }
 
     @Override
     public void generateComputedGoto(PrintWriter w) {
-        InvokeHelper.generateComputedGoto(w, true, opcode, comment);
+        InvokeHelper.generateComputedGoto(w, true, opcode, comment, true);
     }
 }
