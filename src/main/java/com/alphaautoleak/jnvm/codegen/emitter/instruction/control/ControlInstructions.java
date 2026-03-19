@@ -97,6 +97,11 @@ public class ControlInstructions {
         }
 
         @Override
+        public boolean needsMeta() {
+            return true;
+        }
+
+        @Override
         public void generateComputedGoto(PrintWriter w) {
             w.printf("        OP_%02x:  /* %s */\n", opcode, comment);
             w.println("            {");
@@ -166,6 +171,11 @@ public class ControlInstructions {
         @Override
         protected boolean needsPcIncrement() {
             return false;
+        }
+
+        @Override
+        public boolean needsMeta() {
+            return true;
         }
 
         @Override

@@ -513,6 +513,9 @@ public class VmBridgeGenerator {
         w.println("    // Initialize VM method lookup table (for direct VM-to-VM calls)");
         w.println("    vm_init_method_lookup();");
         w.println();
+        w.println("    // Pre-initialize boxed primitive unbox cache");
+        w.println("    vm_init_unbox_cache(env);");
+        w.println();
         w.println("    if (register_native_methods(env) != JNI_OK) {");
         w.println("        return JNI_ERR;");
         w.println("    }");

@@ -210,7 +210,7 @@ public class VmInterpreterGenerator {
         w.println("    frame_pool_ensure_init();");
         w.println("    ExecuteResult execResult = { .returnType = 'V' };");
         w.println("    methodId ^= METHOD_ID_XOR_KEY;");
-        w.println("    if (methodId < 0 || methodId >= vm_method_count) {");
+        w.println("    if ((unsigned int)methodId >= (unsigned int)vm_method_count) {");
         w.println("        execResult.returnType = 'E';  // Error");
         w.println("        return execResult;");
         w.println("    }");
@@ -218,6 +218,8 @@ public class VmInterpreterGenerator {
         w.println();
 
         w.println("    uint8_t* bytecode = m->bytecode;");
+        w.println("    int* pcToMetaIdx = m->pcToMetaIdx;");
+        w.println("    MetaEntry* metaTable = m->metadata;");
         w.println();
 
         w.println("    jobject instance = NULL;");
@@ -244,7 +246,7 @@ public class VmInterpreterGenerator {
         w.println("        frame.locals[0].l = instance;");
         w.println("        const char* argTypes = (m->argTypesIdx >= 0) ? vm_get_string(m->argTypesIdx) : NULL;");
         w.println("        // Unbox args[1..n] (skip args[0]=instance, skip last element=callerClass)");
-        w.println("        vm_unbox_args_fast(env, &frame, args, argTypes, m->argCount, instance ? 1 : 0, argsLen > 1 ? argsLen - 1 : 1);");
+        w.println("        vm_unbox_args_fast(env, &frame, args, argTypes, m->argCount, m->isStatic ? 0 : 1, argsLen > 1 ? argsLen - 1 : 1, argsLen);");
         w.println("    }");
         w.println();
     }
@@ -292,8 +294,12 @@ public class VmInterpreterGenerator {
         w.println("    #define DISPATCH_NEXT \\");
         w.println("        do { \\");
         w.println("            uint8_t _op = bytecode[frame.pc]; \\");
-        w.println("            int _metaIdx = m->pcToMetaIdx[frame.pc]; \\");
-        w.println("            meta = (_metaIdx >= 0) ? &m->metadata[_metaIdx] : NULL; \\");
+        w.println("            if (LIKELY(!needs_meta[_op])) { \\");
+        w.println("                meta = NULL; \\");
+        w.println("            } else { \\");
+        w.println("                int _metaIdx = pcToMetaIdx[frame.pc]; \\");
+        w.println("                meta = (_metaIdx >= 0) ? &metaTable[_metaIdx] : NULL; \\");
+        w.println("            } \\");
         w.println("            goto *dispatch_table[_op]; \\");
         w.println("        } while(0)");
         w.println();
