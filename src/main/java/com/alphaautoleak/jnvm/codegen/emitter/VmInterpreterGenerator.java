@@ -7,17 +7,41 @@ import com.alphaautoleak.jnvm.crypto.OpcodeObfuscator;
 import java.io.File;
 import java.io.IOException;
 import java.io.PrintWriter;
+import java.util.List;
 
 /**
  * Generates vm_interpreter.h and vm_interpreter.c - VM interpreter core
  * Generates separate functions for each return type to avoid boxing/unboxing
  */
 public class VmInterpreterGenerator {
+    private static final WrapperSpec[] WRAPPER_SPECS = {
+            new WrapperSpec("void", "vm_execute_method_void", "(void)r;  // ignore return value"),
+            new WrapperSpec("jint", "vm_execute_method_int", "return r.value.i;"),
+            new WrapperSpec("jlong", "vm_execute_method_long", "return r.value.j;"),
+            new WrapperSpec("jfloat", "vm_execute_method_float", "return r.value.f;"),
+            new WrapperSpec("jdouble", "vm_execute_method_double", "return r.value.d;"),
+            new WrapperSpec("jobject", "vm_execute_method_object", "return r.value.l;")
+    };
+
+    private static final class WrapperSpec {
+        final String returnType;
+        final String functionName;
+        final String returnStatement;
+
+        WrapperSpec(String returnType, String functionName, String returnStatement) {
+            this.returnType = returnType;
+            this.functionName = functionName;
+            this.returnStatement = returnStatement;
+        }
+    }
     
     private final File dir;
     private final boolean debug;
     private final boolean encryptStrings;
     private final Instructions instructions;
+    private final List<Instruction> allInstructions;
+    private final Instruction[] instructionByOpcode = new Instruction[256];
+    private final VmCachingSectionEmitter cachingSectionEmitter;
     private final VMHelpers helpers;
     private final int methodIdXorKey;
     private final OpcodeObfuscator opcodeObfuscator;
@@ -28,6 +52,9 @@ public class VmInterpreterGenerator {
         this.debug = debug;
         this.encryptStrings = encryptStrings;
         this.instructions = new Instructions();
+        this.allInstructions = instructions.getAllInstructions();
+        buildInstructionIndex();
+        this.cachingSectionEmitter = new VmCachingSectionEmitter();
         this.helpers = new VMHelpers(encryptStrings);
         this.methodIdXorKey = methodIdXorKey;
         this.opcodeObfuscator = opcodeObfuscator;
@@ -36,6 +63,22 @@ public class VmInterpreterGenerator {
     public void generate() throws IOException {
         generateHeader();
         generateSource();
+    }
+
+    private void buildInstructionIndex() {
+        for (Instruction inst : allInstructions) {
+            int opcode = inst.getOpcode();
+            if (opcode >= 0 && opcode < instructionByOpcode.length) {
+                instructionByOpcode[opcode] = inst;
+            }
+        }
+    }
+
+    private Instruction getInstructionByOriginalOpcode(int opcode) {
+        if (opcode < 0 || opcode >= instructionByOpcode.length) {
+            return null;
+        }
+        return instructionByOpcode[opcode];
     }
     
     private void generateHeader() throws IOException {
@@ -71,17 +114,18 @@ public class VmInterpreterGenerator {
 
             // Execution function declarations for each return type
             // New format: args[0]=instance, args[1..n]=params, args[n+1]=callerClass
-            w.println("void vm_execute_method_void(JNIEnv* env, int methodId, jobjectArray args);");
-            w.println("jint vm_execute_method_int(JNIEnv* env, int methodId, jobjectArray args);");
-            w.println("jlong vm_execute_method_long(JNIEnv* env, int methodId, jobjectArray args);");
-            w.println("jfloat vm_execute_method_float(JNIEnv* env, int methodId, jobjectArray args);");
-            w.println("jdouble vm_execute_method_double(JNIEnv* env, int methodId, jobjectArray args);");
-            w.println("jobject vm_execute_method_object(JNIEnv* env, int methodId, jobjectArray args);");
+            emitWrapperDeclarations(w);
             w.println();
             // Internal function for VM-to-VM direct calls
             w.println("// Internal: direct VM-to-VM call with pre-built locals");
             w.println("ExecuteResult vm_execute_common(JNIEnv* env, int methodId, jobjectArray args, VMValue* directLocals, int directLocalSlots, jclass callerClass);");
             w.println("#endif");
+        }
+    }
+
+    private void emitWrapperDeclarations(PrintWriter w) {
+        for (WrapperSpec spec : WRAPPER_SPECS) {
+            w.println(spec.returnType + " " + spec.functionName + "(JNIEnv* env, int methodId, jobjectArray args);");
         }
     }
     
@@ -143,311 +187,20 @@ public class VmInterpreterGenerator {
     }
     
     private void emitCachingSystem(PrintWriter w) {
-        // === Frame memory pool (thread-local bump allocator) ===
-        w.println("// === Frame memory pool (thread-local bump allocator) ===");
-        w.println("#define FRAME_POOL_SIZE (4 * 1024 * 1024)  // 4MB per thread");
-        w.println("#define TMP_BUF_MAX 4096  // max temp buffer size per allocation");
-        w.println();
-        w.println("static __thread VMValue* _frameBase;");
-        w.println("static __thread int _frameOffset;  // offset in VMValue units");
-        w.println();
-        w.println("void frame_pool_init(void) {");
-        w.println("    _frameBase = (VMValue*)malloc(FRAME_POOL_SIZE);");
-        w.println("    _frameOffset = 0;");
-        w.println("}");
-        w.println();
-        w.println("__attribute__((cold))");
-        w.println("static inline void frame_pool_ensure_init(void) {");
-        w.println("    if (UNLIKELY(_frameBase == NULL)) {");
-        w.println("        _frameBase = (VMValue*)malloc(FRAME_POOL_SIZE);");
-        w.println("        _frameOffset = 0;");
-        w.println("    }");
-        w.println("}");
-        w.println();
-        w.println("static inline VMValue* frame_pool_push(int count) {");
-        w.println("    VMValue* ptr = _frameBase + _frameOffset;");
-        w.println("    _frameOffset += count;");
-        w.println("    return ptr;");
-        w.println("}");
-        w.println();
-        w.println("static inline void frame_pool_pop(int count) {");
-        w.println("    _frameOffset -= count;");
-        w.println("}");
-        w.println();
-
-        // Temporary string buffer allocation (byte-level, 8-byte aligned)
-        w.println("// === Temporary string buffer (byte-level, 8-byte aligned) ===");
-        w.println("// For safe string operations with dynamic length");
-        w.println("static inline char* tmp_buf_alloc(int bytes) {");
-        w.println("    // Round up to 8-byte alignment (sizeof(VMValue))");
-        w.println("    int aligned = (bytes + 7) / 8;");
-        w.println("    VMValue* ptr = _frameBase + _frameOffset;");
-        w.println("    _frameOffset += aligned;");
-        w.println("    return (char*)ptr;");
-        w.println("}");
-        w.println();
-        w.println("static inline void tmp_buf_free(int bytes) {");
-        w.println("    int aligned = (bytes + 7) / 8;");
-        w.println("    _frameOffset -= aligned;");
-        w.println("}");
-        w.println();
-
-        // Helper macro for safe string copy with length check
-        w.println("// Safe string copy with overflow protection");
-        w.println("#define TMP_STRCPY(dst, dst_size, src) do { \\");
-        w.println("    size_t _len = strlen(src); \\");
-        w.println("    if (_len >= (size_t)(dst_size)) { \\");
-        w.println("        _len = (dst_size) - 1; \\");
-        w.println("    } \\");
-        w.println("    memcpy((dst), (src), _len); \\");
-        w.println("    (dst)[_len] = '\\0'; \\");
-        w.println("} while(0)");
-        w.println();
-        w.println("#define TMP_STRNCPY(dst, src, max_len, dst_size) do { \\");
-        w.println("    size_t _len = (max_len) < (size_t)(dst_size) ? (max_len) : (size_t)(dst_size) - 1; \\");
-        w.println("    memcpy((dst), (src), _len); \\");
-        w.println("    (dst)[_len] = '\\0'; \\");
-        w.println("} while(0)");
-        w.println();
-
-        // Function-level temp buffer save/restore for automatic cleanup
-        w.println("// === Function-level temp buffer save/restore ===");
-        w.println("// Usage: TMP_SAVE at function start, TMP_RESTORE before every return");
-        w.println("#define TMP_SAVE int _savedFrameOffset = _frameOffset");
-        w.println("#define TMP_RESTORE _frameOffset = _savedFrameOffset");
-        w.println();
-
-        // === Hash cache system ===
-        w.println("// === Hash cache system (O(1) lookup) ===");
-        w.println("#define CLASS_CACHE_SIZE 256    // must be power of 2");
-        w.println("#define METHOD_CACHE_SIZE 1024  // must be power of 2");
-        w.println("#define FIELD_CACHE_SIZE 512    // must be power of 2");
-        w.println();
-
-        // Hash function
-        w.println("__attribute__((const))");
-        w.println("static inline uint32_t ptr_hash(const void* p) {");
-        w.println("    return (uint32_t)((uintptr_t)p >> 3);  // ignore low alignment bits");
-        w.println("}");
-        w.println();
-
-        // Combined hash: three pointers
-        w.println("__attribute__((const))");
-        w.println("static inline uint32_t triple_hash(const void* a, const void* b, const void* c) {");
-        w.println("    return ptr_hash(a) ^ (ptr_hash(b) << 5) ^ (ptr_hash(c) << 11);");
-        w.println("}");
-        w.println();
-
-        // Class cache entry
-        w.println("typedef struct {");
-        w.println("    const char* key;    // className");
-        w.println("    _Atomic jclass value;  // atomic for thread-safe caching");
-        w.println("} ClassCacheEntry;");
-        w.println();
-
-        // Method cache entry
-        w.println("typedef struct {");
-        w.println("    const char* owner;");
-        w.println("    const char* name;");
-        w.println("    const char* desc;");
-        w.println("    _Atomic jmethodID mid;  // atomic for thread-safe caching");
-        w.println("} MethodCacheEntry;");
-        w.println();
-
-        // Field cache entry
-        w.println("typedef struct {");
-        w.println("    const char* owner;");
-        w.println("    const char* name;");
-        w.println("    const char* desc;");
-        w.println("    _Atomic jfieldID fid;  // atomic for thread-safe caching");
-        w.println("} FieldCacheEntry;");
-        w.println();
-
-        // Static cache arrays
-        w.println("static ClassCacheEntry classCache[CLASS_CACHE_SIZE];");
-        w.println("static MethodCacheEntry methodCache[METHOD_CACHE_SIZE];");
-        w.println("static FieldCacheEntry fieldCache[FIELD_CACHE_SIZE];");
-        w.println();
-
-        // Class lookup - O(1) hash with atomic cache and CAS for race condition handling
-        w.println("__attribute__((const, hot))");
-        w.println("static jclass vm_find_class(JNIEnv* env, const char* className) {");
-        w.println("    uint32_t idx = ptr_hash(className) & (CLASS_CACHE_SIZE - 1);");
-        w.println("    ClassCacheEntry* e = &classCache[idx];");
-        w.println("    // Atomic load for thread-safe cache read");
-        w.println("    jclass cached = atomic_load_explicit(&e->value, memory_order_relaxed);");
-        w.println("    if (LIKELY(e->key == className && cached != NULL)) {");
-        w.println("        return cached;  // cache hit");
-        w.println("    }");
-        w.println("    // Cache miss - find and create global ref");
-        w.println("    jclass localCls = (*env)->FindClass(env, className);");
-        w.println("    if (!localCls) return NULL;");
-        w.println("    jclass globalCls = (*env)->NewGlobalRef(env, localCls);");
-        w.println("    if (!globalCls) return localCls;");
-        w.println("    // Check if key matches (different className may hash to same slot)");
-        w.println("    if (e->key != className && e->key != NULL) {");
-        w.println("        return globalCls;  // hash collision, don't cache");
-        w.println("    }");
-        w.println("    // Use CAS to handle race condition");
-        w.println("    if (atomic_compare_exchange_strong_explicit(&e->value, &cached, globalCls, memory_order_relaxed, memory_order_relaxed)) {");
-        w.println("        e->key = className;  // we won the race");
-        w.println("        return globalCls;");
-        w.println("    }");
-        w.println("    // Another thread won - delete our global ref and use theirs");
-        w.println("    (*env)->DeleteGlobalRef(env, globalCls);");
-        w.println("    return cached;");
-        w.println("}");
-        w.println();
-
-        // Method lookup - O(1) hash with atomic cache
-        w.println("__attribute__((hot))");
-        w.println("static jmethodID vm_get_method_id(JNIEnv* env, jclass cls, const char* owner, const char* name, const char* desc) {");
-        w.println("    uint32_t idx = triple_hash(owner, name, desc) & (METHOD_CACHE_SIZE - 1);");
-        w.println("    MethodCacheEntry* e = &methodCache[idx];");
-        w.println("    // Atomic load for thread-safe cache read");
-        w.println("    jmethodID cached = atomic_load_explicit(&e->mid, memory_order_relaxed);");
-        w.println("    if (LIKELY(e->owner == owner && e->name == name && e->desc == desc && cached != NULL)) {");
-        w.println("        return cached;  // cache hit");
-        w.println("    }");
-        w.println("    jmethodID mid = (*env)->GetMethodID(env, cls, name, desc);");
-        w.println("    if (mid) {");
-        w.println("        e->owner = owner;");
-        w.println("        e->name = name;");
-        w.println("        e->desc = desc;");
-        w.println("        atomic_store_explicit(&e->mid, mid, memory_order_relaxed);");
-        w.println("    }");
-        w.println("    return mid;");
-        w.println("}");
-        w.println();
-
-        w.println("__attribute__((hot))");
-        w.println("static jmethodID vm_get_static_method_id(JNIEnv* env, jclass cls, const char* owner, const char* name, const char* desc) {");
-        w.println("    uint32_t idx = triple_hash(owner, name, desc) & (METHOD_CACHE_SIZE - 1);");
-        w.println("    MethodCacheEntry* e = &methodCache[idx];");
-        w.println("    // Atomic load for thread-safe cache read");
-        w.println("    jmethodID cached = atomic_load_explicit(&e->mid, memory_order_relaxed);");
-        w.println("    if (LIKELY(e->owner == owner && e->name == name && e->desc == desc && cached != NULL)) {");
-        w.println("        return cached;  // cache hit");
-        w.println("    }");
-        w.println("    jmethodID mid = (*env)->GetStaticMethodID(env, cls, name, desc);");
-        w.println("    if (mid) {");
-        w.println("        e->owner = owner;");
-        w.println("        e->name = name;");
-        w.println("        e->desc = desc;");
-        w.println("        atomic_store_explicit(&e->mid, mid, memory_order_relaxed);");
-        w.println("    }");
-        w.println("    return mid;");
-        w.println("}");
-        w.println();
-
-        // Field lookup - O(1) hash with atomic cache
-        w.println("__attribute__((hot))");
-        w.println("static jfieldID vm_get_field_id(JNIEnv* env, jclass cls, const char* owner, const char* name, const char* desc) {");
-        w.println("    uint32_t idx = triple_hash(owner, name, desc) & (FIELD_CACHE_SIZE - 1);");
-        w.println("    FieldCacheEntry* e = &fieldCache[idx];");
-        w.println("    // Atomic load for thread-safe cache read");
-        w.println("    jfieldID cached = atomic_load_explicit(&e->fid, memory_order_relaxed);");
-        w.println("    if (LIKELY(e->owner == owner && e->name == name && e->desc == desc && cached != NULL)) {");
-        w.println("        return cached;  // cache hit");
-        w.println("    }");
-        w.println("    jfieldID fid = (*env)->GetFieldID(env, cls, name, desc);");
-        w.println("    if (fid) {");
-        w.println("        e->owner = owner;");
-        w.println("        e->name = name;");
-        w.println("        e->desc = desc;");
-        w.println("        atomic_store_explicit(&e->fid, fid, memory_order_relaxed);");
-        w.println("    }");
-        w.println("    return fid;");
-        w.println("}");
-        w.println();
-
-        w.println("__attribute__((hot))");
-        w.println("static jfieldID vm_get_static_field_id(JNIEnv* env, jclass cls, const char* owner, const char* name, const char* desc) {");
-        w.println("    uint32_t idx = triple_hash(owner, name, desc) & (FIELD_CACHE_SIZE - 1);");
-        w.println("    FieldCacheEntry* e = &fieldCache[idx];");
-        w.println("    // Atomic load for thread-safe cache read");
-        w.println("    jfieldID cached = atomic_load_explicit(&e->fid, memory_order_relaxed);");
-        w.println("    if (LIKELY(e->owner == owner && e->name == name && e->desc == desc && cached != NULL)) {");
-        w.println("        return cached;  // cache hit");
-        w.println("    }");
-        w.println("    jfieldID fid = (*env)->GetStaticFieldID(env, cls, name, desc);");
-        w.println("    if (fid) {");
-        w.println("        e->owner = owner;");
-        w.println("        e->name = name;");
-        w.println("        e->desc = desc;");
-        w.println("        atomic_store_explicit(&e->fid, fid, memory_order_relaxed);");
-        w.println("    }");
-        w.println("    return fid;");
-        w.println("}");
-        w.println();
-
-        // === VM method lookup for direct calls ===
-        w.println("// === VM method lookup (direct VM-to-VM calls) ===");
-        w.println("#define VM_METHOD_LOOKUP_SIZE 256");
-        w.println();
-        w.println("typedef struct {");
-        w.println("    const char* owner;");
-        w.println("    const char* name;");
-        w.println("    const char* desc;");
-        w.println("    int methodId;");
-        w.println("} VMMethodLookupEntry;");
-        w.println();
-        w.println("static VMMethodLookupEntry vmMethodLookup[VM_METHOD_LOOKUP_SIZE];");
-        w.println();
-        w.println("__attribute__((const, always_inline))");
-        w.println("static inline int vm_lookup_method(const char* owner, const char* name, const char* desc) {");
-        w.println("    uint32_t hash = triple_hash(owner, name, desc);");
-        w.println("    for (int probe = 0; probe < 8; probe++) {");
-        w.println("        uint32_t idx = (hash + probe) & (VM_METHOD_LOOKUP_SIZE - 1);");
-        w.println("        VMMethodLookupEntry* e = &vmMethodLookup[idx];");
-        w.println("        if (e->owner == NULL) return -1;");
-        w.println("        if (e->owner == owner && e->name == name && e->desc == desc) return e->methodId;");
-        w.println("    }");
-        w.println("    return -1;");
-        w.println("}");
-        w.println();
-        w.println("__attribute__((cold))");
-        w.println("void vm_init_method_lookup(void) {");
-        w.println("    memset(vmMethodLookup, 0, sizeof(vmMethodLookup));");
-        w.println("    for (int i = 0; i < vm_method_count; i++) {");
-        w.println("        VMMethod* m = &vm_methods[i];");
-        w.println("        if (m->ownerIdx < 0 || m->nameIdx < 0 || m->descIdx < 0) continue;");
-        w.println("        const char* o = vm_get_string(m->ownerIdx);");
-        w.println("        const char* n = vm_get_string(m->nameIdx);");
-        w.println("        const char* d = vm_get_string(m->descIdx);");
-        w.println("        uint32_t hash = triple_hash(o, n, d);");
-        w.println("        for (int probe = 0; probe < 8; probe++) {");
-        w.println("            uint32_t idx = (hash + probe) & (VM_METHOD_LOOKUP_SIZE - 1);");
-        w.println("            if (vmMethodLookup[idx].owner == NULL) {");
-        w.println("                vmMethodLookup[idx].owner = o;");
-        w.println("                vmMethodLookup[idx].name = n;");
-        w.println("                vmMethodLookup[idx].desc = d;");
-        w.println("                vmMethodLookup[idx].methodId = i;");
-        w.println("                break;");
-        w.println("            }");
-        w.println("        }");
-        w.println("    }");
-        w.println("    // Pre-cache vmTargetId in all MetaEntry structs for invoke instructions");
-        w.println("    for (int i = 0; i < vm_method_count; i++) {");
-        w.println("        VMMethod* m = &vm_methods[i];");
-        w.println("        for (int j = 0; j < m->metadataCount; j++) {");
-        w.println("            MetaEntry* me = &m->metadata[j];");
-        w.println("            if (me->type == META_METHOD && me->ownerIdx >= 0 && me->nameIdx >= 0 && me->descIdx >= 0) {");
-        w.println("                me->vmTargetId = vm_lookup_method(vm_get_string(me->ownerIdx), vm_get_string(me->nameIdx), vm_get_string(me->descIdx));");
-        w.println("            } else {");
-        w.println("                me->vmTargetId = -1;");
-        w.println("            }");
-        w.println("        }");
-        w.println("    }");
-        w.println("}");
-        w.println();
+        cachingSectionEmitter.emit(w);
     }
     
     private void emitExecuteCommon(PrintWriter w) {
-        // ExecuteResult is now defined in vm_interpreter.h
+        emitExecuteCommonPrelude(w);
+        emitNeedsMetaTable(w);
+        emitDispatchTable(w);
+        emitDispatchPrologue(w);
+        emitInstructionHandlers(w);
+        emitExecuteCommonEpilogue(w);
+    }
 
-        // New format: args[0]=instance, args[1..n]=params, args[n+1]=callerClass
-        // For direct VM-to-VM calls: args=NULL, directLocals!=NULL, callerClass passed directly
+    private void emitExecuteCommonPrelude(PrintWriter w) {
+        // ExecuteResult is now defined in vm_interpreter.h
         w.println("__attribute__((hot))");
         w.println("ExecuteResult vm_execute_common(JNIEnv* env, int methodId, jobjectArray args, VMValue* directLocals, int directLocalSlots, jclass callerClass) {");
         w.println("    frame_pool_ensure_init();");
@@ -460,12 +213,9 @@ public class VmInterpreterGenerator {
         w.println("    VMMethod* m = &vm_methods[methodId];");
         w.println();
 
-        // Bytecode used directly (no longer encrypted)
         w.println("    uint8_t* bytecode = m->bytecode;");
         w.println();
 
-        // Extract instance and callerClass from args array (only when directLocals is NULL)
-        // args[0] = instance, args[1..n] = params, args[n+1] = callerClass
         w.println("    jobject instance = NULL;");
         w.println("    if (!directLocals && args) {");
         w.println("        jsize argsLen = (*env)->GetArrayLength(env, args);");
@@ -475,12 +225,10 @@ public class VmInterpreterGenerator {
         w.println("    }");
         w.println();
 
-        // Initialize frame
         w.println("    VMFrame frame = { .pc = 0, .sp = 0, .callerClass = callerClass };");
         w.println("    frame.stack = frame_pool_push(m->maxStack);");
         w.println();
 
-        // Set up arguments - direct path (zero copy) or unboxing path
         w.println("    const char* methodDesc = (m->descIdx >= 0) ? vm_get_string(m->descIdx) : NULL;");
         w.println("    if (directLocals) {");
         w.println("        frame.locals = directLocals;  // reuse caller's buffer directly (zero copy)");
@@ -494,17 +242,15 @@ public class VmInterpreterGenerator {
         w.println("        vm_unbox_args_fast(env, &frame, args, argTypes, m->argCount, instance ? 1 : 0, argsLen > 1 ? argsLen - 1 : 1);");
         w.println("    }");
         w.println();
+    }
 
-        // Lookup table for whether instruction needs metadata (indexed by OBFUSCATED opcode)
+    private void emitNeedsMetaTable(PrintWriter w) {
         w.println("    // Metadata requirement table (indexed by obfuscated opcode)");
         w.println("    static const uint8_t needs_meta[256] = {");
         StringBuilder metaTable = new StringBuilder();
         for (int i = 0; i < 256; i++) {
-            // i is the OBFUSCATED opcode, decode to get original
             int originalOp = opcodeObfuscator.decode(i);
-            Instruction inst = instructions.getAllInstructions().stream()
-                .filter(ins -> ins.getOpcode() == originalOp)
-                .findFirst().orElse(null);
+            Instruction inst = getInstructionByOriginalOpcode(originalOp);
             boolean needsMeta = inst != null && inst.needsMeta();
             if (i % 32 == 0) metaTable.append("        ");
             metaTable.append(needsMeta ? "1" : "0");
@@ -519,18 +265,15 @@ public class VmInterpreterGenerator {
         }
         w.println("    };");
         w.println();
-        
-        // Computed Goto dispatch table (indexed by OBFUSCATED opcode)
+    }
+
+    private void emitDispatchTable(PrintWriter w) {
         w.println("    // Dispatch table (indexed by obfuscated opcode)");
         w.println("    static const void* dispatch_table[256] = {");
         for (int i = 0; i < 256; i++) {
-            // i is the OBFUSCATED opcode, decode to get original
             int originalOp = opcodeObfuscator.decode(i);
-            Instruction inst = instructions.getAllInstructions().stream()
-                .filter(ins -> ins.getOpcode() == originalOp)
-                .findFirst().orElse(null);
+            Instruction inst = getInstructionByOriginalOpcode(originalOp);
             if (inst != null) {
-                // Label uses original opcode, but table is indexed by obfuscated opcode
                 w.printf("        &&OP_%02x,%n", originalOp);
             } else {
                 w.printf("        &&OP_DEFAULT,%n");
@@ -538,9 +281,9 @@ public class VmInterpreterGenerator {
         }
         w.println("    };");
         w.println();
+    }
 
-        // DISPATCH_NEXT: directly use obfuscated opcode as index (NO decoding!)
-        // Unconditional meta lookup (branchless, pcToMetaIdx returns -1 for non-meta instructions)
+    private void emitDispatchPrologue(PrintWriter w) {
         w.println("    #define DISPATCH_NEXT \\");
         w.println("        do { \\");
         w.println("            uint8_t _op = bytecode[frame.pc]; \\");
@@ -554,29 +297,26 @@ public class VmInterpreterGenerator {
         w.println("    MetaEntry* meta = NULL;");
         w.println("    DISPATCH_NEXT;");
         w.println();
+    }
 
-        // Generate instruction handling code in RANDOM order (obfuscated)
-        // The order is determined by the obfuscator's shuffle
+    private void emitInstructionHandlers(PrintWriter w) {
         for (int i = 0; i < 256; i++) {
-            // Get original opcode at this position in the shuffled order
             int originalOp = opcodeObfuscator.decode(i);
-            Instruction inst = instructions.getAllInstructions().stream()
-                .filter(ins -> ins.getOpcode() == originalOp)
-                .findFirst().orElse(null);
+            Instruction inst = getInstructionByOriginalOpcode(originalOp);
             if (inst != null) {
                 inst.generateComputedGoto(w);
                 w.println();
             }
         }
+    }
 
-        
+    private void emitExecuteCommonEpilogue(PrintWriter w) {
         w.println("        OP_DEFAULT:");
         w.println("            VM_LOG(\"Unknown opcode: 0x%02x at pc=%d\\n\", bytecode[frame.pc], frame.pc);");
         w.println("            frame.pc++;");
         w.println("            DISPATCH_NEXT;");
         w.println();
 
-        // Return result on exit
         w.println("    method_exit:");
         w.println("    ;");
         w.println("    if (UNLIKELY(_hasException)) {");
@@ -601,51 +341,17 @@ public class VmInterpreterGenerator {
     }
 
     private void emitExecuteWrappers(PrintWriter w) {
-        // void
+        for (WrapperSpec spec : WRAPPER_SPECS) {
+            emitWrapperFunction(w, spec.returnType, spec.functionName, spec.returnStatement);
+        }
+    }
+
+    private void emitWrapperFunction(PrintWriter w, String returnType, String functionName, String returnStatement) {
         w.println("__attribute__((hot))");
-        w.println("void vm_execute_method_void(JNIEnv* env, int methodId, jobjectArray args) {");
+        w.println(returnType + " " + functionName + "(JNIEnv* env, int methodId, jobjectArray args) {");
         w.println("    ExecuteResult r = vm_execute_common(env, methodId, args, NULL, 0, NULL);");
-        w.println("    (void)r;  // ignore return value");
+        w.println("    " + returnStatement);
         w.println("}");
         w.println();
-
-        // int
-        w.println("__attribute__((hot))");
-        w.println("jint vm_execute_method_int(JNIEnv* env, int methodId, jobjectArray args) {");
-        w.println("    ExecuteResult r = vm_execute_common(env, methodId, args, NULL, 0, NULL);");
-        w.println("    return r.value.i;");
-        w.println("}");
-        w.println();
-
-        // long
-        w.println("__attribute__((hot))");
-        w.println("jlong vm_execute_method_long(JNIEnv* env, int methodId, jobjectArray args) {");
-        w.println("    ExecuteResult r = vm_execute_common(env, methodId, args, NULL, 0, NULL);");
-        w.println("    return r.value.j;");
-        w.println("}");
-        w.println();
-
-        // float
-        w.println("__attribute__((hot))");
-        w.println("jfloat vm_execute_method_float(JNIEnv* env, int methodId, jobjectArray args) {");
-        w.println("    ExecuteResult r = vm_execute_common(env, methodId, args, NULL, 0, NULL);");
-        w.println("    return r.value.f;");
-        w.println("}");
-        w.println();
-
-        // double
-        w.println("__attribute__((hot))");
-        w.println("jdouble vm_execute_method_double(JNIEnv* env, int methodId, jobjectArray args) {");
-        w.println("    ExecuteResult r = vm_execute_common(env, methodId, args, NULL, 0, NULL);");
-        w.println("    return r.value.d;");
-        w.println("}");
-        w.println();
-
-        // object
-        w.println("__attribute__((hot))");
-        w.println("jobject vm_execute_method_object(JNIEnv* env, int methodId, jobjectArray args) {");
-        w.println("    ExecuteResult r = vm_execute_common(env, methodId, args, NULL, 0, NULL);");
-        w.println("    return r.value.l;");
-        w.println("}");
     }
 }

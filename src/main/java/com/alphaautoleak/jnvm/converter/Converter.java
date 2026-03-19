@@ -11,7 +11,6 @@ import com.alphaautoleak.jnvm.crypto.OpcodeObfuscator;
 import com.alphaautoleak.jnvm.patcher.JarPatcher;
 import com.alphaautoleak.jnvm.patcher.OutputPackager;
 
-import java.io.File;
 import java.util.List;
 import java.util.Set;
 
@@ -30,68 +29,20 @@ public class Converter {
     public void run() throws Exception {
         long startTime = System.currentTimeMillis();
 
-        // Create opcode obfuscator (global, shared across all methods)
-        opcodeObfuscator = new OpcodeObfuscator();
-        System.out.println("[INFO] Opcode obfuscation enabled - each bytecode is mapped to random value");
-
-        // ===== STEP 1: Scan JAR =====
-        System.out.println("[STEP 1/7] Scanning JAR: " + config.getInputJar());
-        JarScanner scanner = new JarScanner(config, opcodeObfuscator);
-        protectedMethods = scanner.scan(config.getInputJar());
-        affectedClasses = scanner.getAffectedClasses();
+        initializeOpcodeObfuscation();
+        scanInputJar();
 
         if (protectedMethods.isEmpty()) {
             System.out.println("[WARN] No methods matched protection rules. Nothing to do.");
             return;
         }
 
-        System.out.println();
-        System.out.println("[INFO] Protection summary:");
-        System.out.println("  Methods to protect: " + protectedMethods.size());
-        System.out.println("  Classes affected:   " + affectedClasses.size());
-        int totalBytecode = 0;
-        int totalMetadata = 0;
-        for (MethodInfo m : protectedMethods) {
-            totalBytecode += m.getBytecode().length;
-            totalMetadata += m.getMetadata().size();
-        }
-        System.out.println("  Total bytecode:     " + totalBytecode + " bytes");
-        System.out.println("  Total metadata:     " + totalMetadata + " entries");
-        System.out.println();
-
-        // ===== STEP 2: Package bytecode data =====
-        System.out.println("[STEP 2/7] Encrypting bytecode...");
-        BytecodeEncryptor encryptor = new BytecodeEncryptor();
-        encryptedMethods = encryptor.encryptAll(protectedMethods);
-        System.out.println();
-
-        // ===== STEP 3: Create JarPatcher to get random bridge package name and XOR key =====
-        JarPatcher patcher = new JarPatcher(protectedMethods, affectedClasses);
-        String bridgeClass = patcher.getBridgeClass();
-        int methodIdXorKey = patcher.getMethodIdXorKey();
-
-        // ===== STEP 4: Generate C source code =====
-        System.out.println("[STEP 3/7] Generating native C sources...");
-        NativeCodeGenerator codegen = new NativeCodeGenerator(config, encryptedMethods, bridgeClass, methodIdXorKey, opcodeObfuscator);
-        codegen.generate();
-        System.out.println();
-
-        // ===== STEP 5: Zig compilation =====
-        System.out.println("[STEP 4/7] Compiling with Zig...");
-        ZigCompiler compiler = new ZigCompiler(config);
-        compiler.compileAll();
-        System.out.println();
-
-        // ===== STEP 6: Patch JAR =====
-        System.out.println("[STEP 5/7] Patching JAR classes...");
-        patcher.patch(config.getInputJar(), config.getOutputJar());
-        System.out.println();
-
-        // ===== STEP 6: Embed native library =====
-        System.out.println("[STEP 6/7] Embedding native libraries...");
-        OutputPackager packager = new OutputPackager();
-        packager.embedNativeLibraries(config.getOutputJar(), compiler.getOutputLibraries());
-        System.out.println();
+        printProtectionSummary();
+        encryptBytecodeData();
+        JarPatcher patcher = createJarPatcher();
+        ZigCompiler compiler = generateAndCompileNativeCode(patcher);
+        patchOutputJar(patcher);
+        embedNativeLibraries(compiler);
 
         // ===== STEP 7: Done =====
         long elapsed = System.currentTimeMillis() - startTime;
@@ -107,6 +58,78 @@ public class Converter {
         System.out.println("╠══════════════════════════════════════╣");
         System.out.println("║  Output: " + padRight(config.getOutputJar().getName(), 27) + "║");
         System.out.println("╚══════════════════════════════════════╝");
+    }
+
+    private void initializeOpcodeObfuscation() {
+        opcodeObfuscator = new OpcodeObfuscator();
+        System.out.println("[INFO] Opcode obfuscation enabled - each bytecode is mapped to random value");
+    }
+
+    private void scanInputJar() throws Exception {
+        System.out.println("[STEP 1/7] Scanning JAR: " + config.getInputJar());
+        JarScanner scanner = new JarScanner(config, opcodeObfuscator);
+        protectedMethods = scanner.scan(config.getInputJar());
+        affectedClasses = scanner.getAffectedClasses();
+    }
+
+    private void printProtectionSummary() {
+        System.out.println();
+        System.out.println("[INFO] Protection summary:");
+        System.out.println("  Methods to protect: " + protectedMethods.size());
+        System.out.println("  Classes affected:   " + affectedClasses.size());
+
+        int totalBytecode = 0;
+        int totalMetadata = 0;
+        for (MethodInfo m : protectedMethods) {
+            totalBytecode += m.getBytecode().length;
+            totalMetadata += m.getMetadata().size();
+        }
+        System.out.println("  Total bytecode:     " + totalBytecode + " bytes");
+        System.out.println("  Total metadata:     " + totalMetadata + " entries");
+        System.out.println();
+    }
+
+    private void encryptBytecodeData() {
+        System.out.println("[STEP 2/7] Encrypting bytecode...");
+        BytecodeEncryptor encryptor = new BytecodeEncryptor();
+        encryptedMethods = encryptor.encryptAll(protectedMethods);
+        System.out.println();
+    }
+
+    private JarPatcher createJarPatcher() {
+        return new JarPatcher(protectedMethods, affectedClasses);
+    }
+
+    private ZigCompiler generateAndCompileNativeCode(JarPatcher patcher) throws Exception {
+        System.out.println("[STEP 3/7] Generating native C sources...");
+        NativeCodeGenerator codegen = new NativeCodeGenerator(
+                config,
+                encryptedMethods,
+                patcher.getBridgeClass(),
+                patcher.getMethodIdXorKey(),
+                opcodeObfuscator
+        );
+        codegen.generate();
+        System.out.println();
+
+        System.out.println("[STEP 4/7] Compiling with Zig...");
+        ZigCompiler compiler = new ZigCompiler(config);
+        compiler.compileAll();
+        System.out.println();
+        return compiler;
+    }
+
+    private void patchOutputJar(JarPatcher patcher) throws Exception {
+        System.out.println("[STEP 5/7] Patching JAR classes...");
+        patcher.patch(config.getInputJar(), config.getOutputJar());
+        System.out.println();
+    }
+
+    private void embedNativeLibraries(ZigCompiler compiler) throws Exception {
+        System.out.println("[STEP 6/7] Embedding native libraries...");
+        OutputPackager packager = new OutputPackager();
+        packager.embedNativeLibraries(config.getOutputJar(), compiler.getOutputLibraries());
+        System.out.println();
     }
 
     private String padRight(String s, int width) {

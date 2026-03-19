@@ -42,7 +42,7 @@ public class BytecodeExtractor {
     private final List<ExceptionEntry> exceptionTable = new ArrayList<>();
 
     /** Bootstrap method table */
-    private final List<BootstrapEntry> bootstrapMethods = new ArrayList<>();
+    private final BootstrapMethodRegistry bootstrapRegistry = new BootstrapMethodRegistry();
 
     /** Stack type frames from ASM analysis (for 64-bit stack op transformation) */
     private Frame<BasicValue>[] frames;
@@ -231,18 +231,14 @@ public class BytecodeExtractor {
         MetaEntry meta = new MetaEntry();
         meta.type = MetaType.META_INT;
         meta.intVal = node.operand;
-        int idx = metadataList.size();
-        metadataList.add(meta);
-        pcToMetaIdx.put(pc, idx);
+        addMeta(pc, meta);
     }
 
     private void emitVarInsn(VarInsnNode node, int pc) {
         MetaEntry meta = new MetaEntry();
         meta.type = MetaType.META_LOCAL;
         meta.intVal = node.var;
-        int idx = metadataList.size();
-        metadataList.add(meta);
-        pcToMetaIdx.put(pc, idx);
+        addMeta(pc, meta);
     }
 
     private void emitTypeInsn(TypeInsnNode node, int pc) {
@@ -250,41 +246,25 @@ public class BytecodeExtractor {
         meta.type = MetaType.META_CLASS;
         meta.classIdx = getStringIndex(node.desc);
         meta.classLen = node.desc.length();
-        int idx = metadataList.size();
-        metadataList.add(meta);
-        pcToMetaIdx.put(pc, idx);
+        addMeta(pc, meta);
     }
 
     private void emitFieldInsn(FieldInsnNode node, int pc) {
         MetaEntry meta = new MetaEntry();
         meta.type = MetaType.META_FIELD;
-        meta.ownerIdx = getStringIndex(node.owner);
-        meta.ownerLen = node.owner.length();
-        meta.nameIdx = getStringIndex(node.name);
-        meta.nameLen = node.name.length();
-        meta.descIdx = getStringIndex(node.desc);
-        meta.descLen = node.desc.length();
-        int idx = metadataList.size();
-        metadataList.add(meta);
-        pcToMetaIdx.put(pc, idx);
+        fillMemberMeta(meta, node.owner, node.name, node.desc);
+        addMeta(pc, meta);
     }
 
     private void emitMethodInsn(MethodInsnNode node, int pc) {
         MetaEntry meta = new MetaEntry();
         meta.type = MetaType.META_METHOD;
-        meta.ownerIdx = getStringIndex(node.owner);
-        meta.ownerLen = node.owner.length();
-        meta.nameIdx = getStringIndex(node.name);
-        meta.nameLen = node.name.length();
-        meta.descIdx = getStringIndex(node.desc);
-        meta.descLen = node.desc.length();
-        int idx = metadataList.size();
-        metadataList.add(meta);
-        pcToMetaIdx.put(pc, idx);
+        fillMemberMeta(meta, node.owner, node.name, node.desc);
+        addMeta(pc, meta);
     }
 
     private void emitInvokeDynamicInsn(InvokeDynamicInsnNode node, int pc) {
-        int bsmIdx = findOrCreateBootstrapMethod(node.bsm, node.bsmArgs);
+        int bsmIdx = bootstrapRegistry.findOrCreate(node.bsm, node.bsmArgs);
         
         MetaEntry meta = new MetaEntry();
         meta.type = MetaType.META_INVOKE_DYNAMIC;
@@ -293,9 +273,7 @@ public class BytecodeExtractor {
         meta.nameLen = node.name.length();
         meta.descIdx = getStringIndex(node.desc);
         meta.descLen = node.desc.length();
-        int idx = metadataList.size();
-        metadataList.add(meta);
-        pcToMetaIdx.put(pc, idx);
+        addMeta(pc, meta);
     }
 
     private void emitJumpInsn(JumpInsnNode node, int pc) {
@@ -303,9 +281,7 @@ public class BytecodeExtractor {
         meta.type = MetaType.META_JUMP;
         // Offset backfilled later
         meta.jumpOffset = 0;
-        int idx = metadataList.size();
-        metadataList.add(meta);
-        pcToMetaIdx.put(pc, idx);
+        int idx = addMeta(pc, meta);
         jumpBackpatches.add(new JumpBackpatch(idx, pc, node.label));
     }
 
@@ -340,19 +316,12 @@ public class BytecodeExtractor {
             // MethodHandle - temporarily stored as string
             Handle h = (Handle) cst;
             meta.type = MetaType.META_METHOD;
-            meta.ownerIdx = getStringIndex(h.getOwner());
-            meta.ownerLen = h.getOwner().length();
-            meta.nameIdx = getStringIndex(h.getName());
-            meta.nameLen = h.getName().length();
-            meta.descIdx = getStringIndex(h.getDesc());
-            meta.descLen = h.getDesc().length();
+            fillMemberMeta(meta, h.getOwner(), h.getName(), h.getDesc());
         } else {
             throw new RuntimeException("Unsupported LDC constant: " + cst.getClass());
         }
-        
-        int idx = metadataList.size();
-        metadataList.add(meta);
-        pcToMetaIdx.put(pc, idx);
+
+        addMeta(pc, meta);
     }
 
     private void emitIincInsn(IincInsnNode node, int pc) {
@@ -360,9 +329,7 @@ public class BytecodeExtractor {
         meta.type = MetaType.META_IINC;
         meta.iincIndex = node.var;
         meta.iincConst = node.incr;
-        int idx = metadataList.size();
-        metadataList.add(meta);
-        pcToMetaIdx.put(pc, idx);
+        addMeta(pc, meta);
     }
 
     private void emitTableSwitchInsn(TableSwitchInsnNode node, int pc) {
@@ -371,11 +338,8 @@ public class BytecodeExtractor {
         meta.switchLow = node.min;
         meta.switchHigh = node.max;
         meta.switchOffsets = new int[node.labels.size() + 1]; // default + cases
-        
-        int idx = metadataList.size();
-        metadataList.add(meta);
-        pcToMetaIdx.put(pc, idx);
-        
+
+        int idx = addMeta(pc, meta);
         switchBackpatches.add(new SwitchBackpatch(idx, pc, node.dflt, node.labels));
     }
 
@@ -390,11 +354,8 @@ public class BytecodeExtractor {
         for (int i = 0; i < node.keys.size(); i++) {
             meta.switchKeys[i] = node.keys.get(i);
         }
-        
-        int idx = metadataList.size();
-        metadataList.add(meta);
-        pcToMetaIdx.put(pc, idx);
-        
+
+        int idx = addMeta(pc, meta);
         switchBackpatches.add(new SwitchBackpatch(idx, pc, node.dflt, node.labels));
     }
 
@@ -404,9 +365,23 @@ public class BytecodeExtractor {
         meta.classIdx = getStringIndex(node.desc);
         meta.classLen = node.desc.length();
         meta.dims = node.dims;
+        addMeta(pc, meta);
+    }
+
+    private int addMeta(int pc, MetaEntry meta) {
         int idx = metadataList.size();
         metadataList.add(meta);
         pcToMetaIdx.put(pc, idx);
+        return idx;
+    }
+
+    private void fillMemberMeta(MetaEntry meta, String owner, String name, String desc) {
+        meta.ownerIdx = getStringIndex(owner);
+        meta.ownerLen = owner.length();
+        meta.nameIdx = getStringIndex(name);
+        meta.nameLen = name.length();
+        meta.descIdx = getStringIndex(desc);
+        meta.descLen = desc.length();
     }
 
     // ===== Backfill jumps =====
@@ -461,119 +436,6 @@ public class BytecodeExtractor {
             ExceptionEntry entry = new ExceptionEntry(startPc, endPc, handlerPc, tcb.type);
             exceptionTable.add(entry);
         }
-    }
-
-    // ===== Bootstrap Methods =====
-
-    private int findOrCreateBootstrapMethod(Handle bsm, Object[] bsmArgs) {
-        // Need to compare args when searching, different args should create different BSM
-        for (int i = 0; i < bootstrapMethods.size(); i++) {
-            BootstrapEntry e = bootstrapMethods.get(i);
-            if (e.getHandleTag() == bsm.getTag() &&
-                e.getHandleOwner().equals(bsm.getOwner()) &&
-                e.getHandleName().equals(bsm.getName()) &&
-                e.getHandleDescriptor().equals(bsm.getDesc())) {
-                // Also need to compare args
-                List<Object> existingArgs = e.getArguments();
-                if (argsEqual(existingArgs, bsmArgs)) {
-                    return i;
-                }
-            }
-        }
-        
-        BootstrapEntry entry = new BootstrapEntry();
-        entry.setHandleTag(bsm.getTag());
-        entry.setHandleOwner(bsm.getOwner());
-        entry.setHandleName(bsm.getName());
-        entry.setHandleDescriptor(bsm.getDesc());
-        
-        List<Object> args = new ArrayList<>();
-        List<ArgType> argTypes = new ArrayList<>();
-        
-        if (bsmArgs != null) {
-            for (Object arg : bsmArgs) {
-                if (arg instanceof Integer) {
-                    args.add(arg);
-                    argTypes.add(ArgType.INTEGER);
-                } else if (arg instanceof Long) {
-                    args.add(arg);
-                    argTypes.add(ArgType.LONG);
-                } else if (arg instanceof Float) {
-                    args.add(arg);
-                    argTypes.add(ArgType.FLOAT);
-                } else if (arg instanceof Double) {
-                    args.add(arg);
-                    argTypes.add(ArgType.DOUBLE);
-                } else if (arg instanceof String) {
-                    args.add(arg);
-                    argTypes.add(ArgType.STRING);
-                } else if (arg instanceof Type) {
-                    Type t = (Type) arg;
-                    String desc = t.getDescriptor();
-                    // Distinguish between MethodType (contains '(') and Class reference
-                    // MethodType: ()Ljava/util/ArrayList;
-                    // Class: Lcom/zelix/Demo$SAMInterfaceB; (or just the internal name for Class constants)
-                    if (desc.contains("(")) {
-                        args.add(desc);
-                        argTypes.add(ArgType.METHOD_TYPE);
-                    } else {
-                        // It's a Class reference - store internal name (without L; wrapper)
-                        args.add(t.getInternalName());
-                        argTypes.add(ArgType.CLASS);
-                    }
-                } else if (arg instanceof Handle) {
-                    Handle h = (Handle) arg;
-                    String serialized = h.getTag() + ":" + h.getOwner() + ":" +
-                            h.getName() + ":" + h.getDesc();
-                    args.add(serialized);
-                    argTypes.add(ArgType.METHOD_HANDLE);
-                } else {
-                    args.add(arg.toString());
-                    argTypes.add(ArgType.STRING);
-                }
-            }
-        }
-        
-        entry.setArguments(args);
-        entry.setArgumentTypes(argTypes);
-        
-        int idx = bootstrapMethods.size();
-        bootstrapMethods.add(entry);
-        return idx;
-    }
-    
-    private boolean argsEqual(List<Object> args1, Object[] args2) {
-        if (args1 == null && args2 == null) return true;
-        if (args1 == null || args2 == null) return false;
-        if (args1.size() != args2.length) return false;
-        
-        for (int i = 0; i < args1.size(); i++) {
-            Object a1 = args1.get(i);
-            Object a2 = args2[i];
-            if (a1 == null && a2 == null) continue;
-            if (a1 == null || a2 == null) return false;
-            
-            // Handle Handle serialization case
-            if (a2 instanceof Handle) {
-                Handle h = (Handle) a2;
-                String serialized = h.getTag() + ":" + h.getOwner() + ":" +
-                        h.getName() + ":" + h.getDesc();
-                if (!a1.toString().equals(serialized)) return false;
-            } else if (a2 instanceof Type) {
-                Type t = (Type) a2;
-                String desc = t.getDescriptor();
-                if (desc.contains("(")) {
-                    // MethodType - compare descriptor
-                    if (!a1.toString().equals(desc)) return false;
-                } else {
-                    // Class - compare internal name
-                    if (!a1.toString().equals(t.getInternalName())) return false;
-                }
-            } else {
-                if (!a1.toString().equals(a2.toString())) return false;
-            }
-        }
-        return true;
     }
 
     // ===== 64-bit stack operation transformation =====
@@ -693,6 +555,6 @@ public class BytecodeExtractor {
     }
 
     public List<BootstrapEntry> getBootstrapMethods() {
-        return bootstrapMethods;
+        return bootstrapRegistry.getEntries();
     }
 }

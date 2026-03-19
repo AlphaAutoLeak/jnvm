@@ -129,7 +129,7 @@ The original method bodies are replaced with native VM calls, making reverse eng
 ## Compatibility
 
 JNVM has been tested with JARs obfuscated by:
-- **Zelix KlassMaster (ZKM)** - support including encrypted string decryption , invokedynamic not support
+- **Zelix KlassMaster (ZKM)** - support including encrypted string decryption , invokedynamic 
 - **ProGuard** - Standard obfuscation
 - **Allatori** - String encryption and flow obfuscation
 - **Vanilla Java** - No obfuscation

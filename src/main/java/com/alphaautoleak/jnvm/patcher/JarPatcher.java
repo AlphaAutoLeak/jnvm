@@ -2,6 +2,7 @@ package com.alphaautoleak.jnvm.patcher;
 
 import com.alphaautoleak.jnvm.asm.MethodInfo;
 import com.alphaautoleak.jnvm.utils.BridgePackageNameGenerator;
+import com.alphaautoleak.jnvm.utils.MethodKeyUtil;
 import org.objectweb.asm.ClassReader;
 import org.objectweb.asm.ClassWriter;
 import org.objectweb.asm.Opcodes;
@@ -38,7 +39,7 @@ public class JarPatcher {
         this.methodIdXorKey = key;
 
         for (MethodInfo m : protectedMethods) {
-            String k = m.getOwner() + "." + m.getName() + "." + m.getDescriptor();
+            String k = MethodKeyUtil.of(m.getOwner(), m.getName(), m.getDescriptor());
             methodIdMap.put(k, m.getMethodId());
         }
 
@@ -118,7 +119,7 @@ public class JarPatcher {
         cr.accept(cn, 0);
 
         for (MethodNode mn : cn.methods) {
-            String key = cn.name + "." + mn.name + "." + mn.desc;
+            String key = MethodKeyUtil.of(cn.name, mn.name, mn.desc);
             Integer methodId = methodIdMap.get(key);
             if (methodId == null) continue;
 

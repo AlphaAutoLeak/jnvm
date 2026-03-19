@@ -9,6 +9,11 @@ import java.util.concurrent.TimeUnit;
 
 public class ZigCompiler {
 
+    private static final int COMPILE_TIMEOUT_SECONDS = 180;
+    private static final int ZIG_VERSION_TIMEOUT_SECONDS = 10;
+    private static final String[] JNI_PLATFORM_SUBDIRS = {"win32", "linux", "darwin"};
+    private static final String[] SOURCE_FILES = {"vm_data.c", "vm_interpreter.c", "vm_bridge.c", "chacha20.c"};
+
     private final ProtectConfig config;
     private final List<File> outputLibraries = new ArrayList<>();
 
@@ -35,21 +40,30 @@ public class ZigCompiler {
      */
     private void compileDirect(String target, String javaHome) throws Exception {
         File nativeDir = config.getNativeDir();
+        File outputFile = buildOutputFile(target, nativeDir);
+        List<String> cmd = buildCompileCommand(target, javaHome, outputFile);
+        String output = runCompileProcess(target, nativeDir, cmd);
+        verifyAndRecordOutput(target, outputFile, output);
+    }
 
-        // Output filename
-        String libName;
-        if (target.contains("windows")) {
-            libName = "customvm.dll";
-        } else if (target.contains("macos") || target.contains("darwin")) {
-            libName = "libcustomvm.dylib";
-        } else {
-            libName = "libcustomvm.so";
-        }
-
+    private File buildOutputFile(String target, File nativeDir) {
+        String libName = getOutputLibraryName(target);
         File outputDir = new File(nativeDir, "out-" + target);
         outputDir.mkdirs();
-        File outputFile = new File(outputDir, libName);
+        return new File(outputDir, libName);
+    }
 
+    private String getOutputLibraryName(String target) {
+        if (target.contains("windows")) {
+            return "customvm.dll";
+        }
+        if (target.contains("macos") || target.contains("darwin")) {
+            return "libcustomvm.dylib";
+        }
+        return "libcustomvm.so";
+    }
+
+    private List<String> buildCompileCommand(String target, String javaHome, File outputFile) {
         List<String> cmd = new ArrayList<>();
         cmd.add("zig");
         cmd.add("cc");
@@ -69,26 +83,8 @@ public class ZigCompiler {
         cmd.add("-s");                          // Strip symbol table and debug info
         cmd.add("-fvisibility=hidden");         // Hide symbols
 
-        // JNI headers
-        if (javaHome != null) {
-            File includeDir = new File(javaHome, "include");
-            if (includeDir.exists()) {
-                cmd.add("-I" + includeDir.getAbsolutePath());
-
-                // Add all platform subdirs (cross-compilation needs target platform headers)
-                String[] subDirs = {"win32", "linux", "darwin"};
-                for (String sub : subDirs) {
-                    File subDir = new File(includeDir, sub);
-                    if (subDir.exists()) {
-                        cmd.add("-I" + subDir.getAbsolutePath());
-                    }
-                }
-            }
-        }
-
-        // Source files
-        String[] sources = {"vm_data.c", "vm_interpreter.c", "vm_bridge.c", "chacha20.c"};
-        for (String src : sources) {
+        appendJniIncludeDirs(cmd, javaHome);
+        for (String src : SOURCE_FILES) {
             cmd.add(src);
         }
 
@@ -99,7 +95,27 @@ public class ZigCompiler {
         if (!target.contains("windows")) {
             cmd.add("-lc");
         }
+        return cmd;
+    }
 
+    private void appendJniIncludeDirs(List<String> cmd, String javaHome) {
+        if (javaHome == null) {
+            return;
+        }
+        File includeDir = new File(javaHome, "include");
+        if (!includeDir.exists()) {
+            return;
+        }
+        cmd.add("-I" + includeDir.getAbsolutePath());
+        for (String sub : JNI_PLATFORM_SUBDIRS) {
+            File subDir = new File(includeDir, sub);
+            if (subDir.exists()) {
+                cmd.add("-I" + subDir.getAbsolutePath());
+            }
+        }
+    }
+
+    private String runCompileProcess(String target, File nativeDir, List<String> cmd) throws Exception {
         ProcessBuilder pb = new ProcessBuilder(cmd);
         pb.directory(nativeDir);
         pb.redirectErrorStream(true);
@@ -117,7 +133,7 @@ public class ZigCompiler {
             }
         }
 
-        boolean finished = proc.waitFor(180, TimeUnit.SECONDS);
+        boolean finished = proc.waitFor(COMPILE_TIMEOUT_SECONDS, TimeUnit.SECONDS);
         if (!finished) {
             proc.destroyForcibly();
             throw new RuntimeException("Zig compilation timed out for target: " + target);
@@ -128,14 +144,18 @@ public class ZigCompiler {
             throw new RuntimeException(
                     "Zig compilation failed for target: " + target + "\n" + output.toString());
         }
+        return output.toString();
+    }
 
+    private void verifyAndRecordOutput(String target, File outputFile, String output) {
         if (outputFile.exists()) {
             outputLibraries.add(outputFile);
             System.out.println("  [OK] " + outputFile.getAbsolutePath() +
                     " (" + (outputFile.length() / 1024) + " KB)");
-        } else {
-            throw new RuntimeException("Output library not found: " + outputFile);
+            return;
         }
+        throw new RuntimeException(
+                "Output library not found: " + outputFile + "\nBuild output:\n" + output);
     }
 
     private String findJavaHome() {
@@ -181,7 +201,7 @@ public class ZigCompiler {
                 }
             }
 
-            proc.waitFor(10, TimeUnit.SECONDS);
+            proc.waitFor(ZIG_VERSION_TIMEOUT_SECONDS, TimeUnit.SECONDS);
             System.out.println("[ZIG] Zig version: " + out.toString().trim());
 
         } catch (IOException e) {

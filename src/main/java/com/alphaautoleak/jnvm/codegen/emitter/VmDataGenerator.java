@@ -38,22 +38,17 @@ public class VmDataGenerator {
     /** Global Bootstrap method table */
     private List<BootstrapEntry> globalBootstrapMethods = new ArrayList<>();
     private Map<String, Integer> bootstrapIndexMap = new HashMap<>();
+    private final VmBootstrapMethodsEmitter bootstrapMethodsEmitter;
     
-    /** Method invocation metadata pre-computation cache: "methodId_metaIdx" -> InvokeMetaInfo */
-    private Map<String, InvokeMetaInfo> invokeMetaCache = new HashMap<>();
-    
-    /** Method descriptor parsing result */
-    private static class InvokeMetaInfo {
-        int argCount;
-        char returnTypeChar;
-        String argTypes;  // pre-parsed argument type string, e.g. "IJB"
-    }
+    /** Method invocation metadata pre-computation cache: "methodId_metaIdx" -> descriptor info */
+    private Map<String, MethodDescriptorParser.DescriptorInfo> invokeMetaCache = new HashMap<>();
     
     public VmDataGenerator(File dir, List<EncryptedMethodData> methods, byte[] stringKey, boolean encryptStrings) {
         this.dir = dir;
         this.methods = methods;
         this.stringKey = stringKey;           // method bytecode key (8 bytes)
         this.encryptStrings = encryptStrings;
+        this.bootstrapMethodsEmitter = new VmBootstrapMethodsEmitter(globalBootstrapMethods, this::getOrAddStringIndex);
         if (encryptStrings) {
             this.vmStringKey = CryptoUtils.generateKey();  // string ChaCha20 key (32 bytes)
             this.stringNonce = CryptoUtils.generateNonce(); // string ChaCha20 nonce (12 bytes)
@@ -80,18 +75,7 @@ public class VmDataGenerator {
             if (bsmList == null) continue;
             
             for (BootstrapEntry bsm : bsmList) {
-                // Include args info in key to ensure different BSMs will not be merged
-                StringBuilder keyBuilder = new StringBuilder();
-                keyBuilder.append(bsm.getHandleOwner()).append(".");
-                keyBuilder.append(bsm.getHandleName()).append(bsm.getHandleDescriptor());
-                // Add args info
-                if (bsm.getArguments() != null) {
-                    for (Object arg : bsm.getArguments()) {
-                        keyBuilder.append("|").append(arg != null ? arg.toString() : "null");
-                    }
-                }
-                String key = keyBuilder.toString();
-                
+                String key = buildBootstrapKey(bsm);
                 if (!bootstrapIndexMap.containsKey(key)) {
                     bootstrapIndexMap.put(key, globalBootstrapMethods.size());
                     globalBootstrapMethods.add(bsm);
@@ -130,169 +114,197 @@ public class VmDataGenerator {
             w.println("#include \"vm_data.h\"");
             w.println("#include \"chacha20.h\"");
             w.println();
-            
-            // Encryption key (8 bytes)
-            w.println("const uint8_t vm_key[] = {");
-            for (int i = 0; i < stringKey.length; i++) {
-                w.printf("0x%02x%s", stringKey[i] & 0xFF, (i < stringKey.length - 1 ? ", " : ""));
-            }
-            w.println("\n};");
-            w.println();
-            
-            // Global string pool
-            Set<String> allStrings = new LinkedHashSet<>();
-            for (EncryptedMethodData method : methods) {
-                List<String> pool = method.getStringPool();
-                if (pool != null) {
-                    allStrings.addAll(pool);
-                }
-                // Add method descriptor to string pool
-                if (method.getDescriptor() != null) {
-                    allStrings.add(method.getDescriptor());
-                }
-                // Add exception table catch types to string pool
-                List<ExceptionEntry> excTable = method.getExceptionTable();
-                if (excTable != null) {
-                    for (ExceptionEntry e : excTable) {
-                        if (e.getCatchType() != null) {
-                            allStrings.add(e.getCatchType());
-                        }
-                    }
-                }
-            }
-            
-            // Add method owner+name to string pool (for direct VM-to-VM call lookup)
-            for (EncryptedMethodData method : methods) {
-                if (method.getOwner() != null) allStrings.add(method.getOwner());
-                if (method.getName() != null) allStrings.add(method.getName());
-            }
 
-            // First pass: pre-compute all INVOKE metadata
-            for (EncryptedMethodData method : methods) {
-                List<String> localPool = method.getStringPool();
-                List<MetaEntry> metaList = method.getMetadata();
-                if (localPool == null || metaList == null) continue;
-                for (int i = 0; i < metaList.size(); i++) {
-                    MetaEntry m = metaList.get(i);
-                    if (m.type == MetaType.META_METHOD || m.type == MetaType.META_INVOKE_DYNAMIC) {
-                        if (m.descIdx >= 0 && m.descIdx < localPool.size()) {
-                            String desc = localPool.get(m.descIdx);
-                            InvokeMetaInfo info = parseMethodDesc(desc);
-                            invokeMetaCache.put(method.getMethodId() + "_" + i, info);
-                            // Add argTypes string to global pool
-                            if (info.argTypes != null && !info.argTypes.isEmpty()) {
-                                allStrings.add(info.argTypes);
-                            }
-                        }
-                    }
-                }
-            }
-            
-            // Add BSM-related strings to global pool
-            for (BootstrapEntry bsm : globalBootstrapMethods) {
-                // Add bootstrap method info
-                allStrings.add(bsm.getHandleOwner());
-                allStrings.add(bsm.getHandleName());
-                allStrings.add(bsm.getHandleDescriptor());
-                
-                // Add strings from BSM arguments
-                List<Object> args = bsm.getArguments();
-                List<ArgType> argTypes = bsm.getArgumentTypes();
-                if (args != null && argTypes != null) {
-                    for (int j = 0; j < args.size(); j++) {
-                        Object arg = args.get(j);
-                        ArgType argType = argTypes.get(j);
-                        switch (argType) {
-                            case STRING:
-                            case METHOD_TYPE:
-                            case CLASS:
-                                allStrings.add(arg.toString());
-                                break;
-                            case METHOD_HANDLE:
-                                // Format: "tag:owner:name:desc"
-                                String[] parts = arg.toString().split(":", 4);
-                                if (parts.length >= 4) {
-                                    allStrings.add(parts[1]); // owner
-                                    allStrings.add(parts[2]); // name
-                                    allStrings.add(parts[3]); // descriptor
-                                }
-                                break;
-                        }
-                    }
-                }
-            }
-            
-            // Add VMMethod argTypes strings to global pool (for vm_execute_common parameter unboxing)
-            for (EncryptedMethodData method : methods) {
-                String desc = method.getDescriptor();
-                if (desc != null) {
-                    String argTypes = parseMethodArgTypes(desc);
-                    if (argTypes != null && !argTypes.isEmpty()) {
-                        allStrings.add(argTypes);
-                    }
-                }
-            }
-            
-            // Build global string index mapping
-            globalStringIndexMap = new HashMap<>();
-            int globalIdx = 0;
-            for (String s : allStrings) {
-                globalStringIndexMap.put(s, globalIdx++);
-            }
-            
+            emitVmKey(w);
+            Set<String> allStrings = collectAllStringsAndInvokeMeta();
+            buildGlobalStringIndex(allStrings);
             emitStringPool(w, allStrings);
-            
-            w.println("const int vm_method_count = " + methods.size() + ";");
-            w.println("const int vm_string_count = " + allStrings.size() + ";");
-            w.println("const int vm_bootstrap_count = " + globalBootstrapMethods.size() + ";");
-            w.println();
-            
-            // Generate Bootstrap method table
-            emitBootstrapMethods(w);
-            
-            // Generate data for each method
+
+            emitGlobalCounts(w, allStrings.size());
+            bootstrapMethodsEmitter.emit(w);
+
             for (EncryptedMethodData method : methods) {
                 emitMethodData(w, method);
             }
-            
-            // Method array
-            w.println("VMMethod vm_methods[] = {");
-            for (EncryptedMethodData method : methods) {
-                w.printf("    { .methodId=%d, .maxStack=%d, .maxLocals=%d, ",
-                    method.getMethodId(), method.getMaxStack(), method.getMaxLocals());
-                w.printf(".bytecode=(uint8_t*)m%d_bc, .bytecodeLen=%d, ",
-                    method.getMethodId(), method.getEncryptedBytecode().length);
-                w.printf(".metadata=m%d_meta, .metadataCount=%d, ",
-                    method.getMethodId(), method.getMetadata().size());
-                w.printf(".pcToMetaIdx=m%d_pc2meta, ", method.getMethodId());
-                // Add descIdx and descLen
-                String desc = method.getDescriptor();
-                Integer descIdx = globalStringIndexMap.get(desc);
-                if (descIdx != null) {
-                    w.printf(".descIdx=%d, .descLen=%d, ", descIdx, desc.length());
-                } else {
-                    w.printf(".descIdx=-1, .descLen=0, ");
-                }
-                // Add exception table
-                List<ExceptionEntry> excTable = method.getExceptionTable();
-                if (excTable != null && !excTable.isEmpty()) {
-                    w.printf(".exceptionTable=m%d_exc, .exceptionTableLength=%d, ",
-                        method.getMethodId(), excTable.size());
-                } else {
-                    w.printf(".exceptionTable=NULL, .exceptionTableLength=0, ");
-                }
-                // Add pre-parsed argument info
-                String argTypes = parseMethodArgTypes(desc);
-                int argCount = argTypes.length();
-                int argTypesIdx = argCount > 0 ? getOrAddStringIndex(argTypes) : -1;
-                // Method identity for direct VM-to-VM call optimization
-                int methodOwnerIdx = method.getOwner() != null ? getOrAddStringIndex(method.getOwner()) : -1;
-                int methodNameIdx = method.getName() != null ? getOrAddStringIndex(method.getName()) : -1;
-                w.printf(".isStatic=%d, .argCount=%d, .argTypesIdx=%d, .ownerIdx=%d, .nameIdx=%d },\n",
-                    method.isStatic() ? 1 : 0, argCount, argTypesIdx, methodOwnerIdx, methodNameIdx);
-            }
-            w.println("};");
+
+            emitMethodArray(w);
         }
+    }
+
+    private void emitVmKey(PrintWriter w) {
+        w.println("const uint8_t vm_key[] = {");
+        for (int i = 0; i < stringKey.length; i++) {
+            w.printf("0x%02x%s", stringKey[i] & 0xFF, (i < stringKey.length - 1 ? ", " : ""));
+        }
+        w.println("\n};");
+        w.println();
+    }
+
+    private Set<String> collectAllStringsAndInvokeMeta() {
+        Set<String> allStrings = new LinkedHashSet<>();
+        collectMethodLevelStrings(allStrings);
+        collectMethodIdentityStrings(allStrings);
+        precomputeInvokeMetaAndCollectArgTypes(allStrings);
+        collectBootstrapStrings(allStrings);
+        collectVmMethodArgTypeStrings(allStrings);
+        return allStrings;
+    }
+
+    private void collectMethodLevelStrings(Set<String> allStrings) {
+        for (EncryptedMethodData method : methods) {
+            List<String> pool = method.getStringPool();
+            if (pool != null) {
+                allStrings.addAll(pool);
+            }
+            if (method.getDescriptor() != null) {
+                allStrings.add(method.getDescriptor());
+            }
+            List<ExceptionEntry> excTable = method.getExceptionTable();
+            if (excTable == null) {
+                continue;
+            }
+            for (ExceptionEntry e : excTable) {
+                if (e.getCatchType() != null) {
+                    allStrings.add(e.getCatchType());
+                }
+            }
+        }
+    }
+
+    private void collectMethodIdentityStrings(Set<String> allStrings) {
+        for (EncryptedMethodData method : methods) {
+            if (method.getOwner() != null) {
+                allStrings.add(method.getOwner());
+            }
+            if (method.getName() != null) {
+                allStrings.add(method.getName());
+            }
+        }
+    }
+
+    private void precomputeInvokeMetaAndCollectArgTypes(Set<String> allStrings) {
+        invokeMetaCache.clear();
+        for (EncryptedMethodData method : methods) {
+            List<String> localPool = method.getStringPool();
+            List<MetaEntry> metaList = method.getMetadata();
+            if (localPool == null || metaList == null) {
+                continue;
+            }
+            for (int i = 0; i < metaList.size(); i++) {
+                MetaEntry m = metaList.get(i);
+                if (m.type != MetaType.META_METHOD && m.type != MetaType.META_INVOKE_DYNAMIC) {
+                    continue;
+                }
+                if (m.descIdx < 0 || m.descIdx >= localPool.size()) {
+                    continue;
+                }
+                String desc = localPool.get(m.descIdx);
+                MethodDescriptorParser.DescriptorInfo info = MethodDescriptorParser.parse(desc);
+                invokeMetaCache.put(method.getMethodId() + "_" + i, info);
+                if (info.getArgTypes() != null && !info.getArgTypes().isEmpty()) {
+                    allStrings.add(info.getArgTypes());
+                }
+            }
+        }
+    }
+
+    private void collectBootstrapStrings(Set<String> allStrings) {
+        for (BootstrapEntry bsm : globalBootstrapMethods) {
+            allStrings.add(bsm.getHandleOwner());
+            allStrings.add(bsm.getHandleName());
+            allStrings.add(bsm.getHandleDescriptor());
+
+            List<Object> args = bsm.getArguments();
+            List<ArgType> argTypes = bsm.getArgumentTypes();
+            if (args == null || argTypes == null) {
+                continue;
+            }
+            for (int j = 0; j < args.size(); j++) {
+                Object arg = args.get(j);
+                ArgType argType = argTypes.get(j);
+                switch (argType) {
+                    case STRING:
+                    case METHOD_TYPE:
+                    case CLASS:
+                        allStrings.add(arg.toString());
+                        break;
+                    case METHOD_HANDLE:
+                        String[] parts = arg.toString().split(":", 4);
+                        if (parts.length >= 4) {
+                            allStrings.add(parts[1]);
+                            allStrings.add(parts[2]);
+                            allStrings.add(parts[3]);
+                        }
+                        break;
+                }
+            }
+        }
+    }
+
+    private void collectVmMethodArgTypeStrings(Set<String> allStrings) {
+        for (EncryptedMethodData method : methods) {
+            String desc = method.getDescriptor();
+            if (desc == null) {
+                continue;
+            }
+            String argTypes = MethodDescriptorParser.parseArgTypes(desc);
+            if (argTypes != null && !argTypes.isEmpty()) {
+                allStrings.add(argTypes);
+            }
+        }
+    }
+
+    private void buildGlobalStringIndex(Set<String> allStrings) {
+        globalStringIndexMap = new HashMap<>();
+        int globalIdx = 0;
+        for (String s : allStrings) {
+            globalStringIndexMap.put(s, globalIdx++);
+        }
+    }
+
+    private void emitGlobalCounts(PrintWriter w, int stringCount) {
+        w.println("const int vm_method_count = " + methods.size() + ";");
+        w.println("const int vm_string_count = " + stringCount + ";");
+        w.println("const int vm_bootstrap_count = " + globalBootstrapMethods.size() + ";");
+        w.println();
+    }
+
+    private void emitMethodArray(PrintWriter w) {
+        w.println("VMMethod vm_methods[] = {");
+        for (EncryptedMethodData method : methods) {
+            w.printf("    { .methodId=%d, .maxStack=%d, .maxLocals=%d, ",
+                    method.getMethodId(), method.getMaxStack(), method.getMaxLocals());
+            w.printf(".bytecode=(uint8_t*)m%d_bc, .bytecodeLen=%d, ",
+                    method.getMethodId(), method.getEncryptedBytecode().length);
+            w.printf(".metadata=m%d_meta, .metadataCount=%d, ",
+                    method.getMethodId(), method.getMetadata().size());
+            w.printf(".pcToMetaIdx=m%d_pc2meta, ", method.getMethodId());
+
+            String desc = method.getDescriptor();
+            Integer descIdx = globalStringIndexMap.get(desc);
+            if (descIdx != null) {
+                w.printf(".descIdx=%d, .descLen=%d, ", descIdx, desc.length());
+            } else {
+                w.printf(".descIdx=-1, .descLen=0, ");
+            }
+
+            List<ExceptionEntry> excTable = method.getExceptionTable();
+            if (excTable != null && !excTable.isEmpty()) {
+                w.printf(".exceptionTable=m%d_exc, .exceptionTableLength=%d, ",
+                        method.getMethodId(), excTable.size());
+            } else {
+                w.printf(".exceptionTable=NULL, .exceptionTableLength=0, ");
+            }
+
+            String argTypes = MethodDescriptorParser.parseArgTypes(desc);
+            int argCount = argTypes.length();
+            int argTypesIdx = argCount > 0 ? getOrAddStringIndex(argTypes) : -1;
+            int methodOwnerIdx = method.getOwner() != null ? getOrAddStringIndex(method.getOwner()) : -1;
+            int methodNameIdx = method.getName() != null ? getOrAddStringIndex(method.getName()) : -1;
+            w.printf(".isStatic=%d, .argCount=%d, .argTypesIdx=%d, .ownerIdx=%d, .nameIdx=%d },\n",
+                    method.isStatic() ? 1 : 0, argCount, argTypesIdx, methodOwnerIdx, methodNameIdx);
+        }
+        w.println("};");
     }
     
     private void emitStringPool(PrintWriter w, Set<String> strings) {
@@ -365,94 +377,6 @@ public class VmDataGenerator {
     }
     
     /**
-     * Generates global Bootstrap method table
-     */
-    private void emitBootstrapMethods(PrintWriter w) {
-        if (globalBootstrapMethods.isEmpty()) {
-            w.println("VMBootstrapMethod vm_bootstrap_methods[] = {};");
-            w.println();
-            return;
-        }
-        
-        // Generate array for each bootstrap method's arguments
-        for (int i = 0; i < globalBootstrapMethods.size(); i++) {
-            BootstrapEntry bsm = globalBootstrapMethods.get(i);
-            List<Object> args = bsm.getArguments();
-            List<ArgType> argTypes = bsm.getArgumentTypes();
-            
-            if (args != null && !args.isEmpty()) {
-                w.printf("static BsmArg bsm%d_args[] = {", i);
-                for (int j = 0; j < args.size(); j++) {
-                    Object arg = args.get(j);
-                    ArgType argType = argTypes.get(j);
-                    
-                    w.printf("\n    { .type=%s, ", bsmArgTypeToString(argType));
-                    
-                    switch (argType) {
-                        case STRING:
-                            w.printf(".strIdx=%d", getOrAddStringIndex(arg.toString()));
-                            break;
-                        case INTEGER:
-                            w.printf(".intVal=%d", (Integer) arg);
-                            break;
-                        case LONG:
-                            w.printf(".longVal=%dL", (Long) arg);
-                            break;
-                        case FLOAT:
-                            w.printf(".floatVal=%af", (Float) arg);
-                            break;
-                        case DOUBLE:
-                            w.printf(".doubleVal=%a", (Double) arg);
-                            break;
-                        case METHOD_TYPE:
-                            w.printf(".strIdx=%d", getOrAddStringIndex(arg.toString()));
-                            break;
-                        case CLASS:
-                            // Class reference - store internal name
-                            w.printf(".strIdx=%d", getOrAddStringIndex(arg.toString()));
-                            break;
-                        case METHOD_HANDLE:
-                            // Format: "tag:owner:name:desc"
-                            String[] parts = arg.toString().split(":", 4);
-                            if (parts.length >= 4) {
-                                w.printf(".handleTag=%s, .ownerIdx=%d, .nameIdx=%d, .descIdx=%d",
-                                    parts[0],
-                                    getOrAddStringIndex(parts[1]),
-                                    getOrAddStringIndex(parts[2]),
-                                    getOrAddStringIndex(parts[3]));
-                            } else {
-                                w.printf(".handleTag=0, .ownerIdx=-1, .nameIdx=-1, .descIdx=-1");
-                            }
-                            break;
-                    }
-                    w.printf(" },");
-                }
-                w.println("\n};");
-            }
-        }
-        
-        // Generate bootstrap method array
-        w.println("VMBootstrapMethod vm_bootstrap_methods[] = {");
-        for (int i = 0; i < globalBootstrapMethods.size(); i++) {
-            BootstrapEntry bsm = globalBootstrapMethods.get(i);
-            w.printf("    { .handleTag=%d, ", bsm.getHandleTag());
-            w.printf(".ownerIdx=%d, ", getOrAddStringIndex(bsm.getHandleOwner()));
-            w.printf(".nameIdx=%d, ", getOrAddStringIndex(bsm.getHandleName()));
-            w.printf(".descIdx=%d, ", getOrAddStringIndex(bsm.getHandleDescriptor()));
-            
-            List<Object> args = bsm.getArguments();
-            if (args != null && !args.isEmpty()) {
-                w.printf(".args=bsm%d_args, .argCount=%d", i, args.size());
-            } else {
-                w.printf(".args=NULL, .argCount=0");
-            }
-            w.printf(" },\n");
-        }
-        w.println("};");
-        w.println();
-    }
-    
-    /**
      * Gets string index
      */
     private int getOrAddStringIndex(String s) {
@@ -461,45 +385,6 @@ public class VmDataGenerator {
         // String should already be in global pool
         System.err.println("[WARN] String not found in global pool: " + s);
         return 0;
-    }
-    
-    private String bsmArgTypeToString(ArgType type) {
-        switch (type) {
-            case STRING: return "BSM_ARG_STRING";
-            case INTEGER: return "BSM_ARG_INTEGER";
-            case LONG: return "BSM_ARG_LONG";
-            case FLOAT: return "BSM_ARG_FLOAT";
-            case DOUBLE: return "BSM_ARG_DOUBLE";
-            case METHOD_TYPE: return "BSM_ARG_METHOD_TYPE";
-            case METHOD_HANDLE: return "BSM_ARG_METHOD_HANDLE";
-            case CLASS: return "BSM_ARG_CLASS";
-            default: return "BSM_ARG_STRING";
-        }
-    }
-    
-    private String escapeCString(String s) {
-        StringBuilder sb = new StringBuilder();
-        for (int i = 0; i < s.length(); i++) {
-            char c = s.charAt(i);
-            switch (c) {
-                case '\\': sb.append("\\\\"); break;
-                case '"': sb.append("\\\""); break;
-                case '\n': sb.append("\\n"); break;
-                case '\r': sb.append("\\r"); break;
-                case '\t': sb.append("\\t"); break;
-                default:
-                    if (c >= 32 && c < 127) {
-                        sb.append(c);
-                    } else {
-                        // Use \xhh format, but need string termination if next char is hex
-                        // Safer approach: use "" "\xhh" concatenation, so \xhh ends with quote
-                        sb.append("\" \"\\x");
-                        sb.append(String.format("%02x", (int) c));
-                        sb.append("\" \"");
-                    }
-            }
-        }
-        return sb.toString();
     }
     
     /**
@@ -525,7 +410,12 @@ public class VmDataGenerator {
             return localIdx;
         }
         BootstrapEntry bsm = localBsmList.get(localIdx);
-        // Use same key generation logic as collectBootstrapMethods
+        String key = buildBootstrapKey(bsm);
+        Integer globalIdx = bootstrapIndexMap.get(key);
+        return globalIdx != null ? globalIdx : localIdx;
+    }
+
+    private String buildBootstrapKey(BootstrapEntry bsm) {
         StringBuilder keyBuilder = new StringBuilder();
         keyBuilder.append(bsm.getHandleOwner()).append(".");
         keyBuilder.append(bsm.getHandleName()).append(bsm.getHandleDescriptor());
@@ -534,10 +424,31 @@ public class VmDataGenerator {
                 keyBuilder.append("|").append(arg != null ? arg.toString() : "null");
             }
         }
-        String key = keyBuilder.toString();
-        
-        Integer globalIdx = bootstrapIndexMap.get(key);
-        return globalIdx != null ? globalIdx : localIdx;
+        return keyBuilder.toString();
+    }
+
+    private void emitInvokeMetaSuffix(PrintWriter w, int methodId, int metaIdx, List<String> localPool, MetaEntry m) {
+        MethodDescriptorParser.DescriptorInfo info = resolveInvokeMetaInfo(methodId, metaIdx, localPool, m);
+        if (info == null) {
+            return;
+        }
+        w.printf(", .argCount=%d, .returnTypeChar='%c'", info.getArgCount(), info.getReturnTypeChar());
+        if (info.getArgTypes() != null && !info.getArgTypes().isEmpty()) {
+            w.printf(", .argTypesIdx=%d", getOrAddStringIndex(info.getArgTypes()));
+        } else {
+            w.printf(", .argTypesIdx=-1");
+        }
+    }
+
+    private MethodDescriptorParser.DescriptorInfo resolveInvokeMetaInfo(int methodId, int metaIdx, List<String> localPool, MetaEntry m) {
+        MethodDescriptorParser.DescriptorInfo info = invokeMetaCache.get(methodId + "_" + metaIdx);
+        if (info != null) {
+            return info;
+        }
+        if (localPool == null || m.descIdx < 0 || m.descIdx >= localPool.size()) {
+            return null;
+        }
+        return MethodDescriptorParser.parse(localPool.get(m.descIdx));
     }
     
     private void emitMethodData(PrintWriter w, EncryptedMethodData method) {
@@ -598,20 +509,7 @@ public class VmDataGenerator {
                             mapStringIndex(localPool, m.descIdx), m.descLen);
                         // Add pre-computed invocation metadata
                         if (m.type == MetaType.META_METHOD) {
-                            InvokeMetaInfo info = invokeMetaCache.get(id + "_" + i);
-                            if (info == null && localPool != null &&
-                                    m.descIdx >= 0 && m.descIdx < localPool.size()) {
-                                info = parseMethodDesc(localPool.get(m.descIdx));
-                            }
-                            if (info != null) {
-                                w.printf(", .argCount=%d, .returnTypeChar='%c'",
-                                    info.argCount, info.returnTypeChar);
-                                if (info.argTypes != null && !info.argTypes.isEmpty()) {
-                                    w.printf(", .argTypesIdx=%d", getOrAddStringIndex(info.argTypes));
-                                } else {
-                                    w.printf(", .argTypesIdx=-1");
-                                }
-                            }
+                            emitInvokeMetaSuffix(w, id, i, localPool, m);
                         }
                         break;
                     case META_INVOKE_DYNAMIC:
@@ -622,21 +520,7 @@ public class VmDataGenerator {
                             mapStringIndex(localPool, m.nameIdx), m.nameLen);
                         w.printf(".descIdx=%d, .descLen=%d",
                             mapStringIndex(localPool, m.descIdx), m.descLen);
-                        // Add pre-computed invocation metadata
-                        InvokeMetaInfo info = invokeMetaCache.get(id + "_" + i);
-                        if (info == null && localPool != null &&
-                                m.descIdx >= 0 && m.descIdx < localPool.size()) {
-                            info = parseMethodDesc(localPool.get(m.descIdx));
-                        }
-                        if (info != null) {
-                            w.printf(", .argCount=%d, .returnTypeChar='%c'",
-                                info.argCount, info.returnTypeChar);
-                            if (info.argTypes != null && !info.argTypes.isEmpty()) {
-                                w.printf(", .argTypesIdx=%d", getOrAddStringIndex(info.argTypes));
-                            } else {
-                                w.printf(", .argTypesIdx=-1");
-                            }
-                        }
+                        emitInvokeMetaSuffix(w, id, i, localPool, m);
                         break;
                     case META_JUMP:
                         w.printf(".jumpOffset=%d", m.jumpOffset);
@@ -758,99 +642,5 @@ public class VmDataGenerator {
     
     private String metaTypeToString(MetaType type) {
         return type.name();
-    }
-    
-    /**
-     * Parses method descriptor and pre-computes invocation metadata
-     * @param desc method descriptor, e.g. "(ILjava/lang/String;J)I"
-     * @return InvokeMetaInfo containing argCount, returnTypeChar, argTypes
-     */
-    private InvokeMetaInfo parseMethodDesc(String desc) {
-        InvokeMetaInfo info = new InvokeMetaInfo();
-        StringBuilder argTypes = new StringBuilder();
-        
-        int i = 1; // skip '('
-        while (i < desc.length() && desc.charAt(i) != ')') {
-            char c = desc.charAt(i);
-            if (c == 'L') {
-                // Object type, add 'L' as marker
-                argTypes.append('L');
-                while (i < desc.length() && desc.charAt(i) != ';') i++;
-                i++; // skip ';'
-            } else if (c == '[') {
-                // Array type, treat as object type
-                argTypes.append('L');
-                while (i < desc.length() && desc.charAt(i) == '[') i++;
-                if (desc.charAt(i) == 'L') {
-                    while (i < desc.length() && desc.charAt(i) != ';') i++;
-                    i++; // skip ';'
-                } else {
-                    i++; // skip primitive type char
-                }
-            } else {
-                // Primitive type
-                argTypes.append(c);
-                i++;
-            }
-            info.argCount++;
-        }
-        
-        // Skip ')' and get return type
-        if (i < desc.length() && desc.charAt(i) == ')') {
-            i++;
-            if (i < desc.length()) {
-                info.returnTypeChar = desc.charAt(i);
-            } else {
-                info.returnTypeChar = 'V';
-            }
-        }
-        
-        info.argTypes = argTypes.toString();
-        return info;
-    }
-    
-    /**
-     * Parses method descriptor, returns only argument type string
-     */
-    private String parseMethodArgTypes(String desc) {
-        if (desc == null || desc.isEmpty()) return "";
-        StringBuilder argTypes = new StringBuilder();
-        int i = 1; // skip '('
-        while (i < desc.length() && desc.charAt(i) != ')') {
-            char c = desc.charAt(i);
-            if (c == 'L') {
-                argTypes.append('L');
-                while (i < desc.length() && desc.charAt(i) != ';') i++;
-                i++;
-            } else if (c == '[') {
-                argTypes.append('L');
-                while (i < desc.length() && desc.charAt(i) == '[') i++;
-                if (i < desc.length() && desc.charAt(i) == 'L') {
-                    while (i < desc.length() && desc.charAt(i) != ';') i++;
-                    i++;
-                } else {
-                    i++;
-                }
-            } else {
-                argTypes.append(c);
-                i++;
-            }
-        }
-        return argTypes.toString();
-    }
-    
-    /**
-     * Pre-computes INVOKE metadata for all methods
-     */
-    private void precomputeInvokeMeta(List<String> localPool, int methodId, List<MetaEntry> metaList) {
-        if (metaList == null) return;
-        for (int i = 0; i < metaList.size(); i++) {
-            MetaEntry m = metaList.get(i);
-            if (m.type == MetaType.META_METHOD || m.type == MetaType.META_INVOKE_DYNAMIC) {
-                String desc = localPool.get(m.descIdx);
-                InvokeMetaInfo info = parseMethodDesc(desc);
-                invokeMetaCache.put(methodId + "_" + i, info);
-            }
-        }
     }
 }

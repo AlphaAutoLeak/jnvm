@@ -29,14 +29,7 @@ public class JarScanner {
     /** Records which classes contain protected methods (for patching) */
     private final Set<String> affectedClasses = new HashSet<>();
 
-    /** Methods used as invokedynamic bootstrap targets: owner.name.desc */
-    private final Set<String> bootstrapMethodTargets = new HashSet<>();
-
-    /** Classes that own invokedynamic bootstrap methods */
-    private final Set<String> bootstrapOwnerClasses = new HashSet<>();
-
-    /** Method dependency graph: method -> directly referenced methods/handles */
-    private final Map<String, Set<String>> methodDependencies = new HashMap<>();
+    private final BootstrapMethodGuard bootstrapGuard = new BootstrapMethodGuard();
 
     /** Annotation rule descriptor list */
     private final List<String> annotationDescs;
@@ -102,8 +95,7 @@ public class JarScanner {
 
         String className = cn.name; // internal format
 
-        collectBootstrapMethodTargets(cn);
-        collectMethodDependencies(cn);
+        bootstrapGuard.scanClass(cn);
 
         // Skip interfaces (no method body) and synthetic classes
         if ((cn.access & Opcodes.ACC_INTERFACE) != 0 &&
@@ -139,30 +131,7 @@ public class JarScanner {
                 continue;
             }
 
-            // Determine if protection is needed
-            boolean shouldProtect = false;
-
-            // Rule matching
-            if (config.shouldProtect(className, mn.name)) {
-                shouldProtect = true;
-            }
-
-            // Class-level annotation
-            if (classAnnotated) {
-                shouldProtect = true;
-            }
-
-            // Method-level annotation
-            if (!shouldProtect && !annotationDescs.isEmpty() && mn.visibleAnnotations != null) {
-                for (AnnotationNode ann : mn.visibleAnnotations) {
-                    if (annotationDescs.contains(ann.desc)) {
-                        shouldProtect = true;
-                        break;
-                    }
-                }
-            }
-
-            if (!shouldProtect) {
+            if (!shouldProtectMethod(className, classAnnotated, mn)) {
                 continue;
             }
 
@@ -208,154 +177,14 @@ public class JarScanner {
         return affectedClasses;
     }
 
-    private void collectBootstrapMethodTargets(ClassNode cn) {
-        for (MethodNode mn : cn.methods) {
-            if (mn.instructions == null || mn.instructions.size() == 0) {
-                continue;
-            }
-            for (AbstractInsnNode node = mn.instructions.getFirst(); node != null; node = node.getNext()) {
-                if (node instanceof InvokeDynamicInsnNode) {
-                    InvokeDynamicInsnNode indy = (InvokeDynamicInsnNode) node;
-                    if (indy.bsm != null) {
-                        addBootstrapTarget(indy.bsm.getOwner(), indy.bsm.getName(), indy.bsm.getDesc());
-                    }
-                    if (indy.bsmArgs != null) {
-                        for (Object arg : indy.bsmArgs) {
-                            if (arg instanceof Handle) {
-                                Handle h = (Handle) arg;
-                                addBootstrapTarget(h.getOwner(), h.getName(), h.getDesc());
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    private void collectMethodDependencies(ClassNode cn) {
-        for (MethodNode mn : cn.methods) {
-            if (mn.instructions == null || mn.instructions.size() == 0) {
-                continue;
-            }
-            String srcKey = cn.name + "." + mn.name + "." + mn.desc;
-            Set<String> deps = methodDependencies.computeIfAbsent(srcKey, k -> new HashSet<>());
-
-            for (AbstractInsnNode node = mn.instructions.getFirst(); node != null; node = node.getNext()) {
-                if (node instanceof MethodInsnNode) {
-                    MethodInsnNode mi = (MethodInsnNode) node;
-                    deps.add(mi.owner + "." + mi.name + "." + mi.desc);
-                    continue;
-                }
-                if (node instanceof LdcInsnNode) {
-                    Object cst = ((LdcInsnNode) node).cst;
-                    if (cst instanceof Handle) {
-                        Handle h = (Handle) cst;
-                        deps.add(h.getOwner() + "." + h.getName() + "." + h.getDesc());
-                    }
-                    continue;
-                }
-                if (node instanceof InvokeDynamicInsnNode) {
-                    InvokeDynamicInsnNode indy = (InvokeDynamicInsnNode) node;
-                    if (indy.bsm != null) {
-                        Handle bsm = indy.bsm;
-                        deps.add(bsm.getOwner() + "." + bsm.getName() + "." + bsm.getDesc());
-                    }
-                    if (indy.bsmArgs != null) {
-                        for (Object arg : indy.bsmArgs) {
-                            if (arg instanceof Handle) {
-                                Handle h = (Handle) arg;
-                                deps.add(h.getOwner() + "." + h.getName() + "." + h.getDesc());
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-
     private void filterOutBootstrapMethods() {
-        if (protectedMethods.isEmpty()) {
-            return;
-        }
-
-        // Also collect bootstrap targets from extracted method metadata as a fallback,
-        // including METHOD_HANDLE static args.
-        for (MethodInfo info : protectedMethods) {
-            List<BootstrapEntry> bsms = info.getBootstrapMethods();
-            if (bsms == null) continue;
-            for (BootstrapEntry bsm : bsms) {
-                if (bsm.getHandleOwner() == null || bsm.getHandleName() == null || bsm.getHandleDescriptor() == null) {
-                    continue;
-                }
-                addBootstrapTarget(bsm.getHandleOwner(), bsm.getHandleName(), bsm.getHandleDescriptor());
-
-                List<Object> args = bsm.getArguments();
-                List<ArgType> argTypes = bsm.getArgumentTypes();
-                if (args == null || argTypes == null) continue;
-                int n = Math.min(args.size(), argTypes.size());
-                for (int i = 0; i < n; i++) {
-                    if (argTypes.get(i) != ArgType.METHOD_HANDLE) {
-                        continue;
-                    }
-                    Object raw = args.get(i);
-                    if (raw == null) continue;
-                    String[] parts = raw.toString().split(":", 4);
-                    if (parts.length < 4) continue;
-                    addBootstrapTarget(parts[1], parts[2], parts[3]);
-                }
-            }
-        }
-
-        if (bootstrapMethodTargets.isEmpty()) {
-            return;
-        }
-
-        // Closure from bootstrap methods through direct calls / MethodHandle constants.
-        Set<String> bootstrapSensitiveMethods = new HashSet<>();
-        Deque<String> queue = new ArrayDeque<>(bootstrapMethodTargets);
-        while (!queue.isEmpty()) {
-            String current = queue.pollFirst();
-            if (!bootstrapSensitiveMethods.add(current)) {
-                continue;
-            }
-            Set<String> deps = methodDependencies.get(current);
-            if (deps == null || deps.isEmpty()) {
-                continue;
-            }
-            for (String dep : deps) {
-                if (!bootstrapSensitiveMethods.contains(dep)) {
-                    queue.addLast(dep);
-                }
-            }
-        }
-
-        int before = protectedMethods.size();
-        List<MethodInfo> filtered = new ArrayList<>(before);
-        int skipByClassCount = 0;
-        int skipByMethodCount = 0;
-        for (MethodInfo info : protectedMethods) {
-            String key = info.getOwner() + "." + info.getName() + "." + info.getDescriptor();
-            boolean skipByClass = !protectBootstrapPayload && bootstrapOwnerClasses.contains(info.getOwner());
-            boolean skipByMethod = bootstrapSensitiveMethods.contains(key);
-            if (skipByClass || skipByMethod) {
-                if (skipByClass) {
-                    skipByClassCount++;
-                    System.out.println("  [SKIP] Bootstrap-owner class method: " + key);
-                } else {
-                    skipByMethodCount++;
-                    System.out.println("  [SKIP] Bootstrap-sensitive method: " + key);
-                }
-                continue;
-            }
-            filtered.add(info);
-        }
-
-        if (filtered.size() == before) {
+        BootstrapMethodGuard.FilterOutcome outcome = bootstrapGuard.filter(protectedMethods, protectBootstrapPayload);
+        if (!outcome.isChanged()) {
             return;
         }
 
         protectedMethods.clear();
-        protectedMethods.addAll(filtered);
+        protectedMethods.addAll(outcome.getFilteredMethods());
 
         affectedClasses.clear();
         int id = 0;
@@ -365,20 +194,28 @@ public class JarScanner {
         }
         nextMethodId = id;
 
-        int skipped = before - filtered.size();
-        String mode = protectBootstrapPayload ? "payload-only" : "owner-class-safe";
-        System.out.println("[SCAN] Skipped " + skipped +
+        System.out.println("[SCAN] Skipped " + outcome.getTotalSkippedCount() +
                 " bootstrap-sensitive methods used by invokedynamic." +
-                " (mode=" + mode +
-                ", class-owner=" + skipByClassCount +
-                ", dependency=" + skipByMethodCount + ")");
+                " (mode=" + outcome.getModeName() +
+                ", class-owner=" + outcome.getSkipByClassCount() +
+                ", dependency=" + outcome.getSkipByDependencyCount() + ")");
     }
 
-    private void addBootstrapTarget(String owner, String name, String desc) {
-        if (owner == null || name == null || desc == null) {
-            return;
+    private boolean shouldProtectMethod(String className, boolean classAnnotated, MethodNode mn) {
+        if (config.shouldProtect(className, mn.name)) {
+            return true;
         }
-        bootstrapOwnerClasses.add(owner);
-        bootstrapMethodTargets.add(owner + "." + name + "." + desc);
+        if (classAnnotated) {
+            return true;
+        }
+        if (annotationDescs.isEmpty() || mn.visibleAnnotations == null) {
+            return false;
+        }
+        for (AnnotationNode ann : mn.visibleAnnotations) {
+            if (annotationDescs.contains(ann.desc)) {
+                return true;
+            }
+        }
+        return false;
     }
 }

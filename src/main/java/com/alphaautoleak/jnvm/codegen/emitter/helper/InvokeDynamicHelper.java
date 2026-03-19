@@ -7,6 +7,28 @@ import java.io.PrintWriter;
  * Generic bootstrap invocation with JDK 8~17+ compatibility.
  */
 public class InvokeDynamicHelper extends VMHelper {
+    private static final String[] INDY_BOX_CASE_LINES = {
+            "        case 'I': cls = vm_find_class(env, \"java/lang/Integer\"); if (cls) mid = vm_get_static_method_id(env, cls, \"java/lang/Integer\", \"valueOf\", \"(I)Ljava/lang/Integer;\"); if (mid) return (*env)->CallStaticObjectMethod(env, cls, mid, val.i); break;",
+            "        case 'J': cls = vm_find_class(env, \"java/lang/Long\"); if (cls) mid = vm_get_static_method_id(env, cls, \"java/lang/Long\", \"valueOf\", \"(J)Ljava/lang/Long;\"); if (mid) return (*env)->CallStaticObjectMethod(env, cls, mid, val.j); break;",
+            "        case 'F': cls = vm_find_class(env, \"java/lang/Float\"); if (cls) mid = vm_get_static_method_id(env, cls, \"java/lang/Float\", \"valueOf\", \"(F)Ljava/lang/Float;\"); if (mid) return (*env)->CallStaticObjectMethod(env, cls, mid, val.f); break;",
+            "        case 'D': cls = vm_find_class(env, \"java/lang/Double\"); if (cls) mid = vm_get_static_method_id(env, cls, \"java/lang/Double\", \"valueOf\", \"(D)Ljava/lang/Double;\"); if (mid) return (*env)->CallStaticObjectMethod(env, cls, mid, val.d); break;",
+            "        case 'Z': cls = vm_find_class(env, \"java/lang/Boolean\"); if (cls) mid = vm_get_static_method_id(env, cls, \"java/lang/Boolean\", \"valueOf\", \"(Z)Ljava/lang/Boolean;\"); if (mid) return (*env)->CallStaticObjectMethod(env, cls, mid, val.i); break;",
+            "        case 'B': cls = vm_find_class(env, \"java/lang/Byte\"); if (cls) mid = vm_get_static_method_id(env, cls, \"java/lang/Byte\", \"valueOf\", \"(B)Ljava/lang/Byte;\"); if (mid) return (*env)->CallStaticObjectMethod(env, cls, mid, (jbyte)val.i); break;",
+            "        case 'S': cls = vm_find_class(env, \"java/lang/Short\"); if (cls) mid = vm_get_static_method_id(env, cls, \"java/lang/Short\", \"valueOf\", \"(S)Ljava/lang/Short;\"); if (mid) return (*env)->CallStaticObjectMethod(env, cls, mid, (jshort)val.i); break;",
+            "        case 'C': cls = vm_find_class(env, \"java/lang/Character\"); if (cls) mid = vm_get_static_method_id(env, cls, \"java/lang/Character\", \"valueOf\", \"(C)Ljava/lang/Character;\"); if (mid) return (*env)->CallStaticObjectMethod(env, cls, mid, (jchar)val.i); break;"
+    };
+
+    private static final String[] INDY_UNBOX_CASE_LINES = {
+            "        case 'I': cls = vm_find_class(env, \"java/lang/Integer\"); if (cls) mid = vm_get_method_id(env, cls, \"java/lang/Integer\", \"intValue\", \"()I\"); if (mid) frame->stack[frame->sp++].i = (*env)->CallIntMethod(env, result, mid); break;",
+            "        case 'Z': cls = vm_find_class(env, \"java/lang/Boolean\"); if (cls) mid = vm_get_method_id(env, cls, \"java/lang/Boolean\", \"booleanValue\", \"()Z\"); if (mid) frame->stack[frame->sp++].i = (*env)->CallBooleanMethod(env, result, mid); break;",
+            "        case 'B': cls = vm_find_class(env, \"java/lang/Byte\"); if (cls) mid = vm_get_method_id(env, cls, \"java/lang/Byte\", \"byteValue\", \"()B\"); if (mid) frame->stack[frame->sp++].i = (*env)->CallByteMethod(env, result, mid); break;",
+            "        case 'S': cls = vm_find_class(env, \"java/lang/Short\"); if (cls) mid = vm_get_method_id(env, cls, \"java/lang/Short\", \"shortValue\", \"()S\"); if (mid) frame->stack[frame->sp++].i = (*env)->CallShortMethod(env, result, mid); break;",
+            "        case 'C': cls = vm_find_class(env, \"java/lang/Character\"); if (cls) mid = vm_get_method_id(env, cls, \"java/lang/Character\", \"charValue\", \"()C\"); if (mid) frame->stack[frame->sp++].i = (*env)->CallCharMethod(env, result, mid); break;",
+            "        case 'J': cls = vm_find_class(env, \"java/lang/Long\"); if (cls) mid = vm_get_method_id(env, cls, \"java/lang/Long\", \"longValue\", \"()J\"); if (mid) frame->stack[frame->sp++].j = (*env)->CallLongMethod(env, result, mid); break;",
+            "        case 'F': cls = vm_find_class(env, \"java/lang/Float\"); if (cls) mid = vm_get_method_id(env, cls, \"java/lang/Float\", \"floatValue\", \"()F\"); if (mid) frame->stack[frame->sp++].f = (*env)->CallFloatMethod(env, result, mid); break;",
+            "        case 'D': cls = vm_find_class(env, \"java/lang/Double\"); if (cls) mid = vm_get_method_id(env, cls, \"java/lang/Double\", \"doubleValue\", \"()D\"); if (mid) frame->stack[frame->sp++].d = (*env)->CallDoubleMethod(env, result, mid); break;"
+    };
+
     @Override
     public String[] getIncludes() {
         return new String[] { "vm_types.h", "vm_data.h", "<jni.h>", "<string.h>", "<stdio.h>", "<stdlib.h>" };
@@ -23,6 +45,12 @@ public class InvokeDynamicHelper extends VMHelper {
         emitStaticCache(w);
         emitHelperFunctions(w);
         emitMainFunction(w);
+    }
+
+    private void emitLines(PrintWriter w, String[] lines) {
+        for (String line : lines) {
+            w.println(line);
+        }
     }
 
     private void emitStaticCache(PrintWriter w) {
@@ -150,14 +178,7 @@ public class InvokeDynamicHelper extends VMHelper {
         w.println("static jobject vm_indy_box(JNIEnv* env, char type, VMValue val) {");
         w.println("    jclass cls = NULL; jmethodID mid = NULL;");
         w.println("    switch (type) {");
-        w.println("        case 'I': cls = vm_find_class(env, \"java/lang/Integer\"); if (cls) mid = vm_get_static_method_id(env, cls, \"java/lang/Integer\", \"valueOf\", \"(I)Ljava/lang/Integer;\"); if (mid) return (*env)->CallStaticObjectMethod(env, cls, mid, val.i); break;");
-        w.println("        case 'J': cls = vm_find_class(env, \"java/lang/Long\"); if (cls) mid = vm_get_static_method_id(env, cls, \"java/lang/Long\", \"valueOf\", \"(J)Ljava/lang/Long;\"); if (mid) return (*env)->CallStaticObjectMethod(env, cls, mid, val.j); break;");
-        w.println("        case 'F': cls = vm_find_class(env, \"java/lang/Float\"); if (cls) mid = vm_get_static_method_id(env, cls, \"java/lang/Float\", \"valueOf\", \"(F)Ljava/lang/Float;\"); if (mid) return (*env)->CallStaticObjectMethod(env, cls, mid, val.f); break;");
-        w.println("        case 'D': cls = vm_find_class(env, \"java/lang/Double\"); if (cls) mid = vm_get_static_method_id(env, cls, \"java/lang/Double\", \"valueOf\", \"(D)Ljava/lang/Double;\"); if (mid) return (*env)->CallStaticObjectMethod(env, cls, mid, val.d); break;");
-        w.println("        case 'Z': cls = vm_find_class(env, \"java/lang/Boolean\"); if (cls) mid = vm_get_static_method_id(env, cls, \"java/lang/Boolean\", \"valueOf\", \"(Z)Ljava/lang/Boolean;\"); if (mid) return (*env)->CallStaticObjectMethod(env, cls, mid, val.i); break;");
-        w.println("        case 'B': cls = vm_find_class(env, \"java/lang/Byte\"); if (cls) mid = vm_get_static_method_id(env, cls, \"java/lang/Byte\", \"valueOf\", \"(B)Ljava/lang/Byte;\"); if (mid) return (*env)->CallStaticObjectMethod(env, cls, mid, (jbyte)val.i); break;");
-        w.println("        case 'S': cls = vm_find_class(env, \"java/lang/Short\"); if (cls) mid = vm_get_static_method_id(env, cls, \"java/lang/Short\", \"valueOf\", \"(S)Ljava/lang/Short;\"); if (mid) return (*env)->CallStaticObjectMethod(env, cls, mid, (jshort)val.i); break;");
-        w.println("        case 'C': cls = vm_find_class(env, \"java/lang/Character\"); if (cls) mid = vm_get_static_method_id(env, cls, \"java/lang/Character\", \"valueOf\", \"(C)Ljava/lang/Character;\"); if (mid) return (*env)->CallStaticObjectMethod(env, cls, mid, (jchar)val.i); break;");
+        emitLines(w, INDY_BOX_CASE_LINES);
         w.println("        default: return val.l;");
         w.println("    }");
         w.println("    return NULL;");
@@ -355,14 +376,7 @@ public class InvokeDynamicHelper extends VMHelper {
         w.println("    }");
         w.println("    jclass cls = NULL; jmethodID mid = NULL;");
         w.println("    switch (meta->returnTypeChar) {");
-        w.println("        case 'I': cls = vm_find_class(env, \"java/lang/Integer\"); if (cls) mid = vm_get_method_id(env, cls, \"java/lang/Integer\", \"intValue\", \"()I\"); if (mid) frame->stack[frame->sp++].i = (*env)->CallIntMethod(env, result, mid); break;");
-        w.println("        case 'Z': cls = vm_find_class(env, \"java/lang/Boolean\"); if (cls) mid = vm_get_method_id(env, cls, \"java/lang/Boolean\", \"booleanValue\", \"()Z\"); if (mid) frame->stack[frame->sp++].i = (*env)->CallBooleanMethod(env, result, mid); break;");
-        w.println("        case 'B': cls = vm_find_class(env, \"java/lang/Byte\"); if (cls) mid = vm_get_method_id(env, cls, \"java/lang/Byte\", \"byteValue\", \"()B\"); if (mid) frame->stack[frame->sp++].i = (*env)->CallByteMethod(env, result, mid); break;");
-        w.println("        case 'S': cls = vm_find_class(env, \"java/lang/Short\"); if (cls) mid = vm_get_method_id(env, cls, \"java/lang/Short\", \"shortValue\", \"()S\"); if (mid) frame->stack[frame->sp++].i = (*env)->CallShortMethod(env, result, mid); break;");
-        w.println("        case 'C': cls = vm_find_class(env, \"java/lang/Character\"); if (cls) mid = vm_get_method_id(env, cls, \"java/lang/Character\", \"charValue\", \"()C\"); if (mid) frame->stack[frame->sp++].i = (*env)->CallCharMethod(env, result, mid); break;");
-        w.println("        case 'J': cls = vm_find_class(env, \"java/lang/Long\"); if (cls) mid = vm_get_method_id(env, cls, \"java/lang/Long\", \"longValue\", \"()J\"); if (mid) frame->stack[frame->sp++].j = (*env)->CallLongMethod(env, result, mid); break;");
-        w.println("        case 'F': cls = vm_find_class(env, \"java/lang/Float\"); if (cls) mid = vm_get_method_id(env, cls, \"java/lang/Float\", \"floatValue\", \"()F\"); if (mid) frame->stack[frame->sp++].f = (*env)->CallFloatMethod(env, result, mid); break;");
-        w.println("        case 'D': cls = vm_find_class(env, \"java/lang/Double\"); if (cls) mid = vm_get_method_id(env, cls, \"java/lang/Double\", \"doubleValue\", \"()D\"); if (mid) frame->stack[frame->sp++].d = (*env)->CallDoubleMethod(env, result, mid); break;");
+        emitLines(w, INDY_UNBOX_CASE_LINES);
         w.println("        default: frame->stack[frame->sp++].l = result; return 1;");
         w.println("    }");
         w.println("    return !(*env)->ExceptionCheck(env);");
@@ -372,6 +386,13 @@ public class InvokeDynamicHelper extends VMHelper {
 
     private void emitMainFunction(PrintWriter w) {
         w.println("jobject vm_invoke_dynamic(JNIEnv* env, VMFrame* frame, MetaEntry* meta) {");
+        emitMainFunctionPrelude(w);
+        emitMainFunctionBootstrapResolution(w);
+        emitMainFunctionInvokeTarget(w);
+        w.println("}");
+    }
+
+    private void emitMainFunctionPrelude(PrintWriter w) {
         w.println("    TMP_SAVE;");
         w.println("    if (!meta) { VM_LOG(\"INVOKEDYNAMIC: meta is NULL\\n\"); TMP_RESTORE; return NULL; }");
         w.println("    vm_indy_init_cache(env);");
@@ -399,6 +420,9 @@ public class InvokeDynamicHelper extends VMHelper {
         w.println("        return NULL;");
         w.println("    }");
         w.println();
+    }
+
+    private void emitMainFunctionBootstrapResolution(PrintWriter w) {
         w.println("    jobject targetHandle = meta->cachedIndyResult;");
         w.println("    if (!targetHandle) {");
         w.println("        if (meta->bsmIdx < 0 || meta->bsmIdx >= vm_bootstrap_count) {");
@@ -500,6 +524,9 @@ public class InvokeDynamicHelper extends VMHelper {
         w.println("        }");
         w.println("    }");
         w.println();
+    }
+
+    private void emitMainFunctionInvokeTarget(PrintWriter w) {
         w.println("    jobjectArray invokeArgs = vm_indy_pop_args(env, frame, methodDesc, capturedCount);");
         w.println("    if ((*env)->ExceptionCheck(env)) { TMP_RESTORE; return NULL; }");
         w.println("    if (!invokeArgs && capturedCount > 0) {");
@@ -511,6 +538,5 @@ public class InvokeDynamicHelper extends VMHelper {
         w.println("    if ((*env)->ExceptionCheck(env)) { TMP_RESTORE; return NULL; }");
         w.println("    TMP_RESTORE;");
         w.println("    return result;");
-        w.println("}");
     }
 }
