@@ -1,5 +1,7 @@
 # JNVM - Java Native VM Protector
 
+[简体中文](README_CN.md) | English
+
 A powerful Java bytecode protection tool that converts Java methods into native code execution, providing strong protection against decompilation and reverse engineering.
 
 ## Features
@@ -60,10 +62,6 @@ java -jar jnvm.jar config.yml
 | `ClassName` | Protect all methods in class |
 | `ClassName#methodName` | Protect specific method |
 | `@annotation` | Protect methods with annotation |
-
-`protect-bootstrap-payload`:
-- `false` (default): Skip all methods in invokedynamic bootstrap owner classes (safer).
-- `true`: Only skip bootstrap-sensitive closure, allowing non-sensitive payload methods in those classes to be protected.
 
 `direct-native-rewrite`:
 - `false` (default): Protect by rewriting method body to call bridge.
