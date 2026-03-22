@@ -17,6 +17,7 @@ import java.util.Set;
 public class Converter {
 
     private final ProtectConfig config;
+    private final ConversionReportPrinter reportPrinter = new ConversionReportPrinter();
     private OpcodeObfuscator opcodeObfuscator;
     private List<MethodInfo> protectedMethods;
     private Set<String> affectedClasses;
@@ -38,27 +39,16 @@ public class Converter {
             return;
         }
 
-        printProtectionSummary();
+        ProtectionSummary summary = ProtectionSummary.from(protectedMethods, affectedClasses.size());
+        reportPrinter.printProtectionSummary(summary);
         encryptBytecodeData();
         JarPatcher patcher = createJarPatcher();
         ZigCompiler compiler = generateAndCompileNativeCode(patcher);
         patchOutputJar(patcher);
         embedNativeLibraries(compiler);
 
-        // ===== STEP 7: Done =====
         long elapsed = System.currentTimeMillis() - startTime;
-        System.out.println("[STEP 7/7] Done!");
-        System.out.println();
-        System.out.println("╔══════════════════════════════════════╗");
-        System.out.println("║         Protection Complete          ║");
-        System.out.println("╠══════════════════════════════════════╣");
-        System.out.printf( "║  Methods protected: %-15d ║%n", protectedMethods.size());
-        System.out.printf( "║  Classes patched:   %-15d ║%n", affectedClasses.size());
-        System.out.printf( "║  Native libs:       %-15d ║%n", compiler.getOutputLibraries().size());
-        System.out.printf( "║  Time elapsed:      %-12s ms ║%n", elapsed);
-        System.out.println("╠══════════════════════════════════════╣");
-        System.out.println("║  Output: " + padRight(config.getOutputJar().getName(), 27) + "║");
-        System.out.println("╚══════════════════════════════════════╝");
+        reportPrinter.printCompletion(config, summary, compiler, elapsed);
     }
 
     private void initializeOpcodeObfuscation() {
@@ -72,23 +62,6 @@ public class Converter {
         protectedMethods = scanner.scan(config.getInputJar());
         affectedClasses = scanner.getAffectedClasses();
         bootstrapMethodKeys = scanner.getBootstrapMethodKeys();
-    }
-
-    private void printProtectionSummary() {
-        System.out.println();
-        System.out.println("[INFO] Protection summary:");
-        System.out.println("  Methods to protect: " + protectedMethods.size());
-        System.out.println("  Classes affected:   " + affectedClasses.size());
-
-        int totalBytecode = 0;
-        int totalMetadata = 0;
-        for (MethodInfo m : protectedMethods) {
-            totalBytecode += m.getBytecode().length;
-            totalMetadata += m.getMetadata().size();
-        }
-        System.out.println("  Total bytecode:     " + totalBytecode + " bytes");
-        System.out.println("  Total metadata:     " + totalMetadata + " entries");
-        System.out.println();
     }
 
     private void encryptBytecodeData() {
@@ -139,12 +112,5 @@ public class Converter {
         OutputPackager packager = new OutputPackager();
         packager.embedNativeLibraries(config.getOutputJar(), compiler.getOutputLibraries());
         System.out.println();
-    }
-
-    private String padRight(String s, int width) {
-        if (s.length() >= width) return s.substring(0, width);
-        StringBuilder sb = new StringBuilder(s);
-        while (sb.length() < width) sb.append(' ');
-        return sb.toString();
     }
 }

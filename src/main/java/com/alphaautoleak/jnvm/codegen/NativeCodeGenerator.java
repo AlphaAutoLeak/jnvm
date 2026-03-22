@@ -1,7 +1,6 @@
 package com.alphaautoleak.jnvm.codegen;
 
 import com.alphaautoleak.jnvm.asm.MethodInfo;
-import com.alphaautoleak.jnvm.codegen.emitter.*;
 import com.alphaautoleak.jnvm.config.ProtectConfig;
 import com.alphaautoleak.jnvm.crypto.EncryptedMethodData;
 import com.alphaautoleak.jnvm.crypto.OpcodeObfuscator;
@@ -56,35 +55,24 @@ public class NativeCodeGenerator {
         System.out.println("[CODEGEN] Output directory: " + dir.getAbsolutePath());
 
         boolean encryptStrings = config.isEncryptStrings();
-
-        // vm_types.h (includes opcode decode table)
-        new VmTypesGenerator(dir, encryptStrings, opcodeObfuscator).generate();
-        System.out.println("  [+] vm_types.h");
-
-        // chacha20.h / chacha20.c
-        new ChaCha20Generator(dir).generate();
-        System.out.println("  [+] chacha20.h / chacha20.c");
-
-        // vm_data.h / vm_data.c
-        new VmDataGenerator(dir, methods, stringKey, encryptStrings).generate();
-        System.out.println("  [+] vm_data.h / vm_data.c");
-
-        // vm_interpreter.h / vm_interpreter.c
-        new VmInterpreterGenerator(dir, config.isDebug(), encryptStrings, methodIdXorKey, opcodeObfuscator).generate();
-        System.out.println("  [+] vm_interpreter.h / vm_interpreter.c");
-
-        // vm_bridge.c
-        new VmBridgeGenerator(
-                dir,
-                bridgeClass,
-                encryptStrings,
+        NativeGenerationPlan plan = NativeGenerationPlan.create(
+                config,
+                methods,
                 protectedMethods,
+                bridgeClass,
                 methodIdXorKey,
-                directNativeRewrite
-        ).generate();
-        System.out.println("  [+] vm_bridge.c");
+                directNativeRewrite,
+                encryptStrings,
+                opcodeObfuscator,
+                stringKey
+        );
 
-        System.out.println("[CODEGEN] Generated " + 7 + " files.");
+        for (NativeGenerationStep step : plan.getSteps()) {
+            step.generate();
+            System.out.println("  [+] " + step.getOutputLabel());
+        }
+
+        System.out.println("[CODEGEN] Generated " + plan.getGeneratedFileCount() + " files.");
     }
 
     /**

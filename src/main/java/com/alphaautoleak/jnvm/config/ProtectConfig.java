@@ -1,17 +1,13 @@
 package com.alphaautoleak.jnvm.config;
 
-import org.yaml.snakeyaml.Yaml;
-
-import java.io.BufferedReader;
 import java.io.File;
-import java.io.FileInputStream;
-import java.io.FileReader;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 
 public class ProtectConfig {
+
+    private final ProtectConfigValidator validator = new ProtectConfigValidator();
 
     private File inputJar;
     private File outputJar;
@@ -37,62 +33,10 @@ public class ProtectConfig {
     }
 
     /**
-     * Loads config from YAML file.
-     */
-    public void loadFromYaml(File yamlFile) throws IOException {
-        if (yamlFile == null || !yamlFile.exists()) {
-            return;
-        }
-
-        System.out.println("[INFO] Loading config from YAML: " + yamlFile);
-        Yaml yaml = new Yaml();
-        try (FileInputStream fis = new FileInputStream(yamlFile)) {
-            Map<String, Object> config = yaml.load(fis);
-            if (config == null) {
-                return;
-            }
-
-            loadJarPath(config);
-            loadOutputPath(config);
-            mergeStringList(config, "protect", protectRules, false);
-            mergeStringList(config, "exclude", excludeRules, false);
-            mergeStringList(config, "targets", targets, true);
-
-            encryptStrings = readBoolean(config, "encrypt-strings", encryptStrings);
-            debug = readBoolean(config, "debug", debug);
-            directNativeRewrite = readBoolean(config, "direct-native-rewrite", directNativeRewrite);
-
-            if (config.containsKey("native-dir") && nativeDir == null) {
-                nativeDir = new File((String) config.get("native-dir"));
-            }
-        }
-    }
-
-    /**
      * Validates and merges rules from configFile.
      */
     public void validate() throws IOException {
-        if (configFile != null && configFile.exists()) {
-            String fileName = configFile.getName().toLowerCase();
-            if (fileName.endsWith(".yml") || fileName.endsWith(".yaml")) {
-                loadFromYaml(configFile);
-            } else {
-                loadRulesFromTextConfig(configFile);
-            }
-        }
-
-        if (inputJar == null || !inputJar.exists()) {
-            throw new IllegalArgumentException("Input JAR not found: " + inputJar);
-        }
-
-        if (protectRules.isEmpty()) {
-            System.out.println("[WARN] No protect rules specified, protecting ALL methods.");
-            protectRules.add("**");
-        }
-
-        if (nativeDir != null && !nativeDir.exists()) {
-            nativeDir.mkdirs();
-        }
+        validator.validate(this);
     }
 
     /**
@@ -114,66 +58,6 @@ public class ProtectConfig {
      */
     public List<String> getAnnotationRules() {
         return ProtectRuleMatcher.toAnnotationDescriptors(protectRules);
-    }
-
-    @SuppressWarnings("unchecked")
-    private static void mergeStringList(Map<String, Object> config,
-                                        String key,
-                                        List<String> target,
-                                        boolean onlyWhenTargetEmpty) {
-        if (!config.containsKey(key)) {
-            return;
-        }
-        if (onlyWhenTargetEmpty && !target.isEmpty()) {
-            return;
-        }
-
-        Object value = config.get(key);
-        if (!(value instanceof List)) {
-            return;
-        }
-
-        List<String> incoming = (List<String>) value;
-        for (String item : incoming) {
-            if (!target.contains(item)) {
-                target.add(item);
-            }
-        }
-    }
-
-    private static boolean readBoolean(Map<String, Object> config, String key, boolean defaultValue) {
-        if (!config.containsKey(key)) {
-            return defaultValue;
-        }
-        return Boolean.TRUE.equals(config.get(key));
-    }
-
-    private void loadJarPath(Map<String, Object> config) {
-        if (!config.containsKey("jar") || inputJar != null) {
-            return;
-        }
-        inputJar = new File((String) config.get("jar"));
-    }
-
-    private void loadOutputPath(Map<String, Object> config) {
-        if (!config.containsKey("out") || outputJar != null) {
-            return;
-        }
-        outputJar = new File((String) config.get("out"));
-    }
-
-    private void loadRulesFromTextConfig(File plainConfig) throws IOException {
-        System.out.println("[INFO] Loading protect rules from: " + plainConfig);
-        try (BufferedReader br = new BufferedReader(new FileReader(plainConfig))) {
-            String line;
-            while ((line = br.readLine()) != null) {
-                line = line.trim();
-                if (line.isEmpty() || line.startsWith("#") || line.startsWith("//")) {
-                    continue;
-                }
-                protectRules.add(line);
-            }
-        }
     }
 
     public File getInputJar() {
