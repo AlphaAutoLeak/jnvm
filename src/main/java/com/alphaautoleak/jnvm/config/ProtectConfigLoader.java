@@ -1,5 +1,6 @@
 package com.alphaautoleak.jnvm.config;
 
+import com.alphaautoleak.jnvm.cli.CliReporter;
 import org.yaml.snakeyaml.Yaml;
 
 import java.io.BufferedReader;
@@ -27,7 +28,7 @@ final class ProtectConfigLoader {
     }
 
     private void loadFromYaml(ProtectConfig config, File yamlFile) throws IOException {
-        System.out.println("[INFO] Loading config from YAML: " + yamlFile);
+        CliReporter.info("Loading config from YAML: " + yamlFile);
         Yaml yaml = new Yaml();
         try (FileInputStream fis = new FileInputStream(yamlFile)) {
             Map<String, Object> values = yaml.load(fis);
@@ -101,7 +102,7 @@ final class ProtectConfigLoader {
     }
 
     private void loadRulesFromTextConfig(ProtectConfig config, File plainConfig) throws IOException {
-        System.out.println("[INFO] Loading protect rules from: " + plainConfig);
+        CliReporter.info("Loading protect rules from: " + plainConfig);
         try (BufferedReader br = new BufferedReader(new FileReader(plainConfig))) {
             String line;
             while ((line = br.readLine()) != null) {

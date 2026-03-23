@@ -3,7 +3,6 @@ package com.alphaautoleak.jnvm.patcher;
 import com.alphaautoleak.jnvm.asm.MethodInfo;
 import com.alphaautoleak.jnvm.utils.MethodKeyUtil;
 
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -50,10 +49,6 @@ final class MethodPatchRegistry {
 
     boolean hasProtectedClinit(String className) {
         return classesWithProtectedClinit.contains(className);
-    }
-
-    Set<String> emptyBootstrapKeysIfNull(Set<String> bootstrapMethodKeys) {
-        return bootstrapMethodKeys != null ? bootstrapMethodKeys : Collections.emptySet();
     }
 
     private int createMethodIdXorKey() {

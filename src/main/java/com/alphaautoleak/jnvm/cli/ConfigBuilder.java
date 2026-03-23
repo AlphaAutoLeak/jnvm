@@ -1,30 +1,21 @@
 package com.alphaautoleak.jnvm.cli;
 
 import com.alphaautoleak.jnvm.config.ProtectConfig;
+import com.alphaautoleak.jnvm.config.ProtectConfigBootstrap;
 
-import java.io.File;
+import java.io.IOException;
 
 /**
- * Builds config from YAML file
+ * Builds a fully loaded and validated runtime config from a config path.
  */
 public class ConfigBuilder {
 
-    public static ProtectConfig build(String configPath) {
-        ProtectConfig config = new ProtectConfig();
-        
-        // Set config file
-        config.setConfigFile(new File(configPath));
-        
-        // Set default native dir if not specified in config
-        if (config.getNativeDir() == null) {
-            config.setNativeDir(new File("native"));
-        }
-        
-        // Set default target if not specified in config
-        if (config.getTargets().isEmpty()) {
-            config.getTargets().add(PlatformDetector.detectCurrentTarget());
-        }
+    private static final ProtectConfigBootstrap BOOTSTRAP = new ProtectConfigBootstrap();
 
-        return config;
+    private ConfigBuilder() {
+    }
+
+    public static ProtectConfig build(String configPath) throws IOException {
+        return BOOTSTRAP.load(configPath);
     }
 }

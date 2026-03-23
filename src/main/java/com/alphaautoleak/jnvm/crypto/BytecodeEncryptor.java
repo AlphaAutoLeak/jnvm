@@ -1,6 +1,7 @@
 package com.alphaautoleak.jnvm.crypto;
 
 import com.alphaautoleak.jnvm.asm.MethodInfo;
+import com.alphaautoleak.jnvm.cli.CliReporter;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -11,7 +12,7 @@ import java.util.List;
 public class BytecodeEncryptor {
 
     public BytecodeEncryptor() {
-        System.out.println("[CRYPTO] Bytecode encryption disabled (plaintext mode).");
+        CliReporter.tagged("CRYPTO", "Bytecode encryption disabled (plaintext mode).");
     }
 
     /**
@@ -26,10 +27,10 @@ public class BytecodeEncryptor {
         for (MethodInfo method : methods) {
             EncryptedMethodData data = new EncryptedMethodData(method);
             result.add(data);
-            System.out.println("  [ENC] " + data);
+            CliReporter.verbose("  [ENC] " + data);
         }
 
-        System.out.println("[CRYPTO] Processed " + result.size() + " methods.");
+        CliReporter.tagged("CRYPTO", "Processed " + result.size() + " methods.");
         return result;
     }
 }

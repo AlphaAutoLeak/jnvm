@@ -1,6 +1,7 @@
 package com.alphaautoleak.jnvm.codegen;
 
 import com.alphaautoleak.jnvm.asm.MethodInfo;
+import com.alphaautoleak.jnvm.cli.CliReporter;
 import com.alphaautoleak.jnvm.config.ProtectConfig;
 import com.alphaautoleak.jnvm.crypto.EncryptedMethodData;
 import com.alphaautoleak.jnvm.crypto.OpcodeObfuscator;
@@ -52,7 +53,7 @@ public class NativeCodeGenerator {
         File dir = config.getNativeDir();
         if (!dir.exists()) dir.mkdirs();
 
-        System.out.println("[CODEGEN] Output directory: " + dir.getAbsolutePath());
+        CliReporter.taggedVerbose("CODEGEN", "Output directory: " + dir.getAbsolutePath());
 
         boolean encryptStrings = config.isEncryptStrings();
         NativeGenerationPlan plan = NativeGenerationPlan.create(
@@ -69,10 +70,10 @@ public class NativeCodeGenerator {
 
         for (NativeGenerationStep step : plan.getSteps()) {
             step.generate();
-            System.out.println("  [+] " + step.getOutputLabel());
+            CliReporter.verbose("  [+] " + step.getOutputLabel());
         }
 
-        System.out.println("[CODEGEN] Generated " + plan.getGeneratedFileCount() + " files.");
+        CliReporter.tagged("CODEGEN", "Generated " + plan.getGeneratedFileCount() + " files.");
     }
 
     /**

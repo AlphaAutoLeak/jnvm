@@ -1,13 +1,10 @@
 package com.alphaautoleak.jnvm.config;
 
 import java.io.File;
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 
 public class ProtectConfig {
-
-    private final ProtectConfigValidator validator = new ProtectConfigValidator();
 
     private File inputJar;
     private File outputJar;
@@ -33,10 +30,10 @@ public class ProtectConfig {
     }
 
     /**
-     * Validates and merges rules from configFile.
+     * Validates the current config state.
      */
-    public void validate() throws IOException {
-        validator.validate(this);
+    public void validate() {
+        new ProtectConfigValidator().validate(this);
     }
 
     /**

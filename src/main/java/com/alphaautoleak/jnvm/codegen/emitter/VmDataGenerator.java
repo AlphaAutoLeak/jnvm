@@ -1,5 +1,7 @@
 package com.alphaautoleak.jnvm.codegen.emitter;
 
+import com.alphaautoleak.jnvm.cli.CliReporter;
+
 import com.alphaautoleak.jnvm.asm.BootstrapEntry;
 import com.alphaautoleak.jnvm.asm.ExceptionEntry;
 import com.alphaautoleak.jnvm.crypto.CryptoUtils;
@@ -252,7 +254,7 @@ public class VmDataGenerator {
         if (idx != null) {
             return idx;
         }
-        System.err.println("[WARN] String not found in global pool: " + s);
+        CliReporter.warn("String not found in global pool: " + s);
         return 0;
     }
 

@@ -26,6 +26,12 @@ dependencies {
 
     // YAML 解析
     implementation 'org.yaml:snakeyaml:2.3'
+
+    testImplementation 'org.junit.jupiter:junit-jupiter:5.10.3'
+}
+
+test {
+    useJUnitPlatform()
 }
 
 application {

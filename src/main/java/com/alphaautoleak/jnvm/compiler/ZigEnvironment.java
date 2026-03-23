@@ -1,5 +1,7 @@
 package com.alphaautoleak.jnvm.compiler;
 
+import com.alphaautoleak.jnvm.cli.CliReporter;
+
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.IOException;
@@ -25,7 +27,7 @@ final class ZigEnvironment {
             }
 
             proc.waitFor(ZIG_VERSION_TIMEOUT_SECONDS, TimeUnit.SECONDS);
-            System.out.println("[ZIG] Zig version: " + out.toString().trim());
+            CliReporter.tagged("ZIG", "Zig version: " + out.toString().trim());
         } catch (IOException e) {
             throw new RuntimeException(
                     "Zig compiler not found. Please install Zig and add it to PATH.\n"

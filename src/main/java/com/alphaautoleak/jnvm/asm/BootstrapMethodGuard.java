@@ -14,7 +14,7 @@ import java.util.Set;
  */
 class BootstrapMethodGuard {
 
-    /** Methods used as invokedynamic bootstrap targets: owner.name.desc */
+    /** Methods used as invokedynamic bootstrap targets in canonical owner.name.descriptor format. */
     private final Set<String> bootstrapMethodTargets = new HashSet<>();
 
     void scanClass(ClassNode cn) {

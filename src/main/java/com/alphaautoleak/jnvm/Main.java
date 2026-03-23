@@ -1,6 +1,7 @@
 package com.alphaautoleak.jnvm;
 
 import com.alphaautoleak.jnvm.cli.ConfigBuilder;
+import com.alphaautoleak.jnvm.cli.CliReporter;
 import com.alphaautoleak.jnvm.config.ProtectConfig;
 import com.alphaautoleak.jnvm.converter.Converter;
 
@@ -13,48 +14,43 @@ public class Main {
             "╚══════════════════════════════════════╝";
 
     public static void main(String[] args) {
-        System.out.println(BANNER);
-        System.out.println();
+        CliReporter.configure(false);
+        CliReporter.raw(BANNER);
+        CliReporter.blank();
 
         if (args.length == 0) {
-            System.err.println("[ERROR] Config file is required");
-            System.out.println("Usage: jnvm <config.yml>");
+            CliReporter.error("Config file is required");
+            CliReporter.raw("Usage: jnvm <config.yml>");
             System.exit(1);
         }
 
         try {
             ProtectConfig config = ConfigBuilder.build(args[0]);
-            config.validate();
-
-            if (config.getOutputJar() == null && config.getInputJar() != null) {
-                String input = config.getInputJar().getAbsolutePath();
-                String out = input.replaceAll("\\.jar$", "-obf.jar");
-                config.setOutputJar(new java.io.File(out));
-            }
+            CliReporter.configure(config.isDebug());
 
             printConfig(config);
 
             Converter converter = new Converter(config);
             converter.run();
 
-            System.out.println();
-            System.out.println("[SUCCESS] Protection complete.");
+            CliReporter.blank();
+            CliReporter.success("Protection complete.");
 
         } catch (Exception e) {
-            System.err.println("[FATAL] " + e.getMessage());
+            CliReporter.fatal(e.getMessage());
             e.printStackTrace();
             System.exit(2);
         }
     }
 
     private static void printConfig(ProtectConfig config) {
-        System.out.println("[INFO] Configuration:");
-        System.out.println("  Input JAR:    " + config.getInputJar());
-        System.out.println("  Output JAR:   " + config.getOutputJar());
-        System.out.println("  Targets:      " + config.getTargets());
-        System.out.println("  Protect rules:" + config.getProtectRules());
-        System.out.println("  Debug mode:   " + config.isDebug());
-        System.out.println("  Direct native:" + config.isDirectNativeRewrite());
-        System.out.println();
+        CliReporter.info("Configuration:");
+        CliReporter.raw("  Input JAR:    " + config.getInputJar());
+        CliReporter.raw("  Output JAR:   " + config.getOutputJar());
+        CliReporter.raw("  Targets:      " + config.getTargets());
+        CliReporter.raw("  Protect rules:" + config.getProtectRules());
+        CliReporter.raw("  Debug mode:   " + config.isDebug());
+        CliReporter.raw("  Direct native:" + config.isDirectNativeRewrite());
+        CliReporter.blank();
     }
 }

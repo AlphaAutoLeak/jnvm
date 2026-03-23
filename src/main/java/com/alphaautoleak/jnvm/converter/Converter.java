@@ -2,6 +2,7 @@ package com.alphaautoleak.jnvm.converter;
 
 import com.alphaautoleak.jnvm.asm.JarScanner;
 import com.alphaautoleak.jnvm.asm.MethodInfo;
+import com.alphaautoleak.jnvm.cli.CliReporter;
 import com.alphaautoleak.jnvm.codegen.NativeCodeGenerator;
 import com.alphaautoleak.jnvm.compiler.ZigCompiler;
 import com.alphaautoleak.jnvm.config.ProtectConfig;
@@ -12,17 +13,11 @@ import com.alphaautoleak.jnvm.patcher.JarPatcher;
 import com.alphaautoleak.jnvm.patcher.OutputPackager;
 
 import java.util.List;
-import java.util.Set;
 
 public class Converter {
 
     private final ProtectConfig config;
     private final ConversionReportPrinter reportPrinter = new ConversionReportPrinter();
-    private OpcodeObfuscator opcodeObfuscator;
-    private List<MethodInfo> protectedMethods;
-    private Set<String> affectedClasses;
-    private Set<String> bootstrapMethodKeys;
-    private List<EncryptedMethodData> encryptedMethods;
 
     public Converter(ProtectConfig config) {
         this.config = config;
@@ -31,19 +26,27 @@ public class Converter {
     public void run() throws Exception {
         long startTime = System.currentTimeMillis();
 
-        initializeOpcodeObfuscation();
-        scanInputJar();
+        OpcodeObfuscator opcodeObfuscator = initializeOpcodeObfuscation();
+        ConversionScanResult scanResult = scanInputJar(opcodeObfuscator);
 
-        if (protectedMethods.isEmpty()) {
-            System.out.println("[WARN] No methods matched protection rules. Nothing to do.");
+        if (scanResult.isEmpty()) {
+            reportPrinter.printNoMethodsMatched();
             return;
         }
 
-        ProtectionSummary summary = ProtectionSummary.from(protectedMethods, affectedClasses.size());
+        ProtectionSummary summary = ProtectionSummary.from(
+                scanResult.getProtectedMethods(),
+                scanResult.getAffectedClassCount()
+        );
         reportPrinter.printProtectionSummary(summary);
-        encryptBytecodeData();
-        JarPatcher patcher = createJarPatcher();
-        ZigCompiler compiler = generateAndCompileNativeCode(patcher);
+        List<EncryptedMethodData> encryptedMethods = encryptBytecodeData(scanResult.getProtectedMethods());
+        JarPatcher patcher = createJarPatcher(scanResult);
+        ZigCompiler compiler = generateAndCompileNativeCode(
+                scanResult,
+                encryptedMethods,
+                patcher,
+                opcodeObfuscator
+        );
         patchOutputJar(patcher);
         embedNativeLibraries(compiler);
 
@@ -51,66 +54,70 @@ public class Converter {
         reportPrinter.printCompletion(config, summary, compiler, elapsed);
     }
 
-    private void initializeOpcodeObfuscation() {
-        opcodeObfuscator = new OpcodeObfuscator();
-        System.out.println("[INFO] Opcode obfuscation enabled - each bytecode is mapped to random value");
+    private OpcodeObfuscator initializeOpcodeObfuscation() {
+        OpcodeObfuscator opcodeObfuscator = new OpcodeObfuscator();
+        CliReporter.info("Opcode obfuscation enabled - each bytecode is mapped to random value");
+        return opcodeObfuscator;
     }
 
-    private void scanInputJar() throws Exception {
-        System.out.println("[STEP 1/7] Scanning JAR: " + config.getInputJar());
+    private ConversionScanResult scanInputJar(OpcodeObfuscator opcodeObfuscator) throws Exception {
+        reportPrinter.printStep(ConversionStep.SCAN, String.valueOf(config.getInputJar()));
         JarScanner scanner = new JarScanner(config, opcodeObfuscator);
-        protectedMethods = scanner.scan(config.getInputJar());
-        affectedClasses = scanner.getAffectedClasses();
-        bootstrapMethodKeys = scanner.getBootstrapMethodKeys();
+        List<MethodInfo> protectedMethods = scanner.scan(config.getInputJar());
+        return ConversionScanResult.from(scanner, protectedMethods);
     }
 
-    private void encryptBytecodeData() {
-        System.out.println("[STEP 2/7] Encrypting bytecode...");
+    private List<EncryptedMethodData> encryptBytecodeData(List<MethodInfo> protectedMethods) {
+        reportPrinter.printStep(ConversionStep.ENCRYPT);
         BytecodeEncryptor encryptor = new BytecodeEncryptor();
-        encryptedMethods = encryptor.encryptAll(protectedMethods);
-        System.out.println();
+        List<EncryptedMethodData> encryptedMethods = encryptor.encryptAll(protectedMethods);
+        reportPrinter.printSpacer();
+        return encryptedMethods;
     }
 
-    private JarPatcher createJarPatcher() {
+    private JarPatcher createJarPatcher(ConversionScanResult scanResult) {
         return new JarPatcher(
-                protectedMethods,
-                affectedClasses,
-                bootstrapMethodKeys,
+                scanResult.getProtectedMethods(),
+                scanResult.getAffectedClasses(),
+                scanResult.getBootstrapMethodKeys(),
                 config.isDirectNativeRewrite()
         );
     }
 
-    private ZigCompiler generateAndCompileNativeCode(JarPatcher patcher) throws Exception {
-        System.out.println("[STEP 3/7] Generating native C sources...");
+    private ZigCompiler generateAndCompileNativeCode(ConversionScanResult scanResult,
+                                                     List<EncryptedMethodData> encryptedMethods,
+                                                     JarPatcher patcher,
+                                                     OpcodeObfuscator opcodeObfuscator) throws Exception {
+        reportPrinter.printStep(ConversionStep.GENERATE);
         NativeCodeGenerator codegen = new NativeCodeGenerator(
                 config,
                 encryptedMethods,
-                protectedMethods,
+                scanResult.getProtectedMethods(),
                 patcher.getBridgeClass(),
                 patcher.getMethodIdXorKey(),
                 config.isDirectNativeRewrite(),
                 opcodeObfuscator
         );
         codegen.generate();
-        System.out.println();
+        reportPrinter.printSpacer();
 
-        System.out.println("[STEP 4/7] Compiling with Zig...");
+        reportPrinter.printStep(ConversionStep.COMPILE);
         ZigCompiler compiler = new ZigCompiler(config);
         compiler.compileAll();
-        System.out.println();
+        reportPrinter.printSpacer();
         return compiler;
     }
 
     private void patchOutputJar(JarPatcher patcher) throws Exception {
-        System.out.println("[STEP 5/7] Patching JAR classes...");
+        reportPrinter.printStep(ConversionStep.PATCH);
         patcher.patch(config.getInputJar(), config.getOutputJar());
-        System.out.println();
+        reportPrinter.printSpacer();
     }
 
     private void embedNativeLibraries(ZigCompiler compiler) throws Exception {
-        System.out.println("[STEP 6/7] Embedding native libraries...");
+        reportPrinter.printStep(ConversionStep.PACKAGE);
         OutputPackager packager = new OutputPackager();
         packager.embedNativeLibraries(config.getOutputJar(), compiler.getOutputLibraries());
-        System.out.println();
+        reportPrinter.printSpacer();
     }
 }

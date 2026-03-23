@@ -1,5 +1,7 @@
 package com.alphaautoleak.jnvm.compiler;
 
+import com.alphaautoleak.jnvm.cli.CliReporter;
+
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.InputStreamReader;
@@ -15,7 +17,7 @@ final class ZigProcessRunner {
         pb.directory(nativeDir);
         pb.redirectErrorStream(true);
 
-        System.out.println("  [CMD] " + String.join(" ", command));
+        CliReporter.verbose("  [CMD] " + String.join(" ", command));
 
         Process proc = pb.start();
         StringBuilder output = new StringBuilder();
@@ -23,7 +25,7 @@ final class ZigProcessRunner {
             String line;
             while ((line = reader.readLine()) != null) {
                 output.append(line).append("\n");
-                System.out.println("  [ZIG] " + line);
+                CliReporter.verbose("  [ZIG] " + line);
             }
         }
 

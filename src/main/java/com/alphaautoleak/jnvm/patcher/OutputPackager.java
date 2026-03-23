@@ -1,5 +1,7 @@
 package com.alphaautoleak.jnvm.patcher;
 
+import com.alphaautoleak.jnvm.cli.CliReporter;
+
 import java.io.*;
 import java.nio.file.Files;
 import java.util.Enumeration;
@@ -15,7 +17,7 @@ public class OutputPackager {
 
     public void embedNativeLibraries(File jar, List<File> libraries) throws IOException {
         if (libraries.isEmpty()) {
-            System.out.println("[PACKAGE] No native libraries to embed.");
+            CliReporter.tagged("PACKAGE", "No native libraries to embed.");
             return;
         }
 
@@ -55,7 +57,7 @@ public class OutputPackager {
                 jos.closeEntry();
                 written.add(entryName);
 
-                System.out.println("[PACKAGE] Embedded: " + entryName +
+                CliReporter.tagged("PACKAGE", "Embedded: " + entryName +
                         " (" + (lib.length() / 1024) + " KB)");
             }
         }

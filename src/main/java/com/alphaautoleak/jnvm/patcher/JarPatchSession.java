@@ -1,5 +1,7 @@
 package com.alphaautoleak.jnvm.patcher;
 
+import com.alphaautoleak.jnvm.cli.CliReporter;
+
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
@@ -96,6 +98,6 @@ final class JarPatchSession {
         jos.putNextEntry(new JarEntry(bridgePath));
         jos.write(bridgeGenerator.generate());
         jos.closeEntry();
-        System.out.println("[PATCH] Injected " + bridgeClass.replace('/', '.') + ".class");
+        CliReporter.tagged("PATCH", "Injected " + bridgeClass.replace('/', '.') + ".class");
     }
 }

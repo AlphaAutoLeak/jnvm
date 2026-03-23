@@ -1,5 +1,6 @@
 package com.alphaautoleak.jnvm.compiler;
 
+import com.alphaautoleak.jnvm.cli.CliReporter;
 import com.alphaautoleak.jnvm.config.ProtectConfig;
 
 import java.io.File;
@@ -22,14 +23,14 @@ public class ZigCompiler {
         environment.checkZigInstalled();
 
         String javaHome = environment.findJavaHome();
-        System.out.println("[ZIG] JAVA_HOME = " + javaHome);
+        CliReporter.taggedVerbose("ZIG", "JAVA_HOME = " + javaHome);
 
         for (String target : config.getTargets()) {
-            System.out.println("[ZIG] Compiling for target: " + target);
+            CliReporter.tagged("ZIG", "Compiling for target: " + target);
             compileDirect(target, javaHome);
         }
 
-        System.out.println("[ZIG] Compiled " + outputLibraries.size() + " libraries.");
+        CliReporter.tagged("ZIG", "Compiled " + outputLibraries.size() + " libraries.");
     }
 
     /**
@@ -46,7 +47,7 @@ public class ZigCompiler {
     private void verifyAndRecordOutput(String target, File outputFile, String output) {
         if (outputFile.exists()) {
             outputLibraries.add(outputFile);
-            System.out.println("  [OK] " + outputFile.getAbsolutePath() +
+            CliReporter.verbose("  [OK] " + outputFile.getAbsolutePath() +
                     " (" + (outputFile.length() / 1024) + " KB)");
             return;
         }

@@ -1,7 +1,9 @@
 package com.alphaautoleak.jnvm.patcher;
 
 import com.alphaautoleak.jnvm.asm.MethodInfo;
+import com.alphaautoleak.jnvm.cli.CliReporter;
 import com.alphaautoleak.jnvm.utils.BridgePackageNameGenerator;
+import com.alphaautoleak.jnvm.utils.MethodKeyUtil;
 
 import java.io.File;
 import java.io.IOException;
@@ -29,7 +31,7 @@ public class JarPatcher {
                       boolean directNativeRewrite) {
         this.affectedClasses = affectedClasses;
         this.patchRegistry = new MethodPatchRegistry(protectedMethods, directNativeRewrite);
-        this.bootstrapMethodKeys = patchRegistry.emptyBootstrapKeysIfNull(bootstrapMethodKeys);
+        this.bootstrapMethodKeys = MethodKeyUtil.normalizeAll(bootstrapMethodKeys);
         this.bridgeClass = BridgePackageNameGenerator.generate();
         this.directNativeRewrite = directNativeRewrite;
         this.methodIdXorKey = patchRegistry.getMethodIdXorKey();
@@ -47,9 +49,9 @@ public class JarPatcher {
     }
 
     public void patch(File inputJar, File outputJar) throws IOException {
-        System.out.println("[PATCH] Input:  " + inputJar);
-        System.out.println("[PATCH] Output: " + outputJar);
-        System.out.println("[PATCH] Bridge class: " + bridgeClass.replace('/', '.'));
+        CliReporter.tagged("PATCH", "Input:  " + inputJar);
+        CliReporter.tagged("PATCH", "Output: " + outputJar);
+        CliReporter.tagged("PATCH", "Bridge class: " + bridgeClass.replace('/', '.'));
 
         ClassPatcher classPatcher = new ClassPatcher(
                 bridgeClass,
@@ -68,6 +70,6 @@ public class JarPatcher {
         );
         int patchedCount = patchSession.run();
 
-        System.out.println("[PATCH] Patched " + patchedCount + " classes.");
+        CliReporter.tagged("PATCH", "Patched " + patchedCount + " classes.");
     }
 }
