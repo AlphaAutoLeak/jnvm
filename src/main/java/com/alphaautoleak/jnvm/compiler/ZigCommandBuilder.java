@@ -15,9 +15,9 @@ final class ZigCommandBuilder {
         return new File(outputDir, getOutputLibraryName(target));
     }
 
-    List<String> buildCompileCommand(String target, String javaHome, File outputFile) {
+    List<String> buildCompileCommand(File zigExecutable, String target, String javaHome, File outputFile) {
         List<String> cmd = new ArrayList<>();
-        cmd.add("zig");
+        cmd.add(zigExecutable.getAbsolutePath());
         cmd.add("cc");
         cmd.add("-target");
         cmd.add(target);

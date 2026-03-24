@@ -52,6 +52,9 @@ final class ProtectConfigLoader {
             if (values.containsKey("native-dir") && config.getNativeDir() == null) {
                 config.setNativeDir(new File((String) values.get("native-dir")));
             }
+            if (values.containsKey("zig-exe") && config.getZigExecutable() == null) {
+                config.setZigExecutable(new File((String) values.get("zig-exe")));
+            }
         }
     }
 

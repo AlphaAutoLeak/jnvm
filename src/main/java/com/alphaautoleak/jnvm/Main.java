@@ -49,6 +49,7 @@ public class Main {
         CliReporter.raw("  Output JAR:   " + config.getOutputJar());
         CliReporter.raw("  Targets:      " + config.getTargets());
         CliReporter.raw("  Protect rules:" + config.getProtectRules());
+        CliReporter.raw("  Zig exe:      " + config.getZigExecutable());
         CliReporter.raw("  Debug mode:   " + config.isDebug());
         CliReporter.raw("  Direct native:" + config.isDirectNativeRewrite());
         CliReporter.blank();

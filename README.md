@@ -17,8 +17,19 @@ A powerful Java bytecode protection tool that converts Java methods into native 
 ## Requirements
 
 - Java 8+
-- [Zig](https://ziglang.org/) 0.11+ (for native compilation)
+- [Zig](https://ziglang.org/) 0.11+ (for native compilation, extracted beside `jnvm.jar` if `zig-exe` is not set)
 - Gradle 8+
+
+JNVM no longer resolves Zig from the system `PATH` by default. If `zig-exe` is not configured, place an extracted Zig folder beside `jnvm.jar` with a name like `zig-<arch>-<os>-<version>`, for example:
+
+```text
+app/
+  jnvm.jar
+  zig-x86_64-windows-0.14.0/
+    zig.exe
+```
+
+JNVM scans sibling `zig-*` folders and prefers the one that best matches the current OS and CPU architecture.
 
 ## Usage
 
@@ -27,26 +38,37 @@ A powerful Java bytecode protection tool that converts Java methods into native 
 Create a `config.yml` file:
 
 ```yaml
-# Input JAR file
+# Input JAR
 jar: test/app.jar
 
-# Output JAR file
+# Output JAR
 out: test/app-protected.jar
 
-# Protection rules
+# Protect rules
 protect:
-  - "**"  # Protect all methods
+  - "**"
 
-# Target platforms
+# Optional exclude rules
+# exclude:
+#   - "com.example.Main#main"
+
+# Optional: explicit Zig executable path
+# zig-exe: D:/tools/zig/zig.exe
+
+# Optional targets. If omitted, current platform is used.
 targets:
   - x86_64-windows-gnu
 
-# Options
-debug: false
+# Generated native source directory
 native-dir: native
-protect-bootstrap-payload: false
+
+# Options
+encrypt-strings: false
+debug: false
 direct-native-rewrite: false
 ```
+
+`zig-exe` is optional. When set, JNVM uses that exact Zig executable. When omitted, it falls back to sibling `zig-*` folder discovery beside `jnvm.jar`.
 
 ### Run
 

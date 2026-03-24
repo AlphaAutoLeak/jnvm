@@ -1,7 +1,14 @@
 jar: samples/bench/bench.jar
 out: samples/bench/bench-obf.jar
+
 protect:
   - "**"
+
+# zig-exe: D:/tools/zig/zig.exe
+# targets:
+#   - x86_64-windows-gnu
+
+native-dir: native
 encrypt-strings: false
 debug: false
 direct-native-rewrite: false

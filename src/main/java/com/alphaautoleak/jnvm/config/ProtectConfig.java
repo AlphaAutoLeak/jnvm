@@ -13,6 +13,7 @@ public class ProtectConfig {
     private File configFile; // protect.conf or config.yml
     private List<String> targets = new ArrayList<>();
     private File nativeDir;
+    private File zigExecutable;
     private boolean encryptStrings = true;
     /**
      * When true, protected non-<clinit> methods are rewritten to ACC_NATIVE and
@@ -111,6 +112,14 @@ public class ProtectConfig {
 
     public void setNativeDir(File nativeDir) {
         this.nativeDir = nativeDir;
+    }
+
+    public File getZigExecutable() {
+        return zigExecutable;
+    }
+
+    public void setZigExecutable(File zigExecutable) {
+        this.zigExecutable = zigExecutable;
     }
 
     public boolean isEncryptStrings() {

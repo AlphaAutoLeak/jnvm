@@ -1,21 +1,33 @@
-# JNVM Protection Configuration
+# JNVM configuration
 
-# Input JAR file
+# Input JAR
 jar: test/114514.jar
 
-# Output JAR file (optional)
+# Output JAR
 out: test/114514-obf.jar
 
-# Protection rules
+# Protect rules
 protect:
-  - "**"  # Protect all methods
+  - "**"
 
-# Target platforms
+# Optional exclude rules
+# exclude:
+#   - "com.example.Main#main"
+
+# Optional: explicit Zig executable path.
+# When omitted, JNVM scans for a sibling folder like:
+#   zig-x86_64-windows-0.14.0/zig.exe
+# zig-exe: D:/tools/zig/zig.exe
+
+# Optional: compile targets.
+# When omitted, JNVM uses the current platform automatically.
 targets:
   - x86_64-windows-gnu
 
-# Enable debug logging
-debug: false
-
-# Native source output directory
+# Generated native source directory
 native-dir: native
+
+# Options
+encrypt-strings: false
+debug: false
+direct-native-rewrite: false

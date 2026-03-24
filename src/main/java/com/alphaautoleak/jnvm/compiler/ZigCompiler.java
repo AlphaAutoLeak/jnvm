@@ -20,14 +20,16 @@ public class ZigCompiler {
     }
 
     public void compileAll() throws Exception {
-        environment.checkZigInstalled();
+        ZigInstallation zigInstallation = environment.resolveInstallation(config.getZigExecutable());
 
         String javaHome = environment.findJavaHome();
+        CliReporter.tagged("ZIG", "Using Zig from: " + zigInstallation.getHomeDirectory().getAbsolutePath());
+        CliReporter.tagged("ZIG", "Zig version: " + zigInstallation.getVersion());
         CliReporter.taggedVerbose("ZIG", "JAVA_HOME = " + javaHome);
 
         for (String target : config.getTargets()) {
             CliReporter.tagged("ZIG", "Compiling for target: " + target);
-            compileDirect(target, javaHome);
+            compileDirect(zigInstallation, target, javaHome);
         }
 
         CliReporter.tagged("ZIG", "Compiled " + outputLibraries.size() + " libraries.");
@@ -36,10 +38,10 @@ public class ZigCompiler {
     /**
      * Compiles directly with zig cc - most reliable, no build.zig API dependency
      */
-    private void compileDirect(String target, String javaHome) throws Exception {
+    private void compileDirect(ZigInstallation zigInstallation, String target, String javaHome) throws Exception {
         File nativeDir = config.getNativeDir();
         File outputFile = commandBuilder.buildOutputFile(target, nativeDir);
-        List<String> cmd = commandBuilder.buildCompileCommand(target, javaHome, outputFile);
+        List<String> cmd = commandBuilder.buildCompileCommand(zigInstallation.getExecutable(), target, javaHome, outputFile);
         String output = processRunner.runCompileProcess(target, nativeDir, cmd);
         verifyAndRecordOutput(target, outputFile, output);
     }

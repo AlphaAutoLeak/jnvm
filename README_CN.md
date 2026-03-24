@@ -15,8 +15,19 @@
 ## 环境要求
 
 - Java 8+
-- [Zig](https://ziglang.org/) 0.11+（用于原生编译）
+- [Zig](https://ziglang.org/) 0.11+（用于原生编译，需解压到程序 JAR 同级目录）
 - Gradle 8+
+
+Zig 不再从系统 `PATH` 中查找。请将 Zig 官方压缩包解压到与 `jnvm.jar` 同级的目录下，目录名使用 `zig-<架构>-<系统>-<版本>` 形式，例如：
+
+```text
+app/
+  jnvm.jar
+  zig-x86_64-windows-0.14.0/
+    zig.exe
+```
+
+程序会自动扫描同级目录下所有 `zig-*` 文件夹，并优先选择与当前系统/架构匹配的 Zig 可执行文件。
 
 ## 使用方法
 
@@ -42,9 +53,12 @@ targets:
 # 选项
 debug: false
 native-dir: native
-protect-bootstrap-payload: false
+zig-exe: D:/tools/zig/zig.exe
+encrypt-strings: false
 direct-native-rewrite: false
 ```
+
+`zig-exe` 为可选项。设置后会优先使用该路径指向的 Zig 可执行文件；未设置时，程序才会回退到 `jnvm.jar` 同级目录下的 `zig-*` 文件夹自动发现机制。
 
 ### 运行
 
