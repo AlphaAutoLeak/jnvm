@@ -18,7 +18,11 @@ final class MethodPatchRegistry {
     private final int methodIdXorKey;
 
     MethodPatchRegistry(List<MethodInfo> protectedMethods, boolean directNativeRewrite) {
-        this.methodIdXorKey = createMethodIdXorKey();
+        this(protectedMethods, createMethodIdXorKey(), directNativeRewrite);
+    }
+
+    MethodPatchRegistry(List<MethodInfo> protectedMethods, int methodIdXorKey, boolean directNativeRewrite) {
+        this.methodIdXorKey = methodIdXorKey;
 
         for (MethodInfo method : protectedMethods) {
             String key = MethodKeyUtil.of(method.getOwner(), method.getName(), method.getDescriptor());
@@ -51,7 +55,7 @@ final class MethodPatchRegistry {
         return classesWithProtectedClinit.contains(className);
     }
 
-    private int createMethodIdXorKey() {
+    private static int createMethodIdXorKey() {
         Random rand = new Random();
         int key;
         do {

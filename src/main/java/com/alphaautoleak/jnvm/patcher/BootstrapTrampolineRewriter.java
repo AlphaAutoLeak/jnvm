@@ -65,14 +65,6 @@ final class BootstrapTrampolineRewriter {
 
         insns.add(new MethodInsnNode(invokeOpcode, owner, implName, entry.desc, false));
         ReturnInsnAppender.appendRawReturn(insns, retType);
-
-        entry.instructions.clear();
-        entry.instructions.add(insns);
-        entry.tryCatchBlocks.clear();
-        if (entry.localVariables != null) {
-            entry.localVariables.clear();
-        }
-        entry.maxStack = 0;
-        entry.maxLocals = 0;
+        MethodNodeResetter.replaceBody(entry, insns);
     }
 }

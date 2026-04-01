@@ -28,6 +28,7 @@ public class Converter {
 
         OpcodeObfuscator opcodeObfuscator = initializeOpcodeObfuscation();
         ConversionScanResult scanResult = scanInputJar(opcodeObfuscator);
+        NativeBindingContext bindingContext = NativeBindingContext.create(config.isDirectNativeRewrite());
 
         if (scanResult.isEmpty()) {
             reportPrinter.printNoMethodsMatched();
@@ -40,11 +41,11 @@ public class Converter {
         );
         reportPrinter.printProtectionSummary(summary);
         List<EncryptedMethodData> encryptedMethods = encryptBytecodeData(scanResult.getProtectedMethods());
-        JarPatcher patcher = createJarPatcher(scanResult);
+        JarPatcher patcher = createJarPatcher(scanResult, bindingContext);
         ZigCompiler compiler = generateAndCompileNativeCode(
                 scanResult,
                 encryptedMethods,
-                patcher,
+                bindingContext,
                 opcodeObfuscator
         );
         patchOutputJar(patcher);
@@ -75,27 +76,25 @@ public class Converter {
         return encryptedMethods;
     }
 
-    private JarPatcher createJarPatcher(ConversionScanResult scanResult) {
+    private JarPatcher createJarPatcher(ConversionScanResult scanResult, NativeBindingContext bindingContext) {
         return new JarPatcher(
                 scanResult.getProtectedMethods(),
                 scanResult.getAffectedClasses(),
                 scanResult.getBootstrapMethodKeys(),
-                config.isDirectNativeRewrite()
+                bindingContext
         );
     }
 
     private ZigCompiler generateAndCompileNativeCode(ConversionScanResult scanResult,
                                                      List<EncryptedMethodData> encryptedMethods,
-                                                     JarPatcher patcher,
+                                                     NativeBindingContext bindingContext,
                                                      OpcodeObfuscator opcodeObfuscator) throws Exception {
         reportPrinter.printStep(ConversionStep.GENERATE);
         NativeCodeGenerator codegen = new NativeCodeGenerator(
                 config,
                 encryptedMethods,
                 scanResult.getProtectedMethods(),
-                patcher.getBridgeClass(),
-                patcher.getMethodIdXorKey(),
-                config.isDirectNativeRewrite(),
+                bindingContext,
                 opcodeObfuscator
         );
         codegen.generate();

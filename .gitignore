@@ -53,3 +53,4 @@ calculations.txt
 /.iflow
 /samples/zkm/classes
 /samples/bench/classes
+/zig-x86_64-windows-0.15.2

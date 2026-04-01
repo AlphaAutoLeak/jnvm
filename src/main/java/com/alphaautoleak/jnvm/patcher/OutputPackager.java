@@ -37,7 +37,7 @@ public class OutputPackager {
                 }
                 jos.putNextEntry(new JarEntry(entry.getName()));
                 try (InputStream is = original.getInputStream(entry)) {
-                    copyStream(is, jos);
+                    JarStreams.copy(is, jos);
                 }
                 jos.closeEntry();
                 written.add(entry.getName());
@@ -52,7 +52,7 @@ public class OutputPackager {
 
                 jos.putNextEntry(new JarEntry(entryName));
                 try (FileInputStream fis = new FileInputStream(lib)) {
-                    copyStream(fis, jos);
+                    JarStreams.copy(fis, jos);
                 }
                 jos.closeEntry();
                 written.add(entryName);
@@ -80,13 +80,5 @@ public class OutputPackager {
             return "default";
         }
         return "default";
-    }
-
-    private void copyStream(InputStream in, OutputStream out) throws IOException {
-        byte[] buf = new byte[8192];
-        int n;
-        while ((n = in.read(buf)) != -1) {
-            out.write(buf, 0, n);
-        }
     }
 }

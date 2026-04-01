@@ -1,5 +1,5 @@
-jar: samples/zkm/SnakeGame-zkm.jar
-out: samples/zkm/SnakeGame-zkm-obf.jar
+jar: zkm/SnakeGame-zkm.jar
+out: zkm/SnakeGame-zkm-obf.jar
 
 protect:
   - "**"
@@ -8,7 +8,7 @@ protect:
 # targets:
 #   - x86_64-windows-gnu
 
-native-dir: native
+native-dir: ../native/zkm
 encrypt-strings: false
 debug: false
 direct-native-rewrite: false

@@ -1,5 +1,5 @@
-jar: samples/snake/SnakeGame.jar
-out: samples/snake/SnakeGame-obf.jar
+jar: snake/SnakeGame.jar
+out: snake/SnakeGame-obf.jar
 
 protect:
   - "**"
@@ -8,7 +8,7 @@ protect:
 # targets:
 #   - x86_64-windows-gnu
 
-native-dir: native
+native-dir: ../native/snake
 encrypt-strings: false
 debug: false
 direct-native-rewrite: false

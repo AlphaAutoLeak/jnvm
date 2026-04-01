@@ -2,7 +2,7 @@ package com.alphaautoleak.jnvm.patcher;
 
 import com.alphaautoleak.jnvm.asm.MethodInfo;
 import com.alphaautoleak.jnvm.cli.CliReporter;
-import com.alphaautoleak.jnvm.utils.BridgePackageNameGenerator;
+import com.alphaautoleak.jnvm.converter.NativeBindingContext;
 import com.alphaautoleak.jnvm.utils.MethodKeyUtil;
 
 import java.io.File;
@@ -28,13 +28,17 @@ public class JarPatcher {
     public JarPatcher(List<MethodInfo> protectedMethods,
                       Set<String> affectedClasses,
                       Set<String> bootstrapMethodKeys,
-                      boolean directNativeRewrite) {
+                      NativeBindingContext bindingContext) {
         this.affectedClasses = affectedClasses;
-        this.patchRegistry = new MethodPatchRegistry(protectedMethods, directNativeRewrite);
+        this.patchRegistry = new MethodPatchRegistry(
+                protectedMethods,
+                bindingContext.getMethodIdXorKey(),
+                bindingContext.isDirectNativeRewrite()
+        );
         this.bootstrapMethodKeys = MethodKeyUtil.normalizeAll(bootstrapMethodKeys);
-        this.bridgeClass = BridgePackageNameGenerator.generate();
-        this.directNativeRewrite = directNativeRewrite;
-        this.methodIdXorKey = patchRegistry.getMethodIdXorKey();
+        this.bridgeClass = bindingContext.getBridgeClass();
+        this.directNativeRewrite = bindingContext.isDirectNativeRewrite();
+        this.methodIdXorKey = bindingContext.getMethodIdXorKey();
 
         this.rewriter = new MethodBodyRewriter(bridgeClass, methodIdXorKey, directNativeRewrite);
         this.bridgeGenerator = new BridgeClassGenerator(bridgeClass);

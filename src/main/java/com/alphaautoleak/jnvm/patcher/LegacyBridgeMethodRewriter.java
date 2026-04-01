@@ -69,7 +69,7 @@ final class LegacyBridgeMethodRewriter {
         ));
 
         ReturnInsnAppender.appendDirectReturn(insns, retType);
-        resetMethodBody(mn, insns);
+        MethodNodeResetter.replaceBody(mn, insns);
     }
 
     private String getLegacyExecuteMethodName(Type retType) {
@@ -106,16 +106,5 @@ final class LegacyBridgeMethodRewriter {
             default:
                 return "(I[Ljava/lang/Object;)I";
         }
-    }
-
-    private void resetMethodBody(MethodNode mn, InsnList insns) {
-        mn.instructions.clear();
-        mn.instructions.add(insns);
-        mn.tryCatchBlocks.clear();
-        if (mn.localVariables != null) {
-            mn.localVariables.clear();
-        }
-        mn.maxStack = 0;
-        mn.maxLocals = 0;
     }
 }

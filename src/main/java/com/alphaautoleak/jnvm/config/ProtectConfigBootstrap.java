@@ -30,7 +30,7 @@ public final class ProtectConfigBootstrap {
 
     private void applyDefaults(ProtectConfig config) {
         if (config.getNativeDir() == null) {
-            config.setNativeDir(new File(DEFAULT_NATIVE_DIR));
+            config.setNativeDir(resolveDefaultNativeDir(config));
         }
 
         if (config.getTargets().isEmpty()) {
@@ -60,6 +60,19 @@ public final class ProtectConfigBootstrap {
 
         File parentDir = inputJar.getAbsoluteFile().getParentFile();
         return parentDir == null ? new File(outputName) : new File(parentDir, outputName);
+    }
+
+    private File resolveDefaultNativeDir(ProtectConfig config) {
+        File configFile = config.getConfigFile();
+        if (configFile == null) {
+            return new File(DEFAULT_NATIVE_DIR);
+        }
+
+        File configDir = configFile.getAbsoluteFile().getParentFile();
+        if (configDir == null) {
+            return new File(DEFAULT_NATIVE_DIR);
+        }
+        return new File(configDir, DEFAULT_NATIVE_DIR);
     }
 
     private void ensureNativeDirExists(File nativeDir) {

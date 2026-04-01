@@ -50,10 +50,10 @@ final class ProtectConfigLoader {
                     config.isDirectNativeRewrite()));
 
             if (values.containsKey("native-dir") && config.getNativeDir() == null) {
-                config.setNativeDir(new File((String) values.get("native-dir")));
+                config.setNativeDir(resolveConfiguredFile(config, (String) values.get("native-dir")));
             }
             if (values.containsKey("zig-exe") && config.getZigExecutable() == null) {
-                config.setZigExecutable(new File((String) values.get("zig-exe")));
+                config.setZigExecutable(resolveConfiguredFile(config, (String) values.get("zig-exe")));
             }
         }
     }
@@ -62,14 +62,32 @@ final class ProtectConfigLoader {
         if (!values.containsKey("jar") || config.getInputJar() != null) {
             return;
         }
-        config.setInputJar(new File((String) values.get("jar")));
+        config.setInputJar(resolveConfiguredFile(config, (String) values.get("jar")));
     }
 
     private void loadOutputPath(ProtectConfig config, Map<String, Object> values) {
         if (!values.containsKey("out") || config.getOutputJar() != null) {
             return;
         }
-        config.setOutputJar(new File((String) values.get("out")));
+        config.setOutputJar(resolveConfiguredFile(config, (String) values.get("out")));
+    }
+
+    private File resolveConfiguredFile(ProtectConfig config, String path) {
+        File configured = new File(path);
+        if (configured.isAbsolute()) {
+            return configured;
+        }
+
+        File configFile = config.getConfigFile();
+        if (configFile == null) {
+            return configured;
+        }
+
+        File configDir = configFile.getAbsoluteFile().getParentFile();
+        if (configDir == null) {
+            return configured;
+        }
+        return new File(configDir, path);
     }
 
     @SuppressWarnings("unchecked")

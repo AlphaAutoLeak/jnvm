@@ -3,6 +3,7 @@ package com.alphaautoleak.jnvm.codegen;
 import com.alphaautoleak.jnvm.asm.MethodInfo;
 import com.alphaautoleak.jnvm.cli.CliReporter;
 import com.alphaautoleak.jnvm.config.ProtectConfig;
+import com.alphaautoleak.jnvm.converter.NativeBindingContext;
 import com.alphaautoleak.jnvm.crypto.EncryptedMethodData;
 import com.alphaautoleak.jnvm.crypto.OpcodeObfuscator;
 import com.alphaautoleak.jnvm.crypto.StringEncryptor;
@@ -23,25 +24,19 @@ public class NativeCodeGenerator {
     private final List<EncryptedMethodData> methods;
     private final List<MethodInfo> protectedMethods;
     private final byte[] stringKey;
-    private final String bridgeClass;
-    private final int methodIdXorKey;
-    private final boolean directNativeRewrite;
+    private final NativeBindingContext bindingContext;
     private final OpcodeObfuscator opcodeObfuscator;
 
     public NativeCodeGenerator(ProtectConfig config,
                                List<EncryptedMethodData> methods,
                                List<MethodInfo> protectedMethods,
-                               String bridgeClass,
-                               int methodIdXorKey,
-                               boolean directNativeRewrite,
+                               NativeBindingContext bindingContext,
                                OpcodeObfuscator opcodeObfuscator) {
         this.config = config;
         this.methods = methods;
         this.protectedMethods = protectedMethods;
         this.stringKey = StringEncryptor.generateStringKey();
-        this.bridgeClass = bridgeClass;
-        this.methodIdXorKey = methodIdXorKey;
-        this.directNativeRewrite = directNativeRewrite;
+        this.bindingContext = bindingContext;
         this.opcodeObfuscator = opcodeObfuscator;
     }
 
@@ -60,9 +55,7 @@ public class NativeCodeGenerator {
                 config,
                 methods,
                 protectedMethods,
-                bridgeClass,
-                methodIdXorKey,
-                directNativeRewrite,
+                bindingContext,
                 encryptStrings,
                 opcodeObfuscator,
                 stringKey

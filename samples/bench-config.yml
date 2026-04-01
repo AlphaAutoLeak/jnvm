@@ -1,5 +1,5 @@
-jar: samples/bench/bench.jar
-out: samples/bench/bench-obf.jar
+jar: bench/bench.jar
+out: bench/bench-obf.jar
 
 protect:
   - "**"
@@ -8,7 +8,7 @@ protect:
 # targets:
 #   - x86_64-windows-gnu
 
-native-dir: native
+native-dir: ../native/bench
 encrypt-strings: false
 debug: false
 direct-native-rewrite: false

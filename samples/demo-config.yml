@@ -1,5 +1,5 @@
-jar: samples/demo/demo.jar
-out: samples/demo/demo-obf.jar
+jar: demo/demo.jar
+out: demo/demo-obf.jar
 
 protect:
   - "**"
@@ -8,7 +8,7 @@ protect:
 # targets:
 #   - x86_64-windows-gnu
 
-native-dir: native
+native-dir: ../native/demo
 encrypt-strings: false
 debug: false
 direct-native-rewrite: false

@@ -37,7 +37,7 @@ class ProtectConfigBootstrapTest {
 
         assertEquals(inputJar.toFile().getAbsoluteFile(), config.getInputJar().getAbsoluteFile());
         assertEquals(tempDir.resolve("app-obf.jar").toFile().getAbsoluteFile(), config.getOutputJar().getAbsoluteFile());
-        assertEquals("native", config.getNativeDir().getPath());
+        assertEquals(tempDir.resolve("native").toFile().getAbsoluteFile(), config.getNativeDir().getAbsoluteFile());
         assertEquals(Collections.singletonList("sample.**"), config.getProtectRules());
         assertFalse(config.getTargets().isEmpty());
     }

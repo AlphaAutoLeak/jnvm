@@ -24,17 +24,7 @@ final class DirectNativeMethodRewriter {
     }
 
     void rewrite(MethodNode mn) {
-        mn.access |= Opcodes.ACC_NATIVE;
-        mn.access &= ~Opcodes.ACC_ABSTRACT;
-        if (mn.instructions != null) {
-            mn.instructions.clear();
-        }
-        mn.tryCatchBlocks.clear();
-        if (mn.localVariables != null) {
-            mn.localVariables.clear();
-        }
-        mn.maxStack = 0;
-        mn.maxLocals = 0;
+        MethodNodeResetter.markAsNative(mn);
     }
 
     void rewriteClinit(ClassNode cn, MethodNode mn, int methodId, boolean classHasDirectNativeMethods) {
@@ -67,17 +57,6 @@ final class DirectNativeMethodRewriter {
                 false
         ));
         insns.add(new InsnNode(Opcodes.RETURN));
-        resetMethodBody(mn, insns);
-    }
-
-    private void resetMethodBody(MethodNode mn, InsnList insns) {
-        mn.instructions.clear();
-        mn.instructions.add(insns);
-        mn.tryCatchBlocks.clear();
-        if (mn.localVariables != null) {
-            mn.localVariables.clear();
-        }
-        mn.maxStack = 0;
-        mn.maxLocals = 0;
+        MethodNodeResetter.replaceBody(mn, insns);
     }
 }
